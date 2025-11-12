@@ -28,11 +28,11 @@
 
 ---
 
-## About
+## 📖 About
 
 Yagua is a Python package that helps you collect, store, and manage test information from pytest-based projects using a SQLite database. Part of the **qa_entropy** research workspace.
 
-## Features
+## ✨ Features
 
 - Collect test information from pytest projects
 - Store test metadata in SQLite database (one cache file per project)
@@ -42,7 +42,7 @@ Yagua is a Python package that helps you collect, store, and manage test informa
 
 ---
 
-## Installation
+## 📦 Installation
 
 ```bash
 # Install in development mode
@@ -54,7 +54,7 @@ pip install -e ".[dev]"
 
 ---
 
-## Quick Start
+## 🚀 Quick Start
 
 ```bash
 # Create a new project cache
@@ -75,9 +75,9 @@ yagua coverage project.sqlite
 
 ---
 
-## Usage
+## 💻 Usage
 
-### CLI
+### 🖥️ CLI
 
 ```bash
 # Show help
@@ -101,7 +101,7 @@ yagua coverage project.sqlite
 yagua coverage project.sqlite --force  # Force recalculation
 ```
 
-### Programmatic API
+### 🐍 Programmatic API
 
 ```python
 from yagua import Project, PytestSuite
@@ -141,7 +141,7 @@ with Project(db_path="qa.sqlite") as proj:
 
 ---
 
-## Development
+## 🔧 Development
 
 ```bash
 # Run tests
@@ -159,12 +159,12 @@ tox
 
 ---
 
-## Documentation
+## 📚 Documentation
 
 - [ARCHITECTURE.md](ARCHITECTURE.md) - Comprehensive architecture documentation explaining the global design, components, data flow, and architectural patterns
 - [CLAUDE.md](CLAUDE.md) - Development guide with usage examples, API reference, and coding conventions
 
-## License
+## 📄 License
 
 MIT License - See [LICENSE](LICENSE) for details.
 
