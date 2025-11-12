@@ -470,8 +470,8 @@ def _create_app(cli_manager):
     members = inspect.getmembers(cli_manager, predicate=inspect.ismethod)
     for name, method in members:
         if not name.startswith("_"):
-            doc = _make_help(method)
-            cmd_wrapper = app.command(name=name.replace("_", "-"), help=doc)
+            command_help = _make_help(method)
+            cmd_wrapper = app.command(name=name.replace("_", "-"), help=command_help)
             cmd_wrapper(method)
 
     return app
