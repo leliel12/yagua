@@ -11,18 +11,22 @@ import sys
 from pathlib import Path
 import json
 
+from .abc import TestSuiteABC
+
 
 # ============================================================================
 # PYTEST SUITE
 # ============================================================================
 
 
-class PytestSuite:
+class PytestSuite(TestSuiteABC):
     """
     Test suite handler for pytest-based projects.
 
     This class is responsible for discovering and collecting test information
     from pytest projects using pytest's collection mechanism.
+
+    Implements the TestSuiteABC interface for pytest-based projects.
     """
 
     # ========================================================================
