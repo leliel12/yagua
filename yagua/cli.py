@@ -146,6 +146,26 @@ class CLIManager:
             typer.echo(f"📝 Description: {proj.description}")
         typer.echo("✨ Cache initialized successfully (0 tests)")
 
+    def _validate_cache_exists(self, cache):
+        """Validate that cache file exists, exit with error if not.
+
+        Parameters
+        ----------
+        cache : Path
+            Path to cache file to validate.
+
+        Raises
+        ------
+        typer.Exit
+            If cache file does not exist.
+        """
+        if not cache.exists():
+            typer.echo(
+                f"❌ Error: Cache file does not exist: {cache}",
+                err=True,
+            )
+            raise typer.Exit(code=1)
+
     def collect(
         self,
         cache: str = typer.Argument(
@@ -179,12 +199,7 @@ class CLIManager:
             $ yagua create-project /path/to/project
             $ yagua collect project.sqlite
         """
-        if not cache.exists():
-            typer.echo(
-                f"❌ Error: Cache file does not exist: {cache}",
-                err=True,
-            )
-            raise typer.Exit(code=1)
+        self._validate_cache_exists(cache)
 
         with Project(
             db_path=cache,
@@ -233,12 +248,7 @@ class CLIManager:
         Show project info:
             $ yagua info my_project.sqlite
         """
-        if not cache.exists():
-            typer.echo(
-                f"❌ Error: Cache file does not exist: {cache}",
-                err=True,
-            )
-            raise typer.Exit(code=1)
+        self._validate_cache_exists(cache)
 
         with Project(db_path=cache) as proj:
             test_count = proj.count_tests()
@@ -281,12 +291,7 @@ class CLIManager:
         List all tests:
             $ yagua list-tests my_project.sqlite
         """
-        if not cache.exists():
-            typer.echo(
-                f"❌ Error: Cache file does not exist: {cache}",
-                err=True,
-            )
-            raise typer.Exit(code=1)
+        self._validate_cache_exists(cache)
 
         with Project(db_path=cache) as proj:
             tests = proj.list_tests()
