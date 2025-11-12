@@ -125,6 +125,7 @@ class Project:
 
     def add_test(
         self,
+        project,
         file: str,
         suite: str | None,
         test: str,
@@ -152,7 +153,7 @@ class Project:
         """
         with self.transaction():
             test_obj, created = TestModel.get_or_create(
-                project=self.project,
+                project=project,
                 file=file,
                 suite=suite,
                 test=test,
@@ -187,9 +188,11 @@ class Project:
 
             saved_count = 0
             updated_count = 0
-            
+
+            project = self._get_project_model()
             for file, suite_name, test in tests:
                 _, created = self.add_test(
+                    project=project,
                     file=file,
                     suite=suite_name,
                     test=test,

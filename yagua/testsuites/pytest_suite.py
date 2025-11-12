@@ -46,7 +46,6 @@ class PytestSuite:
             return (parts[0], parts[1], parts[2])
 
     def collect_tests(self, project_path) -> list[tuple[str, str | None, str]]:
-
         result = subprocess.run(
             ["pytest", "--collect-only", "-q"],
             cwd=project_path,
