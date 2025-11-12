@@ -57,14 +57,20 @@ pip install -e ".[dev]"
 ## Quick Start
 
 ```bash
-# Collect tests from a project
-yagua --cache qa.sqlite collect /path/to/project
+# Create a new project cache
+yagua create-project /path/to/project
+
+# Collect tests from the project
+yagua collect project.sqlite
 
 # Show project information
-yagua --cache qa.sqlite info /path/to/project
+yagua info project.sqlite
 
 # List all tests
-yagua --cache qa.sqlite list-tests /path/to/project
+yagua list-tests project.sqlite
+
+# Collect coverage information
+yagua coverage project.sqlite
 ```
 
 ---
@@ -77,17 +83,22 @@ yagua --cache qa.sqlite list-tests /path/to/project
 # Show help
 yagua --help
 
-# Collect tests from a project
-yagua --cache qa.sqlite collect /path/to/project
+# Create a new project cache
+yagua create-project /path/to/project
+yagua create-project /path/to/project my_cache.sqlite --name "My Project" --description "Project description"
 
-# Collect tests with custom name and description
-yagua --cache qa.sqlite collect /path/to/project --name "my_project" --description "My project"
+# Collect tests from a project
+yagua collect project.sqlite
 
 # Show project information
-yagua --cache qa.sqlite info /path/to/project
+yagua info project.sqlite
 
 # List tests for a project
-yagua --cache qa.sqlite list-tests /path/to/project
+yagua list-tests project.sqlite
+
+# Collect coverage information
+yagua coverage project.sqlite
+yagua coverage project.sqlite --force  # Force recalculation
 ```
 
 ### Programmatic API
@@ -95,39 +106,37 @@ yagua --cache qa.sqlite list-tests /path/to/project
 ```python
 from yagua import Project, PytestSuite
 
-# Project is automatically created/updated in the database
-with Project(
-    cache_path="qa.sqlite",
+# Create a new project with metadata
+proj = Project.from_project_info(
     name="my_project",
     path="/path/to/project",
-    description="My awesome project"
-) as proj:
+    description="My awesome project",
+    db_path="qa.sqlite"
+)
+
+# Open existing cache and use as context manager
+with Project(db_path="qa.sqlite") as proj:
     # Collect and save tests from pytest suite
-    suite = PytestSuite("/path/to/project")
+    suite = PytestSuite()
     saved, updated = proj.collect_tests(suite)
     print(f"Collected {saved + updated} tests")
 
-    # Add individual tests
-    test, created = proj.add_test(
-        file="test_file.py",
-        suite="TestSuite",
-        test="test_example",
-        coverage=85.5
-    )
+    # List all tests as DataFrame
+    tests_df = proj.list_tests()
+    print(tests_df)
 
-    # List all tests
-    tests = proj.list_tests()
+    # Count tests
+    count = proj.count_tests()
+    print(f"Total tests: {count}")
 
-    # Access project info
-    print(f"Project: {proj.project.name}")
+    # Collect coverage
+    cov = proj.collect_coverage(suite)
+    print(f"Coverage: {cov:.2f}%")
 
-# Alternative: Use from_path constructor
-with Project.from_path(
-    project_path="/path/to/project",
-    cache_path="qa.sqlite"
-) as proj:
-    suite = PytestSuite("/path/to/project")
-    proj.collect_tests(suite)
+    # Access project info via magic methods
+    print(f"Project: {proj.name}")
+    print(f"Path: {proj.path}")
+    print(f"Description: {proj.description}")
 ```
 
 ---

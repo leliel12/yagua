@@ -37,19 +37,15 @@ yagua/
 
 **Two Constructor Patterns**
 ```python
-# Direct constructor - receives project details and cache path
-project = Project(
-    cache_path="/path/to/cache.sqlite",
+# Direct constructor - opens existing cache file
+project = Project(db_path="/path/to/cache.sqlite")
+
+# Alternative constructor - creates new cache with project info
+project = Project.from_project_info(
     name="my_project",
     path="/path/to/project",
-    description="Optional description"
-)
-
-# Alternative constructor - receives project path and derives name from directory
-project = Project.from_path(
-    project_path="/path/to/project",
-    cache_path="/path/to/cache.sqlite",
-    description="Optional description"
+    description="Optional description",
+    db_path="/path/to/cache.sqlite"  # Must not exist
 )
 ```
 
@@ -57,7 +53,7 @@ project = Project.from_path(
 - CLI commands are class methods in `CLIManager`
 - Commands are auto-registered via introspection in `_create_app()`
 - Method names with underscores (e.g., `list_tests`) become hyphenated commands (`list-tests`)
-- All methods receive `typer.Context` as first parameter containing `cache_path`
+- Each command receives cache path as argument (not via context)
 
 **Test Suite Handlers**
 - Test collection is separated into dedicated suite handler classes
@@ -84,23 +80,28 @@ After installation, the `yagua` command will be available globally.
 ### Running yagua CLI
 
 ```bash
-# Using installed command
-yagua --cache /path/to/cache.sqlite <command>
+# Show help
+yagua --help
+
+# Create a new project cache
+yagua create-project /path/to/project
+yagua create-project /path/to/project my_cache.sqlite --name "My Project" --description "Description"
 
 # Collect tests from a project
-yagua --cache qa.sqlite collect /path/to/project
-
-# Collect tests with custom name and description
-yagua --cache qa.sqlite collect /path/to/project --name "my_project" --description "My project description"
+yagua collect project.sqlite
 
 # Show project information
-yagua --cache qa.sqlite info /path/to/project
+yagua info project.sqlite
 
 # List tests for a project
-yagua --cache qa.sqlite list-tests /path/to/project
+yagua list-tests project.sqlite
+
+# Collect coverage information
+yagua coverage project.sqlite
+yagua coverage project.sqlite --force  # Force recalculation
 
 # Alternatively, using Python module
-python -m yagua --cache qa.sqlite <command>
+python -m yagua <command>
 ```
 
 ### Managing External Projects
@@ -115,48 +116,47 @@ python update_projects.py
 ```python
 from yagua import Project, PytestSuite
 
-# Use as context manager (auto-closes database)
-# Project is automatically created/updated in the database
-with Project(
-    cache_path="qa.sqlite",
+# Create a new project with metadata
+proj = Project.from_project_info(
     name="my_project",
     path="/path/to/project",
-    description="Optional description"
-) as proj:
+    description="Optional description",
+    db_path="qa.sqlite"
+)
+
+# Use as context manager (auto-closes database)
+with Project(db_path="qa.sqlite") as proj:
     # Collect and save tests from a pytest suite
-    suite = PytestSuite("/path/to/project")
+    suite = PytestSuite()
     saved_count, updated_count = proj.collect_tests(suite)
     print(f"Saved {saved_count} new tests, updated {updated_count}")
 
-    # Or collect tests manually
-    tests_found = suite.collect_tests()
-    for file, suite_name, test in tests_found:
-        proj.add_test(file=file, suite=suite_name, test=test)
-
     # Add individual test
+    project_model = proj._get_project_model()
     test, created = proj.add_test(
+        project=project_model,
         file="test_file.py",
         suite="TestSuite",  # Can be None
         test="test_example",
         coverage=85.5  # Optional
     )
 
-    # Query tests
-    tests = proj.list_tests()
+    # Query tests as DataFrame
+    tests_df = proj.list_tests()
+    print(tests_df)
 
-    # Access project info
-    print(f"Project: {proj.project.name}")
-    print(f"Path: {proj.project.path}")
+    # Count tests
+    count = proj.count_tests()
 
-# Alternative: Use from_path constructor
-with Project.from_path(
-    project_path="/path/to/project",
-    cache_path="qa.sqlite",
-    description="Optional description"
-) as proj:
-    # The project name is derived from the directory name
-    suite = PytestSuite("/path/to/project")
-    proj.collect_tests(suite)
+    # Collect coverage
+    cov = proj.collect_coverage(suite)
+    print(f"Coverage: {cov:.2f}%")
+
+    # Access project info via magic methods
+    print(f"Project: {proj.name}")
+    print(f"Path: {proj.path}")
+    print(f"Description: {proj.description}")
+    print(f"Coverage: {proj.coverage}")
 ```
 
 ## Database Schema
@@ -172,8 +172,10 @@ with Project.from_path(
 - `file`: Test file path
 - `suite` (nullable): Test suite/class name
 - `test`: Test function name
-- `coverage` (nullable): Coverage percentage
+- `coverage` (nullable): Coverage percentage per test (not yet implemented)
 - Unique constraint on: `(project, file, suite, test)`
+
+**Note**: Currently, coverage is stored at the project level only. Per-test coverage tracking is planned for future releases.
 
 ## Development Notes
 
@@ -183,23 +185,37 @@ Add a new method to `CLIManager` in `cli.py`:
 ```python
 def my_command(
     self,
-    ctx: typer.Context,
-    project_path: str = typer.Argument(..., help="Path to project"),
+    cache: str = typer.Argument(
+        ...,
+        help="Path to SQLite cache file",
+        parser=as_path,
+    ),
+    my_option: str = typer.Option(
+        None,
+        "--my-option",
+        help="Description of option"
+    ),
 ) -> None:
-    """Command description for help text."""
-    cache_path = ctx.obj.cache_path
-    project_path_obj = Path(project_path).resolve()
+    """Command description for help text.
 
-    with Project(
-        cache_path=cache_path,
-        name=project_path_obj.name,
-        path=str(project_path_obj),
-    ) as proj:
+    This docstring summary will be used as the command help text.
+    Everything before the first section separator is extracted.
+
+    Parameters
+    ----------
+    cache : Path
+        Path to cache file.
+    my_option : str, optional
+        Description of option.
+    """
+    self._validate_cache_exists(cache)
+
+    with Project(db_path=cache) as proj:
         # Implementation
         pass
 ```
 
-The command will be auto-registered as `my-command`.
+The command will be auto-registered as `my-command`. Use NumPy-style docstrings for consistency.
 
 ### Modifying Database Models
 
