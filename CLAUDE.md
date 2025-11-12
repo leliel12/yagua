@@ -206,3 +206,20 @@ The command will be auto-registered as `my-command`.
 1. Update models in `models.py`
 2. Since Peewee models are bound at runtime in `Project.__init__()`, ensure `BaseModel` has no hardcoded database
 3. The `Project` class handles model binding via `db.bind([BaseModel, ProjectModel, TestModel])`
+
+
+### Oden de los contenidos en un modulo
+
+1. Documentacion
+2. Imports
+3. Constantes
+4. Globales (siempre privados)
+5. Funciones privadas utiles en clases
+6. Clases
+    0. Variables de clase
+    1. Constructor (__init__)
+    2. Contructores alternativos (normalmente con los nombres "from_something" y decorados con @classmethod)
+    3. Privados ("_name" or "__name")
+    4. Propiedades
+    5. MEtodos publicos
+7. Funciones publicas
