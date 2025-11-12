@@ -54,11 +54,17 @@ class CLIManager:
         Create an empty cache file with project metadata.
     collect
         Collect tests from a project using pytest.
+    coverage
+        Collect and store coverage information.
     info
         Show project information from cache.
     list_tests
         List all tests for a project.
     """
+
+    # ========================================================================
+    # Public Commands - Project Creation
+    # ========================================================================
 
     def create_project(
         self,
@@ -146,25 +152,9 @@ class CLIManager:
             typer.echo(f"📝 Description: {proj.description}")
         typer.echo("✨ Cache initialized successfully (0 tests)")
 
-    def _validate_cache_exists(self, cache):
-        """Validate that cache file exists, exit with error if not.
-
-        Parameters
-        ----------
-        cache : Path
-            Path to cache file to validate.
-
-        Raises
-        ------
-        typer.Exit
-            If cache file does not exist.
-        """
-        if not cache.exists():
-            typer.echo(
-                f"❌ Error: Cache file does not exist: {cache}",
-                err=True,
-            )
-            raise typer.Exit(code=1)
+    # ========================================================================
+    # Public Commands - Test Management
+    # ========================================================================
 
     def collect(
         self,
@@ -220,48 +210,6 @@ class CLIManager:
             if updated_count > 0:
                 typer.echo(f"  🔄 Updated {updated_count} existing tests")
 
-    def info(
-        self,
-        cache: str = typer.Argument(
-            ...,
-            help="Path to SQLite cache file",
-            parser=as_path,
-        ),
-    ) -> None:
-        """Show project information from cache.
-
-        This command displays information about the project stored in the
-        cache database, including its name, path, description, and test count.
-
-        Parameters
-        ----------
-        cache : Path
-            Path to existing SQLite cache file.
-
-        Raises
-        ------
-        typer.Exit
-            If cache file does not exist.
-
-        Examples
-        --------
-        Show project info:
-            $ yagua info my_project.sqlite
-        """
-        self._validate_cache_exists(cache)
-
-        with Project(db_path=cache) as proj:
-            test_count = proj.count_tests()
-
-            typer.echo("\n📊 Project Information:")
-            typer.echo("=" * 80)
-            typer.echo(f"📝 Name: {proj.name}")
-            typer.echo(f"📁 Path: {proj.path}")
-            if proj.description:
-                typer.echo(f"📄 Description: {proj.description}")
-            typer.echo(f"🧪 Tests: {test_count}")
-            typer.echo("=" * 80 + "\n")
-
     def list_tests(
         self,
         cache: str = typer.Argument(
@@ -307,6 +255,10 @@ class CLIManager:
             typer.echo("")
             typer.echo(f"📊 Total: {len(tests)} tests\n")
 
+    # ========================================================================
+    # Public Commands - Coverage Management
+    # ========================================================================
+
     def coverage(
         self,
         cache: str = typer.Argument(
@@ -314,21 +266,126 @@ class CLIManager:
             help="Path to SQLite cache file",
             parser=as_path,
         ),
-        force: bool = typer.Option(False, )
+        force: bool = typer.Option(
+            False,
+            "--force",
+            "-f",
+            help="Force recalculation even if coverage exists",
+        ),
     ) -> None:
+        """Collect and store coverage information for the project.
+
+        This command runs pytest with coverage enabled and stores the
+        total coverage percentage in the project database.
+
+        Parameters
+        ----------
+        cache : Path
+            Path to existing SQLite cache file.
+        force : bool, optional
+            Force recalculation of coverage even if it already exists.
+
+        Raises
+        ------
+        typer.Exit
+            If cache file does not exist or no tests found.
+
+        Examples
+        --------
+        Collect coverage:
+            $ yagua coverage my_project.sqlite
+
+        Force recalculation:
+            $ yagua coverage my_project.sqlite --force
+        """
         self._validate_cache_exists(cache)
 
         with Project(db_path=cache) as proj:
             if not proj.count_tests():
                 typer.echo(f"⚠️  No tests found for project '{proj.name}'.")
                 return
-            if not(force or proj.coverage is None):
-                typer.echo(f"[completa claude]")
+
+            if not (force or proj.coverage is None):
+                typer.echo(
+                    f"📊 Coverage already exists: {proj.coverage:.2f}%\n"
+                    f"Use --force to recalculate."
+                )
                 raise typer.Exit(1)
 
+            typer.echo(f"📊 Calculating coverage for: {proj.name}")
             suite = PytestSuite()
             cov = proj.collect_coverage(suite)
-            typer.echo(cov)
+            typer.echo(f"✅ Coverage: {cov:.2f}%")
+
+    # ========================================================================
+    # Public Commands - Project Information
+    # ========================================================================
+
+    def info(
+        self,
+        cache: str = typer.Argument(
+            ...,
+            help="Path to SQLite cache file",
+            parser=as_path,
+        ),
+    ) -> None:
+        """Show project information from cache.
+
+        This command displays information about the project stored in the
+        cache database, including its name, path, description, and test count.
+
+        Parameters
+        ----------
+        cache : Path
+            Path to existing SQLite cache file.
+
+        Raises
+        ------
+        typer.Exit
+            If cache file does not exist.
+
+        Examples
+        --------
+        Show project info:
+            $ yagua info my_project.sqlite
+        """
+        self._validate_cache_exists(cache)
+
+        with Project(db_path=cache) as proj:
+            test_count = proj.count_tests()
+
+            typer.echo("\n📊 Project Information:")
+            typer.echo("=" * 80)
+            typer.echo(f"📝 Name: {proj.name}")
+            typer.echo(f"📁 Path: {proj.path}")
+            if proj.description:
+                typer.echo(f"📄 Description: {proj.description}")
+            typer.echo(f"🧪 Tests: {test_count}")
+            typer.echo("=" * 80 + "\n")
+
+    # ========================================================================
+    # Private Helper Methods
+    # ========================================================================
+
+    def _validate_cache_exists(self, cache):
+        """Validate that cache file exists, exit with error if not.
+
+        Parameters
+        ----------
+        cache : Path
+            Path to cache file to validate.
+
+        Raises
+        ------
+        typer.Exit
+            If cache file does not exist.
+        """
+        if not cache.exists():
+            typer.echo(
+                f"❌ Error: Cache file does not exist: {cache}",
+                err=True,
+            )
+            raise typer.Exit(code=1)
 
 
 # ============================================================================

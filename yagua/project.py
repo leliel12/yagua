@@ -22,8 +22,7 @@ ALL_MODELS = [BaseModel] + MODELS_TO_CREATE
 
 
 class Project:
-    """
-    Project manager for QA testing.
+    """Project manager for QA testing.
 
     This class manages the database connection and provides methods to interact
     with projects and tests. The database instance is created per-project and
@@ -31,98 +30,110 @@ class Project:
 
     Parameters
     ----------
-    cache_path : str or Path
+    db_path : str or Path
         Path to the SQLite database cache file.
-    name : str
-        Project name.
-    path : str or Path
-        Project path.
-    description : str, optional
-        Project description.
 
     Attributes
     ----------
-    cache_path : Path
-        Path to the SQLite database cache file.
     db : SqliteDatabase
         Database instance for this project.
-    project : ProjectModel
-        The project model instance for this project.
     """
 
-    def __init__(
-        self,
-        db_path,
-    ):
+    def __init__(self, db_path):
+        """Initialize Project with database path.
+
+        Parameters
+        ----------
+        db_path : str or Path
+            Path to SQLite database file.
+        """
         self.db = SqliteDatabase(str(db_path))
         self.db.connect()
 
         with self.transaction():
             self.db.create_tables(MODELS_TO_CREATE, safe=True)
 
+    # ========================================================================
+    # Class Methods
+    # ========================================================================
+
     @classmethod
     def from_project_info(
-        cls,
-        name,
-        path,
-        description,
-        db_path,
+        cls, name, path, description, db_path
     ) -> "Project":
+        """Create new Project with initial project information.
 
+        Parameters
+        ----------
+        name : str
+            Project name.
+        path : str or Path
+            Project directory path.
+        description : str, optional
+            Project description.
+        db_path : str or Path
+            Path to SQLite database file (must not exist).
+
+        Returns
+        -------
+        Project
+            New Project instance with stored project information.
+
+        Raises
+        ------
+        ValueError
+            If database file already exists.
+        """
         db_path = Path(db_path).resolve()
         if db_path.exists():
             raise ValueError(f"File {db_path} already exists")
 
         path = Path(path).resolve()
-        db_path = Path(db_path).resolve()
 
         project = cls(db_path)
         project.store_project_info(name, path, description)
 
         return project
 
-    @contextlib.contextmanager
-    def transaction(self):
-        with self.db.bind_ctx(ALL_MODELS):
-            with self.db.atomic() as txn:
-                try:
-                    yield txn
-                    txn.commit()
-                except:
-                    txn.rollback()
+    # ========================================================================
+    # Public Methods - Test Management
+    # ========================================================================
 
-    def store_project_info(
-        self, name: str, path: str, description: str | None = None
-    ) -> ProjectModel:
+    def collect_tests(self, suite) -> tuple[int, int]:
+        """Collect tests from a test suite and save them to the database.
+
+        Parameters
+        ----------
+        suite : PytestSuite
+            Test suite object with a get_tests() method.
+
+        Returns
+        -------
+        tuple[int, int]
+            Tuple of (saved_count, updated_count) indicating the number
+            of new tests saved and existing tests updated.
+        """
         with self.transaction():
-            project, created = ProjectModel.get_or_create(
-                id=1, name=name, path=path, description=description
-            )
-            if not created:
-                project.name = name
-                project.path = path
-                project.description = description
-                project.save()
+            tests = suite.get_tests(self.path)
 
-    def _get_project_model(self):
-        with self.transaction():
-            return ProjectModel.get_by_id(1)
+            saved_count = 0
+            updated_count = 0
 
-    def close(self):
-        """Close the database connection."""
-        if not self.db.is_closed():
-            self.db.close()
+            project = self._get_project_model()
+            for file, suite_name, test in tests:
+                _, created = self.add_test(
+                    project=project,
+                    file=file,
+                    suite=suite_name,
+                    test=test,
+                )
 
-    def __getattr__(self, a):
-        if a not in dir(self):
-            raise AttributeError(a)
-        model = self._get_project_model()
-        return getattr(model, a)
-    
-    def __dir__(self):
-        fields = [f for f in ProjectModel._meta.sorted_field_names if f != "id"]
-        return super().__dir__() + fields
-        
+                if created:
+                    saved_count += 1
+                else:
+                    updated_count += 1
+
+        return saved_count, updated_count
 
     def add_test(
         self,
@@ -132,11 +143,12 @@ class Project:
         test: str,
         coverage: float | None = None,
     ) -> tuple[TestModel, bool]:
-        """
-        Add or update a test in the database.
+        """Add or update a test in the database.
 
         Parameters
         ----------
+        project : ProjectModel
+            Project model instance.
         file : str
             Test file path.
         suite : str, optional
@@ -168,64 +180,23 @@ class Project:
 
         return test_obj, created
 
-    def collect_tests(self, suite) -> tuple[int, int]:
-        """
-        Collect tests from a test suite and save them to the database.
-
-        Parameters
-        ----------
-        suite : object
-            A test suite object with a `collect_tests()` method that returns
-            a list of tuples (file, suite, test).
+    def list_tests(self) -> pd.DataFrame:
+        """List all tests for this project as a DataFrame.
 
         Returns
         -------
-        tuple[int, int]
-            Tuple of (saved_count, updated_count) indicating the number
-            of new tests saved and existing tests updated.
-        """
-        with self.transaction():
-            tests = suite.get_tests(self.path)
-
-            saved_count = 0
-            updated_count = 0
-
-            project = self._get_project_model()
-            for file, suite_name, test in tests:
-                _, created = self.add_test(
-                    project=project,
-                    file=file,
-                    suite=suite_name,
-                    test=test,
-                )
-
-                if created:
-                    saved_count += 1
-                else:
-                    updated_count += 1
-
-        return saved_count, updated_count
-
-    def list_tests(self) -> list[TestModel]:
-        """
-        List all tests for this project.
-
-        Returns
-        -------
-        list[TestModel]
-            List of all test models for the project.
+        pd.DataFrame
+            DataFrame containing all test information.
         """
         with self.transaction():
             project = self._get_project_model()
             query = TestModel.select().where(TestModel.project == project)
-
             df = pd.DataFrame.from_dict(query.dicts())
 
         return df
 
     def count_tests(self) -> int:
-        """
-        Count all tests for this project.
+        """Count all tests for this project.
 
         Returns
         -------
@@ -238,7 +209,23 @@ class Project:
                 TestModel.select().where(TestModel.project == project).count()
             )
 
+    # ========================================================================
+    # Public Methods - Coverage Management
+    # ========================================================================
+
     def collect_coverage(self, suite):
+        """Collect and store coverage information for the project.
+
+        Parameters
+        ----------
+        suite : PytestSuite
+            Test suite object with a get_coverage() method.
+
+        Returns
+        -------
+        float
+            Coverage percentage.
+        """
         cov = suite.get_coverage(self.path, self.name)
         with self.transaction():
             project = self._get_project_model()
@@ -246,6 +233,108 @@ class Project:
             project.save()
         return cov
 
+    # ========================================================================
+    # Public Methods - Project Information
+    # ========================================================================
+
+    def store_project_info(
+        self, name: str, path: str, description: str | None = None
+    ) -> None:
+        """Store or update project information in database.
+
+        Parameters
+        ----------
+        name : str
+            Project name.
+        path : str
+            Project path.
+        description : str, optional
+            Project description.
+        """
+        with self.transaction():
+            project, created = ProjectModel.get_or_create(
+                id=1, name=name, path=path, description=description
+            )
+            if not created:
+                project.name = name
+                project.path = path
+                project.description = description
+                project.save()
+
+    # ========================================================================
+    # Private Methods
+    # ========================================================================
+
+    def _get_project_model(self):
+        """Get the project model from database.
+
+        Returns
+        -------
+        ProjectModel
+            The project model instance.
+        """
+        with self.transaction():
+            return ProjectModel.get_by_id(1)
+
+    # ========================================================================
+    # Context Manager & Magic Methods
+    # ========================================================================
+
+    @contextlib.contextmanager
+    def transaction(self):
+        """Context manager for database transactions.
+
+        Yields
+        ------
+        Transaction
+            Database transaction context.
+        """
+        with self.db.bind_ctx(ALL_MODELS):
+            with self.db.atomic() as txn:
+                try:
+                    yield txn
+                    txn.commit()
+                except:
+                    txn.rollback()
+
+    def close(self):
+        """Close the database connection."""
+        if not self.db.is_closed():
+            self.db.close()
+
+    def __getattr__(self, a):
+        """Provide dynamic access to project model attributes.
+
+        Parameters
+        ----------
+        a : str
+            Attribute name.
+
+        Returns
+        -------
+        Any
+            Attribute value from project model.
+
+        Raises
+        ------
+        AttributeError
+            If attribute doesn't exist.
+        """
+        if a not in dir(self):
+            raise AttributeError(a)
+        model = self._get_project_model()
+        return getattr(model, a)
+
+    def __dir__(self):
+        """Expose project model fields in dir().
+
+        Returns
+        -------
+        list
+            List of available attributes.
+        """
+        fields = [f for f in ProjectModel._meta.sorted_field_names if f != "id"]
+        return super().__dir__() + fields
 
     def __enter__(self):
         """Context manager entry."""
@@ -258,4 +347,4 @@ class Project:
 
     def __repr__(self):
         """String representation."""
-        return f"Project(cache_path={self.cache_path})"
+        return f"Project(db_path={self.db.database})"
