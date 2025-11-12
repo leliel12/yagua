@@ -315,7 +315,7 @@ class CLIManager:
             typer.echo(f"📊 Calculating coverage for: {proj.name}")
             suite = PytestSuite()
             cov = proj.collect_coverage(suite)
-            typer.echo(f"✅ Coverage: {cov:.2f}%")
+            typer.echo(f"💯 Total Coverage: {cov:.4f}%")
 
     # ========================================================================
     # Public Commands - Project Information
@@ -354,14 +354,17 @@ class CLIManager:
         with Project(db_path=cache) as proj:
             test_count = proj.count_tests()
 
-            typer.echo("\n📊 Project Information:")
-            typer.echo("=" * 80)
+            typer.echo("\n📊 Project Information -----------")
+            typer.echo("")
             typer.echo(f"📝 Name: {proj.name}")
             typer.echo(f"📁 Path: {proj.path}")
             if proj.description:
                 typer.echo(f"📄 Description: {proj.description}")
-            typer.echo(f"🧪 Tests: {test_count}")
-            typer.echo("=" * 80 + "\n")
+            if test_count:
+                typer.echo(f"🧪 Tests: {test_count}")
+            if proj.coverage:
+                typer.echo(f"💯 Total Coverage: {proj.coverage:.4f}%")
+            typer.echo("")
 
     # ========================================================================
     # Private Helper Methods

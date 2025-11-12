@@ -58,9 +58,7 @@ class Project:
     # ========================================================================
 
     @classmethod
-    def from_project_info(
-        cls, name, path, description, db_path
-    ) -> "Project":
+    def from_project_info(cls, name, path, description, db_path) -> "Project":
         """Create new Project with initial project information.
 
         Parameters
