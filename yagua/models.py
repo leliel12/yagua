@@ -33,6 +33,7 @@ class ProjectModel(BaseModel):
     name = CharField()
     path = CharField()
     description = CharField(null=True)
+    coverage = FloatField(null=True, default=None)
 
     class Meta:
         # Ensure only one project per database

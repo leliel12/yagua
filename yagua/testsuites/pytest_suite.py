@@ -4,6 +4,7 @@ Yagua - Pytest Suite.
 This module provides a test suite handler for pytest-based projects.
 """
 
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -96,3 +97,51 @@ class PytestSuite:
                 "Error: pytest not found. Please install pytest.", file=sys.stderr
             )
             return []
+
+    def get_coverage(self, project_path) -> float | None:
+        """
+        Run pytest with coverage and return the total coverage percentage.
+
+        Executes pytest with coverage enabled and parses the output to extract
+        the total coverage percentage.
+
+        Parameters
+        ----------
+        project_path : str or Path
+            Path to the project directory to run coverage on.
+
+        Returns
+        -------
+        float | None
+            Total coverage percentage (0-100) or None if coverage could not
+            be determined.
+        """
+        try:
+            result = subprocess.run(
+                ["pytest", "-m=''", "--cov=.", "--cov-report=term"],
+                cwd=project_path,
+                capture_output=True,
+                text=True,
+            )
+
+            # Parse the coverage output
+            # Look for line like: TOTAL                      100      0   100%
+            output = result.stdout + result.stderr
+            for line in output.splitlines():
+                if line.startswith("TOTAL"):
+                    # Extract percentage from the line
+                    match = re.search(r'(\d+(?:\.\d+)?)%', line)
+                    if match:
+                        return float(match.group(1))
+
+            return None
+
+        except subprocess.CalledProcessError as e:
+            print(f"Error running pytest coverage: {e}", file=sys.stderr)
+            return None
+        except FileNotFoundError:
+            print(
+                "Error: pytest or pytest-cov not found. Please install pytest and pytest-cov.",
+                file=sys.stderr,
+            )
+            return None

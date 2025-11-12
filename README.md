@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="res/logo.png" alt="Yagua Logo" width="300"/>
+<img src="https://github.com/leliel12/qa_entropy/raw/master/res/logo.png" alt="Yagua Logo" width="300"/>
 
 # Yagua
 
