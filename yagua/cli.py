@@ -17,6 +17,10 @@ from .testsuites import PytestSuite
 # ============================================================================
 
 
+def as_path(string):
+    return Path(string).resolve()
+
+
 class CLIManager:
     """CLI manager that exposes methods as typer subcommands.
 
@@ -34,12 +38,17 @@ class CLIManager:
         List all tests for a project.
     """
 
-    def collect(
+    def create_project(
         self,
-        ctx: typer.Context,
         project_path: str = typer.Argument(
             ...,
             help="Path to the project directory",
+            parser=as_path,
+        ),
+        cache: str = typer.Argument(
+            None,
+            help="[CLAUDE COMPLETA]",
+            parser=as_path,
         ),
         name: str = typer.Option(
             None,
@@ -54,51 +63,60 @@ class CLIManager:
             help="Project description",
         ),
     ) -> None:
-        """Collect tests from a project using pytest.
 
-        This command runs pytest --collect-only -q to discover all tests
-        in the project and stores them in the database.
-
-        Parameters
-        ----------
-        ctx : typer.Context
-            Typer context containing cache_path.
-        project_path : str
-            Path to the project directory.
-        name : str, optional
-            Project name (defaults to directory name).
-        description : str, optional
-            Project description.
-
-        Raises
-        ------
-        typer.Exit
-            If project path does not exist or no tests collected.
-        """
-        cache_path = ctx.obj.cache_path
-        project_path_obj = Path(project_path).resolve()
-
-        if not project_path_obj.exists():
+        if not project_path.exists():
             typer.echo(
-                f"Error: Project path does not exist: {project_path_obj}",
+                f"Error: Project path does not exist: {project_path}",
                 err=True,
             )
             raise typer.Exit(code=1)
 
-        typer.echo(f"Collecting tests from: {project_path_obj}")
+        project_name = name or project_path.name
+        cache = cache or as_path(project_path.name + ".sqlite")
 
-        # Initialize project - project is created in database automatically
-        project_name = name or project_path_obj.name
+        typer.echo(f"Creating empty cache for project: {project_name}")
+        typer.echo(f"Cache file: {cache.name}")
+
+        try:
+            proj = Project.from_project_info(
+                name=project_name,
+                path=project_path,
+                description=description,
+                db_path=cache,
+            )
+        except Exception as err:
+            typer.echo(str(err), err=True)
+            raise typer.Exit(code=1)
+
+        typer.echo(f"Project created: {proj.name}")
+        typer.echo(f"Path: {proj.path}")
+        if proj.description:
+            typer.echo(f"Description: {proj.description}")
+        typer.echo("Cache initialized successfully")
+
+    def collect(
+        self,
+        cache: str = typer.Argument(
+            ...,
+            help="[CLAUDE COMPLETA]",
+            parser=as_path,
+        ),
+    ) -> None:
+
+        if not cache.exists():
+            typer.echo(
+                f"Error: Project path does not exist: {cache}",
+                err=True,
+            )
+            raise typer.Exit(code=1)
+
         with Project(
-            cache_path=cache_path,
-            name=project_name,
-            path=str(project_path_obj),
-            description=description,
+            db_path=cache,
         ) as proj:
-            typer.echo(f"Using project: {project_name}")
+            typer.echo(f"Using project: {proj.name} ({proj.path})")
 
             # Create test suite and collect tests
-            suite = PytestSuite(project_path_obj)
+            suite = PytestSuite()
             saved_count, updated_count = proj.collect_tests(suite)
 
             total_tests = saved_count + updated_count
@@ -111,113 +129,115 @@ class CLIManager:
             if updated_count > 0:
                 typer.echo(f"Updated {updated_count} existing tests")
 
-    def info(
-        self,
-        ctx: typer.Context,
-        project_path: str = typer.Argument(
-            ...,
-            help="Path to the project directory",
-        ),
-        name: str = typer.Option(
-            None,
-            "-n",
-            "--name",
-            help="Project name (defaults to directory name)",
-        ),
-    ) -> None:
-        """Show project information from cache.
+    # def info(
+    #     self,
+    #     ctx: typer.Context,
+    #     project_path: str = typer.Argument(
+    #         ...,
+    #         help="Path to the project directory",
+    #     ),
+    #     name: str = typer.Option(
+    #         None,
+    #         "-n",
+    #         "--name",
+    #         help="Project name (defaults to directory name)",
+    #     ),
+    # ) -> None:
+    #     """Show project information from cache.
 
-        This command displays information about the project stored in the
-        cache, including its name, path, description, and test count.
+    #     This command displays information about the project stored in the
+    #     cache, including its name, path, description, and test count.
 
-        Parameters
-        ----------
-        ctx : typer.Context
-            Typer context containing cache_path.
-        project_path : str
-            Path to the project directory.
-        name : str, optional
-            Project name (defaults to directory name).
-        """
-        cache_path = ctx.obj.cache_path
-        project_path_obj = Path(project_path).resolve()
-        project_name = name or project_path_obj.name
+    #     Parameters
+    #     ----------
+    #     ctx : typer.Context
+    #         Typer context containing cache_path.
+    #     project_path : str
+    #         Path to the project directory.
+    #     name : str, optional
+    #         Project name (defaults to directory name).
+    #     """
+    #     cache_path = ctx.obj.cache_path
+    #     project_path_obj = Path(project_path).resolve()
+    #     project_name = name or project_path_obj.name
 
-        with Project(
-            cache_path=cache_path,
-            name=project_name,
-            path=str(project_path_obj),
-        ) as proj:
-            typer.echo("\nProject Information:")
-            typer.echo("=" * 80)
-            typer.echo(f"Name: {proj.project.name}")
-            typer.echo(f"Path: {proj.project.path}")
-            if proj.project.description:
-                typer.echo(f"Description: {proj.project.description}")
-            test_count = proj.project.tests.count()
-            typer.echo(f"Tests: {test_count}")
-            typer.echo("-" * 80)
+    #     with Project(
+    #         cache_path=cache_path,
+    #         name=project_name,
+    #         path=str(project_path_obj),
+    #     ) as proj:
+    #         typer.echo("\nProject Information:")
+    #         typer.echo("=" * 80)
+    #         typer.echo(f"Name: {proj.project.name}")
+    #         typer.echo(f"Path: {proj.project.path}")
+    #         if proj.project.description:
+    #             typer.echo(f"Description: {proj.project.description}")
+    #         test_count = proj.project.tests.count()
+    #         typer.echo(f"Tests: {test_count}")
+    #         typer.echo("-" * 80)
 
-    def list_tests(
-        self,
-        ctx: typer.Context,
-        project_path: str = typer.Argument(
-            ...,
-            help="Path to the project directory",
-        ),
-        name: str = typer.Option(
-            None,
-            "-n",
-            "--name",
-            help="Project name (defaults to directory name)",
-        ),
-    ) -> None:
-        """List all tests for a project.
+    # def list_tests(
+    #     self,
+    #     ctx: typer.Context,
+    #     project_path: str = typer.Argument(
+    #         ...,
+    #         help="Path to the project directory",
+    #     ),
+    #     name: str = typer.Option(
+    #         None,
+    #         "-n",
+    #         "--name",
+    #         help="Project name (defaults to directory name)",
+    #     ),
+    # ) -> None:
+    #     """List all tests for a project.
 
-        This command displays all tests associated with the project,
-        including their file paths, suite names (if any), test names, and
-        coverage information.
+    #     This command displays all tests associated with the project,
+    #     including their file paths, suite names (if any), test names, and
+    #     coverage information.
 
-        Parameters
-        ----------
-        ctx : typer.Context
-            Typer context containing cache_path.
-        project_path : str
-            Path to the project directory.
-        name : str, optional
-            Project name (defaults to directory name).
-        """
-        cache_path = ctx.obj.cache_path
-        project_path_obj = Path(project_path).resolve()
-        project_name = name or project_path_obj.name
+    #     Parameters
+    #     ----------
+    #     ctx : typer.Context
+    #         Typer context containing cache_path.
+    #     project_path : str
+    #         Path to the project directory.
+    #     name : str, optional
+    #         Project name (defaults to directory name).
+    #     """
+    #     cache_path = ctx.obj.cache_path
+    #     project_path_obj = Path(project_path).resolve()
+    #     project_name = name or project_path_obj.name
 
-        with Project(
-            cache_path=cache_path,
-            name=project_name,
-            path=str(project_path_obj),
-        ) as proj:
-            tests = proj.list_tests()
+    #     with Project(
+    #         cache_path=cache_path,
+    #         name=project_name,
+    #         path=str(project_path_obj),
+    #     ) as proj:
+    #         tests = proj.list_tests()
 
-            if not tests:
-                typer.echo(f"No tests found for project '{project_name}'.")
-                return
+    #         if not tests:
+    #             typer.echo(f"No tests found for project '{project_name}'.")
+    #             return
 
-            typer.echo(f"\nTests for project '{project_name}':")
-            typer.echo("=" * 80)
+    #         typer.echo(f"\nTests for project '{project_name}':")
+    #         typer.echo("=" * 80)
 
-            for test in tests:
-                if test.suite:
-                    test_path = f"{test.file}::{test.suite}::{test.test}"
-                else:
-                    test_path = f"{test.file}::{test.test}"
+    #         for test in tests:
+    #             if test.suite:
+    #                 test_path = f"{test.file}::{test.suite}::{test.test}"
+    #             else:
+    #                 test_path = f"{test.file}::{test.test}"
 
-                coverage_str = (
-                    f"{test.coverage:.2f}%" if test.coverage is not None else "N/A"
-                )
-                typer.echo(f"{test_path} (coverage: {coverage_str})")
+    #             coverage_str = (
+    #                 f"{test.coverage:.2f}%"
+    #                 if test.coverage is not None
+    #                 else "N/A"
+    #             )
+    #             typer.echo(f"{test_path} (coverage: {coverage_str})")
 
-            typer.echo("-" * 80)
-            typer.echo(f"Total: {len(tests)} tests")
+    #         typer.echo("-" * 80)
+    #         typer.echo(f"Total: {len(tests)} tests")
 
 
 # ============================================================================
@@ -261,32 +281,6 @@ def _make_help(obj) -> str:
     return "\n".join(lines)
 
 
-def _global_cache_callback(
-    ctx: typer.Context,
-    cache: Path = typer.Option(
-        ...,
-        "--cache",
-        help="Path to the SQLite database file (e.g., qa.sqlite)",
-        dir_okay=False,
-    ),
-):
-    """Global configuration callback for Typer application.
-
-    This function is called before any command and sets up the global
-    configuration context. It stores the database cache path for use by
-    all commands.
-
-    Parameters
-    ----------
-    ctx : typer.Context
-        Typer context to store application configuration.
-    cache : Path
-        Path to SQLite database file.
-    """
-    # Store cache_path in context
-    ctx.obj = type("Config", (), {"cache_path": str(cache) if cache else None})()
-
-
 def _create_app(cli_manager):
     """Create and configure the Typer application.
 
@@ -325,19 +319,14 @@ def _create_app(cli_manager):
         name="yagua",
         help="Yagua - Tool for collecting and managing test information",
         add_completion=False,
-        callback=_global_cache_callback,
     )
-
-    # add no_args is help
-    click_obj = typer.main.get_command(app)
-    click_obj.no_args_is_help = True
 
     # Introspect CLI class and register methods as commands
     members = inspect.getmembers(cli_manager, predicate=inspect.ismethod)
     for name, method in members:
         if not name.startswith("_"):
             doc = _make_help(method)
-            cmd_wrapper = app.command(name=name, help=doc)
+            cmd_wrapper = app.command(name=name.replace("_", "-"), help=doc)
             cmd_wrapper(method)
 
     return app

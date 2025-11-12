@@ -2,7 +2,9 @@
 Yagua - Project Class.
 """
 
+import contextlib
 from pathlib import Path
+import types
 
 from peewee import SqliteDatabase
 
@@ -12,6 +14,9 @@ from .models import BaseModel, ProjectModel, TestModel
 # ============================================================================
 # PROJECT CLASS
 # ============================================================================
+
+MODELS_TO_CREATE = [ProjectModel, TestModel]
+ALL_MODELS = [BaseModel] + MODELS_TO_CREATE
 
 
 class Project:
@@ -45,131 +50,73 @@ class Project:
 
     def __init__(
         self,
-        cache_path: str | Path,
-        name: str,
-        path: str | Path,
-        description: str | None = None,
+        db_path,
     ):
-        """
-        Initialize a Project instance with a database cache path and project details.
+        self.db = SqliteDatabase(str(db_path))
+        self.db.connect()
 
-        Parameters
-        ----------
-        cache_path : str or Path
-            Path to the SQLite database cache file.
-        name : str
-            Project name.
-        path : str or Path
-            Project path.
-        description : str, optional
-            Project description.
-        """
-        self.cache_path = Path(cache_path)
-        self.db = SqliteDatabase(str(self.cache_path))
-
-        # Bind models to this database instance
-        self.db.bind([BaseModel, ProjectModel, TestModel])
-
-        # Ensure cache file and tables exist
-        self._initialize_database()
-
-        # Create or update the project in the database
-        self.project = self._ensure_project(name, str(path), description)
+        with self.transaction():
+            self.db.create_tables(MODELS_TO_CREATE, safe=True)
 
     @classmethod
-    def from_path(
+    def from_project_info(
         cls,
-        project_path: str | Path,
-        cache_path: str | Path,
-        description: str | None = None,
+        name,
+        path,
+        description,
+        db_path,
     ) -> "Project":
-        """
-        Create a Project instance from a project directory path.
 
-        This constructor creates a Project instance with the specified cache
-        location for the given project path. The project name is derived from
-        the directory name.
+        db_path = Path(db_path).resolve()
+        if db_path.exists():
+            raise ValueError(f"File {db_path} already exists")
 
-        Parameters
-        ----------
-        project_path : str or Path
-            Path to the project directory.
-        cache_path : str or Path
-            Path where to create the cache database file.
-        description : str, optional
-            Project description.
+        path = Path(path).resolve()
+        db_path = Path(db_path).resolve()
 
-        Returns
-        -------
-        Project
-            A new Project instance with the specified cache path.
-        """
-        project_path_obj = Path(project_path).resolve()
-        project_name = project_path_obj.name
-        return cls(
-            cache_path=cache_path,
-            name=project_name,
-            path=str(project_path_obj),
-            description=description,
-        )
-
-    def _initialize_database(self):
-        """
-        Initialize the database and create tables if they don't exist.
-
-        This method creates the cache file (if it doesn't exist) and
-        ensures all required tables are created.
-        """
-        # Ensure parent directory exists
-        self.cache_path.parent.mkdir(parents=True, exist_ok=True)
-
-        # Connect and create tables
-        self.db.connect()
-        self.db.create_tables([ProjectModel, TestModel], safe=True)
-
-    def _ensure_project(
-        self, name: str, path: str, description: str | None = None
-    ) -> ProjectModel:
-        """
-        Create or update the single project in the database.
-
-        Since each cache file represents exactly one project, this method
-        ensures that there is always exactly one ProjectModel instance
-        with id=1.
-
-        Parameters
-        ----------
-        name : str
-            Project name.
-        path : str
-            Project path.
-        description : str, optional
-            Project description.
-
-        Returns
-        -------
-        ProjectModel
-            The project model instance.
-        """
-        # Try to get the existing project (id=1)
-        try:
-            project = ProjectModel.get_by_id(1)
-            # Update existing project
-            project.name = name
-            project.path = path
-            if description is not None:
-                project.description = description
-            project.save()
-        except ProjectModel.DoesNotExist:
-            # Create new project with id=1
-            project = ProjectModel.create(
-                id=1,
-                name=name,
-                path=path,
-                description=description,
-            )
+        project = cls(db_path)
+        project.store_project_info(name, path, description)
 
         return project
+
+    @contextlib.contextmanager
+    def transaction(self):
+        with self.db.bind_ctx(ALL_MODELS):
+            with self.db.atomic() as txn:
+                try:
+                    yield txn
+                    txn.commit()
+                except:
+                    txn.rollback()
+
+    def store_project_info(
+        self, name: str, path: str, description: str | None = None
+    ) -> ProjectModel:
+        with self.transaction():
+            project, created = ProjectModel.get_or_create(
+                id=1, name=name, path=path, description=description
+            )
+            if not created:
+                project.name = name
+                project.path = path
+                project.description = description
+                project.save()
+
+    def _get_project_model(self):
+        with self.transaction():
+            return ProjectModel.get_by_id(1)
+
+    @property
+    def name(self):
+        return self._get_project_model().name
+
+    @property
+    def path(self):
+        return self._get_project_model().path
+
+    @property
+    def description(self):
+        return self._get_project_model().description
 
     def close(self):
         """Close the database connection."""
@@ -203,18 +150,19 @@ class Project:
             Tuple of (test, created) where created is True if the test
             was newly created.
         """
-        test_obj, created = TestModel.get_or_create(
-            project=self.project,
-            file=file,
-            suite=suite,
-            test=test,
-            defaults={"coverage": coverage},
-        )
+        with self.transaction():
+            test_obj, created = TestModel.get_or_create(
+                project=self.project,
+                file=file,
+                suite=suite,
+                test=test,
+                defaults={"coverage": coverage},
+            )
 
-        if not created and coverage is not None:
-            # Update coverage if provided
-            test_obj.coverage = coverage
-            test_obj.save()
+            if not created and coverage is not None:
+                # Update coverage if provided
+                test_obj.coverage = coverage
+                test_obj.save()
 
         return test_obj, created
 
@@ -234,22 +182,23 @@ class Project:
             Tuple of (saved_count, updated_count) indicating the number
             of new tests saved and existing tests updated.
         """
-        tests = suite.collect_tests(self.project.path)
+        with self.transaction():
+            tests = suite.collect_tests(self.path)
 
-        saved_count = 0
-        updated_count = 0
+            saved_count = 0
+            updated_count = 0
+            
+            for file, suite_name, test in tests:
+                _, created = self.add_test(
+                    file=file,
+                    suite=suite_name,
+                    test=test,
+                )
 
-        for file, suite_name, test in tests:
-            _, created = self.add_test(
-                file=file,
-                suite=suite_name,
-                test=test,
-            )
-
-            if created:
-                saved_count += 1
-            else:
-                updated_count += 1
+                if created:
+                    saved_count += 1
+                else:
+                    updated_count += 1
 
         return saved_count, updated_count
 
@@ -262,10 +211,14 @@ class Project:
         list[TestModel]
             List of all test models for the project.
         """
-        return list(TestModel.select().where(TestModel.project == self.project))
+        with self.transaction():
+            return list(
+                TestModel.select().where(TestModel.project == self.project)
+            )
 
     def __enter__(self):
         """Context manager entry."""
+        self.db.connect(reuse_if_open=True)
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):

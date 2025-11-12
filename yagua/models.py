@@ -51,4 +51,6 @@ class TestModel(BaseModel):
     coverage = FloatField(null=True, default=None)
 
     class Meta:
-        indexes = ((("project", "file", "suite", "test"), True),)  # Unique constraint
+        indexes = (
+            (("project", "file", "suite", "test"), True),
+        )  # Unique constraint

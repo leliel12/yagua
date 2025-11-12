@@ -37,68 +37,33 @@ class PytestSuite:
         tuple[str, str | None, str] | None
             Tuple of (file, suite, test) or None if parsing fails.
         """
-        line = line.strip()
-        if not line or "::" not in line:
-            return None
-
-        parts = line.split("::")
+        parts = line.strip().split("::")
         if len(parts) == 2:
             # Format: file::test
             return (parts[0], None, parts[1])
         elif len(parts) == 3:
             # Format: file::Suite::test
             return (parts[0], parts[1], parts[2])
-        else:
-            return None
 
     def collect_tests(self, project_path) -> list[tuple[str, str | None, str]]:
-        """
-        Collect all tests from a pytest project.
 
-        Uses pytest's --collect-only flag to discover all tests in the project
-        without executing them.
+        result = subprocess.run(
+            ["pytest", "--collect-only", "-q"],
+            cwd=project_path,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
 
-        Parameters
-        ----------
-        project_path : str or Path
-            Path to the project directory to collect tests from.
+        tests = []
+        for line in result.stdout.splitlines():
+            parsed = self._parse_test_line(line)
+            if parsed:
+                tests.append(parsed)
 
-        Returns
-        -------
-        list[tuple[str, str | None, str]]
-            List of tuples containing (file, suite, test) where:
-            - file: Test file path
-            - suite: Test class/suite name (None if test is not in a class)
-            - test: Test function name
-        """
-        try:
-            result = subprocess.run(
-                ["pytest", "--collect-only", "-q"],
-                cwd=project_path,
-                capture_output=True,
-                text=True,
-                check=True,
-            )
+        return tests
 
-            tests = []
-            for line in result.stdout.splitlines():
-                parsed = self._parse_test_line(line)
-                if parsed:
-                    tests.append(parsed)
-
-            return tests
-
-        except subprocess.CalledProcessError as e:
-            print(f"Error running pytest: {e}", file=sys.stderr)
-            print(f"stderr: {e.stderr}", file=sys.stderr)
-            return []
-        except FileNotFoundError:
-            print(
-                "Error: pytest not found. Please install pytest.", file=sys.stderr
-            )
-            return []
-
-    def get_coverage(self, project_path) -> float | None:
+    def get_coverage(self, project_path, project_name) -> float | None:
         """
         Run pytest with coverage and return the total coverage percentage.
 
@@ -116,32 +81,15 @@ class PytestSuite:
             Total coverage percentage (0-100) or None if coverage could not
             be determined.
         """
-        try:
-            result = subprocess.run(
-                ["pytest", "-m=''", "--cov=.", "--cov-report=term"],
-                cwd=project_path,
-                capture_output=True,
-                text=True,
-            )
 
-            # Parse the coverage output
-            # Look for line like: TOTAL                      100      0   100%
-            output = result.stdout + result.stderr
-            for line in output.splitlines():
-                if line.startswith("TOTAL"):
-                    # Extract percentage from the line
-                    match = re.search(r'(\d+(?:\.\d+)?)%', line)
-                    if match:
-                        return float(match.group(1))
-
-            return None
-
-        except subprocess.CalledProcessError as e:
-            print(f"Error running pytest coverage: {e}", file=sys.stderr)
-            return None
-        except FileNotFoundError:
-            print(
-                "Error: pytest or pytest-cov not found. Please install pytest and pytest-cov.",
-                file=sys.stderr,
-            )
-            return None
+        result = subprocess.run(
+            [
+                "pytest",
+                "-m=''",
+                f"--cov={project_name}",
+                f"--cov-report=json:{output}",
+            ],
+            cwd=project_path,
+            capture_output=True,
+            text=True,
+        )
