@@ -6,6 +6,8 @@ import contextlib
 from pathlib import Path
 import types
 
+import pandas as pd
+
 from peewee import SqliteDatabase
 
 from .models import BaseModel, ProjectModel, TestModel
@@ -106,22 +108,21 @@ class Project:
         with self.transaction():
             return ProjectModel.get_by_id(1)
 
-    @property
-    def name(self):
-        return self._get_project_model().name
-
-    @property
-    def path(self):
-        return self._get_project_model().path
-
-    @property
-    def description(self):
-        return self._get_project_model().description
-
     def close(self):
         """Close the database connection."""
         if not self.db.is_closed():
             self.db.close()
+
+    def __getattr__(self, a):
+        if a not in dir(self):
+            raise AttributeError(a)
+        model = self._get_project_model()
+        return getattr(model, a)
+    
+    def __dir__(self):
+        fields = [f for f in ProjectModel._meta.sorted_field_names if f != "id"]
+        return super().__dir__() + fields
+        
 
     def add_test(
         self,
@@ -184,7 +185,7 @@ class Project:
             of new tests saved and existing tests updated.
         """
         with self.transaction():
-            tests = suite.collect_tests(self.path)
+            tests = suite.get_tests(self.path)
 
             saved_count = 0
             updated_count = 0
@@ -216,9 +217,11 @@ class Project:
         """
         with self.transaction():
             project = self._get_project_model()
-            return list(
-                TestModel.select().where(TestModel.project == project)
-            )
+            query = TestModel.select().where(TestModel.project == project)
+
+            df = pd.DataFrame.from_dict(query.dicts())
+
+        return df
 
     def count_tests(self) -> int:
         """
@@ -231,7 +234,18 @@ class Project:
         """
         with self.transaction():
             project = self._get_project_model()
-            return TestModel.select().where(TestModel.project == project).count()
+            return (
+                TestModel.select().where(TestModel.project == project).count()
+            )
+
+    def collect_coverage(self, suite):
+        cov = suite.get_coverage(self.path, self.name)
+        with self.transaction():
+            project = self._get_project_model()
+            project.coverage = cov
+            project.save()
+        return cov
+
 
     def __enter__(self):
         """Context manager entry."""

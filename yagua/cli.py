@@ -296,28 +296,39 @@ class CLIManager:
         with Project(db_path=cache) as proj:
             tests = proj.list_tests()
 
-            if not tests:
+            if not len(tests):
                 typer.echo(f"⚠️  No tests found for project '{proj.name}'.")
                 return
 
             typer.echo(f"\n🧪 Tests for project '{proj.name}':")
-            typer.echo("=" * 80)
+            typer.echo("")
 
-            for test in tests:
-                if test.suite:
-                    test_path = f"{test.file}::{test.suite}::{test.test}"
-                else:
-                    test_path = f"{test.file}::{test.test}"
-
-                coverage_str = (
-                    f"{test.coverage:.2f}%"
-                    if test.coverage is not None
-                    else "N/A"
-                )
-                typer.echo(f"  • {test_path} (coverage: {coverage_str})")
-
-            typer.echo("=" * 80)
+            typer.echo(tests)
+            typer.echo("")
             typer.echo(f"📊 Total: {len(tests)} tests\n")
+
+    def coverage(
+        self,
+        cache: str = typer.Argument(
+            ...,
+            help="Path to SQLite cache file",
+            parser=as_path,
+        ),
+        force: bool = typer.Option(False, )
+    ) -> None:
+        self._validate_cache_exists(cache)
+
+        with Project(db_path=cache) as proj:
+            if not proj.count_tests():
+                typer.echo(f"⚠️  No tests found for project '{proj.name}'.")
+                return
+            if not(force or proj.coverage is None):
+                typer.echo(f"[completa claude]")
+                raise typer.Exit(1)
+
+            suite = PytestSuite()
+            cov = proj.collect_coverage(suite)
+            typer.echo(cov)
 
 
 # ============================================================================

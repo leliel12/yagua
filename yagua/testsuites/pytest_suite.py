@@ -5,9 +5,11 @@ This module provides a test suite handler for pytest-based projects.
 """
 
 import re
+import tempfile
 import subprocess
 import sys
 from pathlib import Path
+import json
 
 
 # ============================================================================
@@ -22,6 +24,9 @@ class PytestSuite:
     This class is responsible for discovering and collecting test information
     from pytest projects using pytest's collection mechanism.
     """
+
+    def __init__(self):
+        self._temp_dir = tempfile.TemporaryDirectory()
 
     def _parse_test_line(self, line: str) -> tuple[str, str | None, str] | None:
         """
@@ -45,13 +50,16 @@ class PytestSuite:
             # Format: file::Suite::test
             return (parts[0], parts[1], parts[2])
 
-    def collect_tests(self, project_path) -> list[tuple[str, str | None, str]]:
+    def _run(self, cmd, cwd):
         result = subprocess.run(
+            cmd, cwd=cwd, capture_output=True, text=True, check=True
+        )
+        return result
+
+    def get_tests(self, project_path) -> list[tuple[str, str | None, str]]:
+        result = self._run(
             ["pytest", "--collect-only", "-q"],
             cwd=project_path,
-            capture_output=True,
-            text=True,
-            check=True,
         )
 
         tests = []
@@ -81,14 +89,21 @@ class PytestSuite:
             be determined.
         """
 
-        result = subprocess.run(
-            [
-                "pytest",
-                "-m=''",
-                f"--cov={project_name}",
-                f"--cov-report=json:{output}",
-            ],
-            cwd=project_path,
-            capture_output=True,
-            text=True,
-        )
+        with tempfile.NamedTemporaryFile(
+            dir=self._temp_dir.name, suffix=".json", prefix="yagua_cov_"
+        ) as fp:
+
+            result = self._run(
+                [
+                    "pytest",
+                    # "-m=''",
+                    f"--cov={project_name}",
+                    f"--cov-report=json:{fp.name}",
+                ],
+                cwd=project_path,
+            )
+
+            data = json.load(fp)
+
+        cov = data["totals"]["percent_covered"]
+        return cov
