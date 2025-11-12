@@ -54,6 +54,10 @@ class CLIManager:
         Create an empty cache file with project metadata.
     collect
         Collect tests from a project using pytest.
+    info
+        Show project information from cache.
+    list_tests
+        List all tests for a project.
     """
 
     def create_project(
@@ -200,6 +204,115 @@ class CLIManager:
             typer.echo(f"  💾 Saved {saved_count} new tests")
             if updated_count > 0:
                 typer.echo(f"  🔄 Updated {updated_count} existing tests")
+
+    def info(
+        self,
+        cache: str = typer.Argument(
+            ...,
+            help="Path to SQLite cache file",
+            parser=as_path,
+        ),
+    ) -> None:
+        """Show project information from cache.
+
+        This command displays information about the project stored in the
+        cache database, including its name, path, description, and test count.
+
+        Parameters
+        ----------
+        cache : Path
+            Path to existing SQLite cache file.
+
+        Raises
+        ------
+        typer.Exit
+            If cache file does not exist.
+
+        Examples
+        --------
+        Show project info:
+            $ yagua info my_project.sqlite
+        """
+        if not cache.exists():
+            typer.echo(
+                f"❌ Error: Cache file does not exist: {cache}",
+                err=True,
+            )
+            raise typer.Exit(code=1)
+
+        with Project(db_path=cache) as proj:
+            test_count = proj.count_tests()
+
+            typer.echo("\n📊 Project Information:")
+            typer.echo("=" * 80)
+            typer.echo(f"📝 Name: {proj.name}")
+            typer.echo(f"📁 Path: {proj.path}")
+            if proj.description:
+                typer.echo(f"📄 Description: {proj.description}")
+            typer.echo(f"🧪 Tests: {test_count}")
+            typer.echo("=" * 80 + "\n")
+
+    def list_tests(
+        self,
+        cache: str = typer.Argument(
+            ...,
+            help="Path to SQLite cache file",
+            parser=as_path,
+        ),
+    ) -> None:
+        """List all tests for a project.
+
+        This command displays all tests associated with the project,
+        including their file paths, suite names (if any), test names, and
+        coverage information.
+
+        Parameters
+        ----------
+        cache : Path
+            Path to existing SQLite cache file.
+
+        Raises
+        ------
+        typer.Exit
+            If cache file does not exist.
+
+        Examples
+        --------
+        List all tests:
+            $ yagua list-tests my_project.sqlite
+        """
+        if not cache.exists():
+            typer.echo(
+                f"❌ Error: Cache file does not exist: {cache}",
+                err=True,
+            )
+            raise typer.Exit(code=1)
+
+        with Project(db_path=cache) as proj:
+            tests = proj.list_tests()
+
+            if not tests:
+                typer.echo(f"⚠️  No tests found for project '{proj.name}'.")
+                return
+
+            typer.echo(f"\n🧪 Tests for project '{proj.name}':")
+            typer.echo("=" * 80)
+
+            for test in tests:
+                if test.suite:
+                    test_path = f"{test.file}::{test.suite}::{test.test}"
+                else:
+                    test_path = f"{test.file}::{test.test}"
+
+                coverage_str = (
+                    f"{test.coverage:.2f}%"
+                    if test.coverage is not None
+                    else "N/A"
+                )
+                typer.echo(f"  • {test_path} (coverage: {coverage_str})")
+
+            typer.echo("=" * 80)
+            typer.echo(f"📊 Total: {len(tests)} tests\n")
 
 
 # ============================================================================

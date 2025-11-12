@@ -215,9 +215,23 @@ class Project:
             List of all test models for the project.
         """
         with self.transaction():
+            project = self._get_project_model()
             return list(
-                TestModel.select().where(TestModel.project == self.project)
+                TestModel.select().where(TestModel.project == project)
             )
+
+    def count_tests(self) -> int:
+        """
+        Count all tests for this project.
+
+        Returns
+        -------
+        int
+            Number of tests for the project.
+        """
+        with self.transaction():
+            project = self._get_project_model()
+            return TestModel.select().where(TestModel.project == project).count()
 
     def __enter__(self):
         """Context manager entry."""
