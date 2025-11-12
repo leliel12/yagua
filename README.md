@@ -161,7 +161,8 @@ tox
 
 ## Documentation
 
-See [CLAUDE.md](CLAUDE.md) for detailed architecture and development documentation.
+- [ARCHITECTURE.md](ARCHITECTURE.md) - Comprehensive architecture documentation explaining the global design, components, data flow, and architectural patterns
+- [CLAUDE.md](CLAUDE.md) - Development guide with usage examples, API reference, and coding conventions
 
 ## License
 
