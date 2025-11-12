@@ -273,7 +273,7 @@ def _create_app(cli_manager):
     """
     app = typer.Typer(
         name="yagua",
-        help="🐊 Yagua - Tool for collecting and managing test information",
+        help="🐕 Yagua - Tool for collecting and managing test information",
         add_completion=False,
     )
 
