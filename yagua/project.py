@@ -14,11 +14,16 @@ from .models import BaseModel, ProjectModel, TestModel
 
 
 # ============================================================================
-# PROJECT CLASS
+# CONSTANTS
 # ============================================================================
 
 MODELS_TO_CREATE = [ProjectModel, TestModel]
 ALL_MODELS = [BaseModel] + MODELS_TO_CREATE
+
+
+# ============================================================================
+# PROJECT CLASS
+# ============================================================================
 
 
 class Project:
@@ -39,6 +44,10 @@ class Project:
         Database instance for this project.
     """
 
+    # ========================================================================
+    # Constructor
+    # ========================================================================
+
     def __init__(self, db_path):
         """Initialize Project with database path.
 
@@ -54,7 +63,7 @@ class Project:
             self.db.create_tables(MODELS_TO_CREATE, safe=True)
 
     # ========================================================================
-    # Class Methods
+    # Alternative Constructors
     # ========================================================================
 
     @classmethod
@@ -92,6 +101,38 @@ class Project:
         project.store_project_info(name, path, description)
 
         return project
+
+    # ========================================================================
+    # Private Methods
+    # ========================================================================
+
+    def _get_project_model(self):
+        """Get the project model from database.
+
+        Returns
+        -------
+        ProjectModel
+            The project model instance.
+        """
+        with self.transaction():
+            return ProjectModel.get_by_id(1)
+
+    @contextlib.contextmanager
+    def transaction(self):
+        """Context manager for database transactions.
+
+        Yields
+        ------
+        Transaction
+            Database transaction context.
+        """
+        with self.db.bind_ctx(ALL_MODELS):
+            with self.db.atomic() as txn:
+                try:
+                    yield txn
+                    txn.commit()
+                except:
+                    txn.rollback()
 
     # ========================================================================
     # Public Methods - Test Management
@@ -260,40 +301,8 @@ class Project:
                 project.save()
 
     # ========================================================================
-    # Private Methods
+    # Magic Methods
     # ========================================================================
-
-    def _get_project_model(self):
-        """Get the project model from database.
-
-        Returns
-        -------
-        ProjectModel
-            The project model instance.
-        """
-        with self.transaction():
-            return ProjectModel.get_by_id(1)
-
-    # ========================================================================
-    # Context Manager & Magic Methods
-    # ========================================================================
-
-    @contextlib.contextmanager
-    def transaction(self):
-        """Context manager for database transactions.
-
-        Yields
-        ------
-        Transaction
-            Database transaction context.
-        """
-        with self.db.bind_ctx(ALL_MODELS):
-            with self.db.atomic() as txn:
-                try:
-                    yield txn
-                    txn.commit()
-                except:
-                    txn.rollback()
 
     def close(self):
         """Close the database connection."""

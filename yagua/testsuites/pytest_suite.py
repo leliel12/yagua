@@ -25,9 +25,58 @@ class PytestSuite:
     from pytest projects using pytest's collection mechanism.
     """
 
+    # ========================================================================
+    # Constructor
+    # ========================================================================
+
     def __init__(self):
         """Initialize PytestSuite with temporary directory for coverage files."""
         self._temp_dir = tempfile.TemporaryDirectory()
+
+    # ========================================================================
+    # Private Methods
+    # ========================================================================
+
+    def _run(self, cmd, cwd):
+        """Run subprocess command with standard configuration.
+
+        Parameters
+        ----------
+        cmd : list
+            Command and arguments to execute.
+        cwd : str or Path
+            Working directory for command execution.
+
+        Returns
+        -------
+        subprocess.CompletedProcess
+            Result of the subprocess execution.
+        """
+        result = subprocess.run(
+            cmd, cwd=cwd, capture_output=True, text=True, check=True
+        )
+        return result
+
+    def _parse_test_line(self, line: str) -> tuple[str, str | None, str] | None:
+        """Parse a pytest test line into components.
+
+        Parameters
+        ----------
+        line : str
+            Test line in format 'file::Suite::test' or 'file::test'.
+
+        Returns
+        -------
+        tuple[str, str | None, str] | None
+            Tuple of (file, suite, test) or None if parsing fails.
+        """
+        parts = line.strip().split("::")
+        if len(parts) == 2:
+            # Format: file::test
+            return (parts[0], None, parts[1])
+        elif len(parts) == 3:
+            # Format: file::Suite::test
+            return (parts[0], parts[1], parts[2])
 
     # ========================================================================
     # Public Methods
@@ -93,48 +142,3 @@ class PytestSuite:
 
         cov = data["totals"]["percent_covered"]
         return cov
-
-    # ========================================================================
-    # Private Helper Methods
-    # ========================================================================
-
-    def _run(self, cmd, cwd):
-        """Run subprocess command with standard configuration.
-
-        Parameters
-        ----------
-        cmd : list
-            Command and arguments to execute.
-        cwd : str or Path
-            Working directory for command execution.
-
-        Returns
-        -------
-        subprocess.CompletedProcess
-            Result of the subprocess execution.
-        """
-        result = subprocess.run(
-            cmd, cwd=cwd, capture_output=True, text=True, check=True
-        )
-        return result
-
-    def _parse_test_line(self, line: str) -> tuple[str, str | None, str] | None:
-        """Parse a pytest test line into components.
-
-        Parameters
-        ----------
-        line : str
-            Test line in format 'file::Suite::test' or 'file::test'.
-
-        Returns
-        -------
-        tuple[str, str | None, str] | None
-            Tuple of (file, suite, test) or None if parsing fails.
-        """
-        parts = line.strip().split("::")
-        if len(parts) == 2:
-            # Format: file::test
-            return (parts[0], None, parts[1])
-        elif len(parts) == 3:
-            # Format: file::Suite::test
-            return (parts[0], parts[1], parts[2])

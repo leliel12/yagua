@@ -16,7 +16,7 @@ from .testsuites import PytestSuite
 
 
 # ============================================================================
-# HELPER FUNCTIONS
+# PRIVATE HELPER FUNCTIONS
 # ============================================================================
 
 
@@ -34,6 +34,42 @@ def as_path(string):
         Resolved absolute Path object.
     """
     return Path(string).resolve()
+
+
+def _make_help(obj) -> str:
+    """Extract summary from a method's NumPy-style docstring.
+
+    This function extracts the summary section from an object's
+    docstring, which includes all content before the first section
+    separator (a line of dashes). This is useful for generating
+    concise help text for CLI commands.
+
+    Parameters
+    ----------
+    obj : object
+        Object with a NumPy-style docstring to extract help from.
+
+    Returns
+    -------
+    str
+        Summary portion of the docstring, or empty string if no
+        docstring exists.
+
+    Notes
+    -----
+    The function stops extracting at the first line that contains
+    only dashes (e.g., "----------"), which marks the beginning of
+    a formal section in NumPy-style docstrings.
+    """
+    lines = (obj.__doc__ or "").strip().splitlines()
+    if lines:
+        for lineno, line in enumerate(lines):
+            line = line.strip()
+            if line and not line.replace("-", ""):
+                break
+        last_line = lineno - 1
+        lines = lines[:last_line]
+    return "\n".join(lines)
 
 
 # ============================================================================
@@ -63,7 +99,31 @@ class CLIManager:
     """
 
     # ========================================================================
-    # Public Commands - Project Creation
+    # Private Methods
+    # ========================================================================
+
+    def _validate_cache_exists(self, cache):
+        """Validate that cache file exists, exit with error if not.
+
+        Parameters
+        ----------
+        cache : Path
+            Path to cache file to validate.
+
+        Raises
+        ------
+        typer.Exit
+            If cache file does not exist.
+        """
+        if not cache.exists():
+            typer.echo(
+                f"❌ Error: Cache file does not exist: {cache}",
+                err=True,
+            )
+            raise typer.Exit(code=1)
+
+    # ========================================================================
+    # Public Methods - Project Creation
     # ========================================================================
 
     def create_project(
@@ -366,70 +426,10 @@ class CLIManager:
                 typer.echo(f"💯 Total Coverage: {proj.coverage:.4f}%")
             typer.echo("")
 
-    # ========================================================================
-    # Private Helper Methods
-    # ========================================================================
-
-    def _validate_cache_exists(self, cache):
-        """Validate that cache file exists, exit with error if not.
-
-        Parameters
-        ----------
-        cache : Path
-            Path to cache file to validate.
-
-        Raises
-        ------
-        typer.Exit
-            If cache file does not exist.
-        """
-        if not cache.exists():
-            typer.echo(
-                f"❌ Error: Cache file does not exist: {cache}",
-                err=True,
-            )
-            raise typer.Exit(code=1)
-
 
 # ============================================================================
-# APP CREATION FUNCTIONS
+# PUBLIC FUNCTIONS
 # ============================================================================
-
-
-def _make_help(obj) -> str:
-    """Extract summary from a method's NumPy-style docstring.
-
-    This function extracts the summary section from an object's
-    docstring, which includes all content before the first section
-    separator (a line of dashes). This is useful for generating
-    concise help text for CLI commands.
-
-    Parameters
-    ----------
-    obj : object
-        Object with a NumPy-style docstring to extract help from.
-
-    Returns
-    -------
-    str
-        Summary portion of the docstring, or empty string if no
-        docstring exists.
-
-    Notes
-    -----
-    The function stops extracting at the first line that contains
-    only dashes (e.g., "----------"), which marks the beginning of
-    a formal section in NumPy-style docstrings.
-    """
-    lines = (obj.__doc__ or "").strip().splitlines()
-    if lines:
-        for lineno, line in enumerate(lines):
-            line = line.strip()
-            if line and not line.replace("-", ""):
-                break
-        last_line = lineno - 1
-        lines = lines[:last_line]
-    return "\n".join(lines)
 
 
 def _create_app(cli_manager):
