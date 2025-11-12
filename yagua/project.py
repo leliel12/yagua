@@ -219,8 +219,8 @@ class Project:
 
         return test_obj, created
 
-    def list_tests(self) -> pd.DataFrame:
-        """List all tests for this project as a DataFrame.
+    def get_tests_dataframe(self) -> pd.DataFrame:
+        """Get all tests for this project as a DataFrame.
 
         Returns
         -------

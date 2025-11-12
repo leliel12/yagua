@@ -88,9 +88,9 @@ class CLIManager:
     -------
     create_project
         Create an empty cache file with project metadata.
-    collect
+    collect_tests
         Collect tests from a project using pytest.
-    coverage
+    collect_coverage
         Collect and store coverage information.
     info
         Show project information from cache.
@@ -216,7 +216,7 @@ class CLIManager:
     # Public Commands - Test Management
     # ========================================================================
 
-    def collect(
+    def collect_tests(
         self,
         cache: str = typer.Argument(
             ...,
@@ -243,11 +243,11 @@ class CLIManager:
         Examples
         --------
         Collect tests from existing cache:
-            $ yagua collect my_project.sqlite
+            $ yagua collect-tests my_project.sqlite
 
         Typical workflow:
             $ yagua create-project /path/to/project
-            $ yagua collect project.sqlite
+            $ yagua collect-tests project.sqlite
         """
         self._validate_cache_exists(cache)
 
@@ -302,7 +302,7 @@ class CLIManager:
         self._validate_cache_exists(cache)
 
         with Project(db_path=cache) as proj:
-            tests = proj.list_tests()
+            tests = proj.get_tests_dataframe()
 
             if not len(tests):
                 typer.echo(f"⚠️  No tests found for project '{proj.name}'.")
@@ -319,7 +319,7 @@ class CLIManager:
     # Public Commands - Coverage Management
     # ========================================================================
 
-    def coverage(
+    def collect_coverage(
         self,
         cache: str = typer.Argument(
             ...,
@@ -353,10 +353,10 @@ class CLIManager:
         Examples
         --------
         Collect coverage:
-            $ yagua coverage my_project.sqlite
+            $ yagua collect-coverage my_project.sqlite
 
         Force recalculation:
-            $ yagua coverage my_project.sqlite --force
+            $ yagua collect-coverage my_project.sqlite --force
         """
         self._validate_cache_exists(cache)
 

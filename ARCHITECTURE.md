@@ -37,8 +37,8 @@ Yagua follows a layered architecture with clear separation of concerns:
 **Key Classes**:
 - `CLIManager`: Contains all CLI commands as public methods
   - `create_project()`: Initialize new project cache
-  - `collect()`: Collect tests from a project
-  - `coverage()`: Run coverage analysis
+  - `collect_tests()`: Collect tests from a project
+  - `collect_coverage()`: Run coverage analysis
   - `info()`: Display project information
   - `list_tests()`: Show all tests
 
@@ -81,7 +81,7 @@ Project.from_project_info(
 2. **Test Management**:
    - `collect_tests(suite)`: Orchestrates test collection via suite handlers
    - `add_test()`: Add/update individual test records
-   - `list_tests()`: Query tests as pandas DataFrame
+   - `get_tests_dataframe()`: Query tests as pandas DataFrame
    - `count_tests()`: Get test count
 
 3. **Coverage Management**:
@@ -150,9 +150,9 @@ New test frameworks can be added by implementing TestSuiteABC (e.g., `UnittestSu
 ### Test Collection Flow
 
 ```
-1. User: yagua collect project.sqlite
+1. User: yagua collect-tests project.sqlite
          ↓
-2. CLI: CLIManager.collect()
+2. CLI: CLIManager.collect_tests()
    - Validates cache exists
    - Creates Project instance
          ↓
@@ -176,9 +176,9 @@ New test frameworks can be added by implementing TestSuiteABC (e.g., `UnittestSu
 ### Coverage Collection Flow
 
 ```
-1. User: yagua coverage project.sqlite
+1. User: yagua collect-coverage project.sqlite
          ↓
-2. CLI: CLIManager.coverage()
+2. CLI: CLIManager.collect_coverage()
          ↓
 3. Project: collect_coverage(suite)
    - Calls suite.get_coverage(path, name)

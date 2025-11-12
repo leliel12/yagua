@@ -61,7 +61,7 @@ pip install -e ".[dev]"
 yagua create-project /path/to/project
 
 # Collect tests from the project
-yagua collect project.sqlite
+yagua collect-tests project.sqlite
 
 # Show project information
 yagua info project.sqlite
@@ -70,7 +70,7 @@ yagua info project.sqlite
 yagua list-tests project.sqlite
 
 # Collect coverage information
-yagua coverage project.sqlite
+yagua collect-coverage project.sqlite
 ```
 
 ---
@@ -88,7 +88,7 @@ yagua create-project /path/to/project
 yagua create-project /path/to/project my_cache.sqlite --name "My Project" --description "Project description"
 
 # Collect tests from a project
-yagua collect project.sqlite
+yagua collect-tests project.sqlite
 
 # Show project information
 yagua info project.sqlite
@@ -97,8 +97,8 @@ yagua info project.sqlite
 yagua list-tests project.sqlite
 
 # Collect coverage information
-yagua coverage project.sqlite
-yagua coverage project.sqlite --force  # Force recalculation
+yagua collect-coverage project.sqlite
+yagua collect-coverage project.sqlite --force  # Force recalculation
 ```
 
 ### 🐍 Programmatic API
