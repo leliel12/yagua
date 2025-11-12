@@ -1,0 +1,120 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "yagua"
+version = "0.1.0"
+description = "Tool for collecting and managing test information from pytest-based projects"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "Your Name", email = "your.email@example.com"}
+]
+keywords = ["testing", "pytest", "qa", "test-management"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Testing",
+]
+
+dependencies = [
+    "peewee>=3.17.0",
+    "typer>=0.9.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "tox>=4.0.0",
+    "mutmut>=2.4.0",
+    "cosmic-ray>=8.3.0",
+]
+
+[project.scripts]
+yagua = "yagua.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/yourusername/yagua"
+Documentation = "https://github.com/yourusername/yagua#readme"
+Repository = "https://github.com/yourusername/yagua"
+Issues = "https://github.com/yourusername/yagua/issues"
+
+[tool.setuptools]
+packages = ["yagua"]
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "-ra -q --strict-markers --cov=yagua --cov-report=term-missing"
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
+[tool.coverage.run]
+source = ["yagua"]
+omit = ["*/tests/*", "*/__pycache__/*"]
+
+[tool.coverage.report]
+precision = 2
+show_missing = true
+skip_covered = false
+
+[tool.mutmut]
+paths_to_mutate = "yagua/"
+backup = false
+runner = "pytest"
+tests_dir = "tests/"
+
+[tool.tox]
+legacy_tox_ini = """
+[tox]
+envlist = py310,py311,py312,lint,coverage
+isolated_build = True
+
+[testenv]
+deps =
+    pytest>=7.4.0
+    pytest-cov>=4.1.0
+commands =
+    pytest {posargs}
+
+[testenv:lint]
+deps =
+    ruff>=0.1.0
+    black>=23.0.0
+    mypy>=1.0.0
+commands =
+    ruff check yagua/
+    black --check yagua/
+    mypy yagua/
+
+[testenv:coverage]
+deps =
+    pytest>=7.4.0
+    pytest-cov>=4.1.0
+commands =
+    pytest --cov=yagua --cov-report=html --cov-report=term-missing
+
+[testenv:mutmut]
+deps =
+    pytest>=7.4.0
+    mutmut>=2.4.0
+commands =
+    mutmut run
+
+[testenv:cosmic-ray]
+deps =
+    pytest>=7.4.0
+    cosmic-ray>=8.3.0
+commands =
+    cosmic-ray init cosmic-ray.conf yagua -- pytest
+    cosmic-ray exec yagua
+"""
