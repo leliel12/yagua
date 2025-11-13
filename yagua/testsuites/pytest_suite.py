@@ -5,6 +5,7 @@ This module provides a test suite handler for pytest-based projects.
 """
 
 import re
+import contextlib
 import tempfile
 import subprocess
 import sys
@@ -12,6 +13,49 @@ from pathlib import Path
 import json
 
 from .abc import TestSuiteABC
+
+# ============================================================================
+# PYTEST PLUGIN
+# ============================================================================
+
+
+class YaguaPlugin:
+    """Pytest plugin for collecting test metadata.
+
+    This plugin hooks into pytest's collection phase to capture additional
+    test metadata that can be stored in the yagua database.
+    """
+
+    def __init__(self):
+        """Initialize the plugin with empty collected items."""
+        self.collected_items = []
+
+    def pytest_collection_modifyitems(self, config, items):
+        """Called after collection is completed.
+
+        Parameters
+        ----------
+        config : pytest.Config
+            Pytest configuration object.
+        items : list[pytest.Item]
+            List of collected test items.
+
+        Notes
+        -----
+        This hook is called after pytest has collected all tests but before
+        they are executed. You can modify the items list or extract metadata.
+
+        Examples of what you can extract from each item:
+        - item.nodeid: Full test path (e.g., "tests/test_foo.py::TestClass::test_method")
+        - item.obj: The actual test function/method object
+        - item.keywords: Dictionary of markers and keywords
+        - item.callspec: Parametrization info (if test is parametrized)
+        """
+        # Store collected items for later processing
+        self.collected_items = items
+
+        # Access config if needed (currently unused)
+        _ = config
 
 
 # ============================================================================
@@ -86,9 +130,7 @@ class PytestSuite(TestSuiteABC):
         )
         return " ".join(cmd), result
 
-    def _parse_test_line(
-        self, line: str
-    ) -> tuple[str, str | None, str] | None:
+    def _parse_test_line(self, line: str) -> tuple[str, str | None, str] | None:
         """Parse a pytest test line into components.
 
         Parameters
@@ -165,6 +207,12 @@ class PytestSuite(TestSuiteABC):
                 tests.append(parsed)
 
         return tests, command, result.stdout, result.stderr, result.stdout
+
+    def get_tests(self, project_path):
+        import pytest
+        with contextlib.chdir(project_path):
+            coso = pytest.main(["--collect-only", "-q"])
+            import ipdb; ipdb.set_trace()
 
     def get_coverage(
         self, project_path, project_name
