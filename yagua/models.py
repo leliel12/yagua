@@ -48,6 +48,23 @@ class ProjectModel(BaseModel):
     This table is limited to a single row per database.
     Each cache file represents exactly one project.
     The id must always be 1.
+
+    Attributes
+    ----------
+    name : CharField
+        Project name or identifier.
+    path : CharField
+        Filesystem path to the project directory.
+    description : CharField, optional
+        Optional project description.
+    coverage : FloatField, optional
+        Total project coverage percentage (0-100).
+        Updated via collect-coverage command.
+
+    Notes
+    -----
+    The Check constraint ensures only one row (id=1) can exist per database,
+    enforcing the one-project-per-cache-file design.
     """
 
     name = CharField()
@@ -72,19 +89,27 @@ class HistoryModel(BaseModel):
     project : ForeignKeyField
         Reference to the ProjectModel (always id=1).
         Accessible via backref as project.history.
-    command : CharField
-        The command that was executed (e.g., 'collect-tests', 'collect-coverage').
-    output : CharField
-        The output or result of the command execution.
-        Can store status messages, error messages, or summary information.
+    tag : CharField
+        Tag identifying the command type (e.g., 'collect_tests', 'collect_coverage::project').
+    command : TextField
+        The full command string that was executed (e.g., 'pytest --collect-only -q').
+    stdout : TextField
+        Standard output from the command execution.
+    stderr : TextField
+        Standard error output from the command execution.
+    result : TextField
+        Additional result data from the command execution.
+        Can store JSON data or other structured information.
 
     Examples
     --------
     >>> HistoryModel.create(
     ...     project=project_model,
-    ...     tag="some command"
-    ...     command="collect-tests",
-    ...     output="Collected 150 tests, 10 new, 5 updated"
+    ...     tag="collect_tests",
+    ...     command="pytest --collect-only -q",
+    ...     stdout="150 tests collected",
+    ...     stderr="",
+    ...     result="raw output data"
     ... )
     """
 
@@ -97,7 +122,33 @@ class HistoryModel(BaseModel):
 
 
 class TestModel(BaseModel):
-    """Test information table."""
+    """Test information table.
+
+    Stores individual test information and coverage metrics.
+
+    Attributes
+    ----------
+    project : ForeignKeyField
+        Reference to the ProjectModel (always id=1).
+        Accessible via backref as project.tests.
+    file : CharField
+        Path to the test file relative to the project root.
+    suite : CharField, optional
+        Test suite or class name. None for standalone test functions.
+    test : CharField
+        Test function name.
+    coverage_alone : FloatField, optional
+        Coverage percentage when running this test in isolation.
+        Not yet implemented.
+    coverage_without : FloatField, optional
+        Coverage percentage when running all tests except this one.
+        Not yet implemented.
+
+    Notes
+    -----
+    The unique constraint on (project, file, suite, test) ensures that
+    each test is only stored once per project.
+    """
 
     project = ForeignKeyField(ProjectModel, backref="tests")
     file = CharField()

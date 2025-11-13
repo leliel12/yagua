@@ -88,7 +88,12 @@ _CACHE_ARGUMENT = typer.Argument(
     metavar="💾 Project Cache db",
 )
 
-#: DOCUMENTA ESTO
+#: List of timestamp column names to exclude from default test listings.
+#:
+#: These columns contain creation and modification timestamps for each test record.
+#: By default, they are hidden in list-tests output unless --dtinfo flag is used.
+#:
+#: Type: list[str]
 _DT_COLUMNS = ['created_at', 'modified_at']
 
 # ============================================================================
@@ -109,12 +114,18 @@ class CLIManager:
         Create an empty cache file with project metadata.
     collect_tests
         Collect tests from a project using pytest.
+    list_tests
+        List all tests for a project (with optional timestamp display).
     collect_coverage
         Collect and store coverage information.
     info
         Show project information from cache.
-    list_tests
-        List all tests for a project.
+
+    Notes
+    -----
+    All commands accept a cache file path as their first argument.
+    Method names with underscores are converted to hyphenated command names
+    (e.g., `collect_tests` becomes `collect-tests`).
     """
 
     # ========================================================================
@@ -293,12 +304,16 @@ class CLIManager:
 
         This command displays all tests associated with the project,
         including their file paths, suite names (if any), test names, and
-        coverage information.
+        coverage information. By default, timestamp columns (created_at,
+        modified_at) are hidden unless --dtinfo is specified.
 
         Parameters
         ----------
         cache : Path
             Path to existing SQLite cache file.
+        dtinfo : bool, optional
+            Show creation and modification timestamps for each test.
+            Default is False.
 
         Raises
         ------
@@ -309,6 +324,9 @@ class CLIManager:
         --------
         List all tests:
             $ yagua list-tests my_project.sqlite
+
+        List tests with timestamp information:
+            $ yagua list-tests my_project.sqlite --dtinfo
         """
         self._validate_cache_exists(cache)
 

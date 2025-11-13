@@ -30,8 +30,9 @@ class Project:
     """Project manager for QA testing.
 
     This class manages the database connection and provides methods to interact
-    with projects and tests. The database instance is created per-project and
-    models are bound to it. Each cache file represents a single project.
+    with projects, tests, and execution history. The database instance is created
+    per-project and models are dynamically bound to it. Each cache file represents
+    a single project.
 
     Parameters
     ----------
@@ -41,7 +42,13 @@ class Project:
     Attributes
     ----------
     db : SqliteDatabase
-        Database instance for this project.
+        Database instance for this project. Models (ProjectModel, TestModel,
+        HistoryModel) are bound to this instance via transaction contexts.
+
+    Notes
+    -----
+    All database operations use the transaction() context manager which handles
+    model binding and automatic transaction management (commit/rollback).
     """
 
     # ========================================================================
@@ -141,16 +148,24 @@ class Project:
     def collect_tests(self, suite) -> tuple[int, int]:
         """Collect tests from a test suite and save them to the database.
 
+        This method runs the suite's get_tests() method to discover all tests,
+        saves them to the database, and logs the execution in the history table.
+
         Parameters
         ----------
-        suite : PytestSuite
-            Test suite object with a get_tests() method.
+        suite : TestSuiteABC
+            Test suite handler with a get_tests() method (e.g., PytestSuite).
 
         Returns
         -------
         tuple[int, int]
             Tuple of (saved_count, updated_count) indicating the number
             of new tests saved and existing tests updated.
+
+        Notes
+        -----
+        Creates a HistoryModel record with tag='collect_tests' containing
+        the command executed and its output for audit purposes.
         """
         saved_count = 0
         updated_count = 0
@@ -188,7 +203,6 @@ class Project:
         file: str,
         suite: str | None,
         test: str,
-        coverage: float | None = None,
     ) -> tuple[TestModel, bool]:
         """Add or update a test in the database.
 
@@ -202,14 +216,17 @@ class Project:
             Test suite name.
         test : str
             Test name.
-        coverage : float, optional
-            Test coverage percentage.
 
         Returns
         -------
         tuple[TestModel, bool]
             Tuple of (test, created) where created is True if the test
             was newly created.
+
+        Notes
+        -----
+        Coverage information (coverage_alone, coverage_without) is not yet
+        implemented and should be updated separately once implemented.
         """
         with self.transaction():
             test_obj, created = TestModel.get_or_create(
@@ -217,13 +234,7 @@ class Project:
                 file=file,
                 suite=suite,
                 test=test,
-                defaults={"coverage": coverage},
             )
-
-            if not created and coverage is not None:
-                # Update coverage if provided
-                test_obj.coverage = coverage
-                test_obj.save()
 
         return test_obj, created
 
@@ -233,7 +244,9 @@ class Project:
         Returns
         -------
         pd.DataFrame
-            DataFrame containing all test information.
+            DataFrame containing all test information including columns:
+            id, project, file, suite, test, coverage_alone, coverage_without,
+            created_at, modified_at.
         """
         with self.transaction():
             project = self._get_project_model()
@@ -261,15 +274,24 @@ class Project:
     def collect_coverage(self, suite):
         """Collect and store coverage information for the project.
 
+        This method runs the suite's get_coverage() method to execute tests
+        with coverage enabled, stores the total coverage percentage in the
+        ProjectModel, and logs the execution in the history table.
+
         Parameters
         ----------
-        suite : PytestSuite
-            Test suite object with a get_coverage() method.
+        suite : TestSuiteABC
+            Test suite handler with a get_coverage() method (e.g., PytestSuite).
 
         Returns
         -------
         float
-            Coverage percentage.
+            Total coverage percentage (0-100).
+
+        Notes
+        -----
+        Creates a HistoryModel record with tag='collect_coverage::project'
+        containing the command executed and its output for audit purposes.
         """
         cov, command, stdout, stderr, result = suite.get_coverage(self.path, self.name)
         with self.transaction():

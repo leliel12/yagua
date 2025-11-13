@@ -16,14 +16,14 @@ The `yagua` package is structured as follows:
 
 ```
 yagua/
-├── __init__.py         # Exposes: main, Project, PytestSuite
-├── models.py           # Peewee ORM models (ProjectModel, TestModel)
+├── __init__.py         # Exposes: main, Project, PytestSuite, TestSuiteABC
+├── models.py           # Peewee ORM models (ProjectModel, TestModel, HistoryModel)
 ├── project.py          # Project class - database management
 ├── cli.py              # Typer CLI commands and application setup
-├── utils.py            # Deprecated utility functions
 └── testsuites/
     ├── __init__.py     # Test suite handlers module
-    └── pytest_suite.py # PytestSuite class
+    ├── abc.py          # TestSuiteABC abstract base class
+    └── pytest_suite.py # PytestSuite implementation
 ```
 
 ### Key Architectural Patterns
@@ -95,6 +95,7 @@ yagua info project.sqlite
 
 # List tests for a project
 yagua list-tests project.sqlite
+yagua list-tests project.sqlite --dtinfo  # Include timestamp information
 
 # Collect coverage information
 yagua collect-coverage project.sqlite
@@ -138,7 +139,6 @@ with Project(db_path="qa.sqlite") as proj:
         file="test_file.py",
         suite="TestSuite",  # Can be None
         test="test_example",
-        coverage=85.5  # Optional
     )
 
     # Query tests as DataFrame
@@ -161,21 +161,35 @@ with Project(db_path="qa.sqlite") as proj:
 
 ## Database Schema
 
+All models inherit from `BaseModel` which provides:
+- `created_at`: UTC timestamp when record was created (auto-set)
+- `modified_at`: UTC timestamp when record was last modified (auto-updated)
+
 **ProjectModel**
 - Limited to a single row per database (id=1)
 - `name`: Project identifier
 - `path`: Filesystem path to project
 - `description` (nullable): Optional description
+- `coverage` (nullable): Total project coverage percentage
 
 **TestModel**
 - `project` (FK): Reference to ProjectModel (always id=1)
 - `file`: Test file path
 - `suite` (nullable): Test suite/class name
 - `test`: Test function name
-- `coverage` (nullable): Coverage percentage per test (not yet implemented)
+- `coverage_alone` (nullable): Coverage when running test in isolation (not yet implemented)
+- `coverage_without` (nullable): Coverage when running all tests except this one (not yet implemented)
 - Unique constraint on: `(project, file, suite, test)`
 
-**Note**: Currently, coverage is stored at the project level only. Per-test coverage tracking is planned for future releases.
+**HistoryModel**
+- `project` (FK): Reference to ProjectModel (always id=1)
+- `tag`: Command type identifier (e.g., 'collect_tests', 'collect_coverage::project')
+- `command`: Full command string executed (e.g., 'pytest --collect-only -q')
+- `stdout`: Standard output from command execution
+- `stderr`: Standard error from command execution
+- `result`: Additional result data (e.g., raw output, JSON data)
+
+**Note**: Currently, coverage is stored at the project level only. Per-test coverage tracking (`coverage_alone`, `coverage_without`) is planned for future releases.
 
 ## Development Notes
 
@@ -221,7 +235,8 @@ The command will be auto-registered as `my-command`. Use NumPy-style docstrings 
 
 1. Update models in `models.py`
 2. Since Peewee models are bound at runtime in `Project.__init__()`, ensure `BaseModel` has no hardcoded database
-3. The `Project` class handles model binding via `db.bind([BaseModel, ProjectModel, TestModel])`
+3. The `Project` class handles model binding via `db.bind([BaseModel, ProjectModel, TestModel, HistoryModel])`
+4. Update `MODELS_TO_CREATE` constant in `project.py` if adding new models
 
 
 ### Oden de los contenidos en un modulo
