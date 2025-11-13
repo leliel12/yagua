@@ -84,7 +84,7 @@ class PytestSuite(TestSuiteABC):
         result = subprocess.run(
             cmd, cwd=cwd, capture_output=True, text=True, check=True
         )
-        return result, " ".join(cmd)
+        return " ".join(cmd), result
 
     def _parse_test_line(self, line: str) -> tuple[str, str | None, str] | None:
         """Parse a pytest test line into components.
@@ -149,18 +149,18 @@ class PytestSuite(TestSuiteABC):
         >>> for file, suite_name, test in tests:
         ...     print(f"{file}::{suite_name or ''}::{test}")
         """
-        command, output = self._run(
+        command, result = self._run(
             ["pytest", "--collect-only", "-q"],
             cwd=project_path,
         )
 
         tests = []
-        for line in output.stdout.splitlines():
+        for line in result.stdout.splitlines():
             parsed = self._parse_test_line(line)
             if parsed:
                 tests.append(parsed)
 
-        return tests, command, output.stdout, output.stderr, output.stdout
+        return tests, command, result.stdout, result.stderr, result.stdout
 
     def get_coverage(self, project_path, project_name) -> tuple[float | None, str, str, str, dict]:
         """Run pytest with coverage and return the total coverage percentage.
@@ -214,7 +214,7 @@ class PytestSuite(TestSuiteABC):
         with tempfile.NamedTemporaryFile(
             dir=self._temp_dir.name, suffix=".json", prefix="yagua_cov_"
         ) as fp:
-            command, output = self._run(
+            command, result = self._run(
                 [
                     "pytest",
                     f"--cov={project_name}",
@@ -227,4 +227,4 @@ class PytestSuite(TestSuiteABC):
 
         cov = data["totals"]["percent_covered"]
 
-        return cov, command, output.stdout, output.stderr, json_src
+        return cov, command, result.stdout, result.stderr, json_src
