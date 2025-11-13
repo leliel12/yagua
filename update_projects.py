@@ -19,11 +19,7 @@ def run_command(command, cwd=None):
     """Executes a command and returns the result."""
     try:
         result = subprocess.run(
-            command,
-            cwd=cwd,
-            check=True,
-            capture_output=True,
-            text=True
+            command, cwd=cwd, check=True, capture_output=True, text=True
         )
         return True, result.stdout
     except subprocess.CalledProcessError as e:

@@ -94,7 +94,7 @@ _CACHE_ARGUMENT = typer.Argument(
 #: By default, they are hidden in list-tests output unless --dtinfo flag is used.
 #:
 #: Type: list[str]
-_DT_COLUMNS = ['created_at', 'modified_at']
+_DT_COLUMNS = ["created_at", "modified_at"]
 
 # ============================================================================
 # CLI MANAGER CLASS
@@ -334,8 +334,10 @@ class CLIManager:
             tests = proj.get_tests_dataframe()
 
             if not dtinfo:
-                
-                columns = [col for col in tests.columns if col not in _DT_COLUMNS]
+
+                columns = [
+                    col for col in tests.columns if col not in _DT_COLUMNS
+                ]
                 tests = tests[columns]
 
             if not len(tests):
@@ -497,7 +499,9 @@ def _create_app(cli_manager):
     for name, method in members:
         if not name.startswith("_"):
             command_help = _make_help(method)
-            cmd_wrapper = app.command(name=name.replace("_", "-"), help=command_help)
+            cmd_wrapper = app.command(
+                name=name.replace("_", "-"), help=command_help
+            )
             cmd_wrapper(method)
 
     return app

@@ -86,7 +86,9 @@ class PytestSuite(TestSuiteABC):
         )
         return " ".join(cmd), result
 
-    def _parse_test_line(self, line: str) -> tuple[str, str | None, str] | None:
+    def _parse_test_line(
+        self, line: str
+    ) -> tuple[str, str | None, str] | None:
         """Parse a pytest test line into components.
 
         Parameters
@@ -111,7 +113,9 @@ class PytestSuite(TestSuiteABC):
     # Public Methods
     # ========================================================================
 
-    def get_tests(self, project_path) -> tuple[list[tuple[str, str | None, str]], str, str, str, str]:
+    def get_tests(
+        self, project_path
+    ) -> tuple[list[tuple[str, str | None, str]], str, str, str, str]:
         """Collect all tests from a pytest project.
 
         Executes pytest with the --collect-only flag to discover all tests
@@ -162,7 +166,9 @@ class PytestSuite(TestSuiteABC):
 
         return tests, command, result.stdout, result.stderr, result.stdout
 
-    def get_coverage(self, project_path, project_name) -> tuple[float | None, str, str, str, dict]:
+    def get_coverage(
+        self, project_path, project_name
+    ) -> tuple[float | None, str, str, str, dict]:
         """Run pytest with coverage and return the total coverage percentage.
 
         Executes pytest with pytest-cov to run all tests and measure code coverage.
@@ -214,12 +220,13 @@ class PytestSuite(TestSuiteABC):
         with tempfile.NamedTemporaryFile(
             dir=self._temp_dir.name, suffix=".json", prefix="yagua_cov_"
         ) as fp:
+            cmd = [
+                "pytest",
+                f"--cov={project_name}",
+                f"--cov-report=json:{fp.name}",
+            ]
             command, result = self._run(
-                [
-                    "pytest",
-                    f"--cov={project_name}",
-                    f"--cov-report=json:{fp.name}",
-                ],
+                cmd,
                 cwd=project_path,
             )
             json_src = fp.read()

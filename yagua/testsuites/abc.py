@@ -27,7 +27,9 @@ class TestSuiteABC(ABC):
     # ========================================================================
 
     @abstractmethod
-    def get_tests(self, project_path) -> tuple[list[tuple[str, str | None, str]], str, str, str, object]:
+    def get_tests(
+        self, project_path
+    ) -> tuple[list[tuple[str, str | None, str]], str, str, str, object]:
         """Collect all tests from a project.
 
         Parameters
@@ -59,7 +61,9 @@ class TestSuiteABC(ABC):
         pass
 
     @abstractmethod
-    def get_coverage(self, project_path, project_name) -> tuple[float | None, str, str, str, object]:
+    def get_coverage(
+        self, project_path, project_name
+    ) -> tuple[float | None, str, str, str, object]:
         """Run tests with coverage and return the total coverage percentage.
 
         Parameters

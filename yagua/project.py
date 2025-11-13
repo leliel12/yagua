@@ -265,7 +265,9 @@ class Project:
         """
         with self.transaction():
             project = self._get_project_model()
-            return TestModel.select().where(TestModel.project == project).count()
+            return (
+                TestModel.select().where(TestModel.project == project).count()
+            )
 
     # ========================================================================
     # Public Methods - Coverage Management
@@ -293,7 +295,9 @@ class Project:
         Creates a HistoryModel record with tag='collect_coverage::project'
         containing the command executed and its output for audit purposes.
         """
-        cov, command, stdout, stderr, result = suite.get_coverage(self.path, self.name)
+        cov, command, stdout, stderr, result = suite.get_coverage(
+            self.path, self.name
+        )
         with self.transaction():
             project = self._get_project_model()
             project.coverage = cov
@@ -377,7 +381,9 @@ class Project:
         list
             List of available attributes.
         """
-        fields = [f for f in ProjectModel._meta.sorted_field_names if f != "id"]
+        fields = [
+            f for f in ProjectModel._meta.sorted_field_names if f != "id"
+        ]
         return super().__dir__() + fields
 
     def __enter__(self):
