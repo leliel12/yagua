@@ -27,7 +27,7 @@ class TestSuiteABC(ABC):
     # ========================================================================
 
     @abstractmethod
-    def get_tests(self, project_path) -> list[tuple[str, str | None, str]]:
+    def get_tests(self, project_path) -> tuple[list[tuple[str, str | None, str]], str, str, str, object]:
         """Collect all tests from a project.
 
         Parameters
@@ -37,15 +37,29 @@ class TestSuiteABC(ABC):
 
         Returns
         -------
-        list[tuple[str, str | None, str]]
+        tests : list[tuple[str, str | None, str]]
             List of tuples (file, suite, test) for each test found.
             The suite element can be None if the test is not part of a
             test class/suite.
+        command : str
+            The command that was executed to collect tests.
+        stdout : str
+            Standard output from the command execution.
+        stderr : str
+            Standard error output from the command execution.
+        data : object
+            Additional data from the collection process (framework-specific).
+
+        Notes
+        -----
+        The return tuple provides complete information about the test collection
+        process, allowing the caller to log the command executed and store
+        execution details (stdout, stderr, and additional data) for audit purposes.
         """
         pass
 
     @abstractmethod
-    def get_coverage(self, project_path, project_name) -> float | None:
+    def get_coverage(self, project_path, project_name) -> tuple[float | None, str, str, str, object]:
         """Run tests with coverage and return the total coverage percentage.
 
         Parameters
@@ -57,8 +71,23 @@ class TestSuiteABC(ABC):
 
         Returns
         -------
-        float | None
+        coverage : float | None
             Total coverage percentage (0-100) or None if coverage could not
             be determined.
+        command : str
+            The command that was executed to collect coverage.
+        stdout : str
+            Standard output from the command execution.
+        stderr : str
+            Standard error output from the command execution.
+        data : object
+            Additional coverage data (e.g., JSON coverage report).
+
+        Notes
+        -----
+        The return tuple provides complete information about the coverage
+        collection process, allowing the caller to log the command executed
+        and store execution details (stdout, stderr, and additional data) for
+        audit purposes.
         """
         pass

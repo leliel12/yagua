@@ -10,14 +10,14 @@ import pandas as pd
 
 from peewee import SqliteDatabase
 
-from .models import BaseModel, ProjectModel, TestModel
+from .models import BaseModel, ProjectModel, TestModel, HistoryModel
 
 
 # ============================================================================
 # CONSTANTS
 # ============================================================================
 
-MODELS_TO_CREATE = [ProjectModel, TestModel]
+MODELS_TO_CREATE = [ProjectModel, TestModel, HistoryModel]
 ALL_MODELS = [BaseModel] + MODELS_TO_CREATE
 
 
@@ -153,7 +153,7 @@ class Project:
             of new tests saved and existing tests updated.
         """
         with self.transaction():
-            tests = suite.get_tests(self.path)
+            tests, command, output = suite.get_tests(self.path)
 
             saved_count = 0
             updated_count = 0
@@ -171,6 +171,13 @@ class Project:
                     saved_count += 1
                 else:
                     updated_count += 1
+
+            HistoryModel.create(
+                project=project,
+                tag="collect_tests",
+                command=command,
+                output=output,
+            )
 
         return saved_count, updated_count
 
@@ -244,9 +251,7 @@ class Project:
         """
         with self.transaction():
             project = self._get_project_model()
-            return (
-                TestModel.select().where(TestModel.project == project).count()
-            )
+            return TestModel.select().where(TestModel.project == project).count()
 
     # ========================================================================
     # Public Methods - Coverage Management
@@ -265,11 +270,18 @@ class Project:
         float
             Coverage percentage.
         """
-        cov = suite.get_coverage(self.path, self.name)
+        cov, command, output = suite.get_coverage(self.path, self.name)
         with self.transaction():
             project = self._get_project_model()
             project.coverage = cov
             project.save()
+
+            HistoryModel.create(
+                project=project,
+                tag="collect_coverage::project",
+                command=command,
+                output=output,
+            )
         return cov
 
     # ========================================================================

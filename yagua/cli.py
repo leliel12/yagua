@@ -72,6 +72,22 @@ def _make_help(obj) -> str:
     return "\n".join(lines)
 
 
+#: Reusable Typer argument definition for cache file path.
+#:
+#: This constant provides a consistent argument definition across all
+#: CLI commands that require a cache file path. It ensures that:
+#: - The argument is required (...)
+#: - The path string is converted to a resolved Path object (parser=as_path)
+#: - The help text and metavar are consistent across all commands
+#:
+#: Type: typer.Argument
+_CACHE_ARGUMENT = typer.Argument(
+    ...,
+    help="Path to SQLite database file",
+    parser=as_path,
+    metavar="💾 Project Cache db",
+)
+
 # ============================================================================
 # CLI MANAGER CLASS
 # ============================================================================
@@ -133,11 +149,7 @@ class CLIManager:
             help="Path to the project directory",
             parser=as_path,
         ),
-        cache: str = typer.Argument(
-            None,
-            help="Path to SQLite cache file (default: <project_name>.sqlite)",
-            parser=as_path,
-        ),
+        cache: str = _CACHE_ARGUMENT,
         name: str = typer.Option(
             None,
             "-n",
@@ -218,11 +230,7 @@ class CLIManager:
 
     def collect_tests(
         self,
-        cache: str = typer.Argument(
-            ...,
-            help="Path to SQLite cache file",
-            parser=as_path,
-        ),
+        cache: str = _CACHE_ARGUMENT,
     ) -> None:
         """Collect tests from a project using pytest.
 
@@ -272,11 +280,7 @@ class CLIManager:
 
     def list_tests(
         self,
-        cache: str = typer.Argument(
-            ...,
-            help="Path to SQLite cache file",
-            parser=as_path,
-        ),
+        cache: str = _CACHE_ARGUMENT,
     ) -> None:
         """List all tests for a project.
 
@@ -321,11 +325,7 @@ class CLIManager:
 
     def collect_coverage(
         self,
-        cache: str = typer.Argument(
-            ...,
-            help="Path to SQLite cache file",
-            parser=as_path,
-        ),
+        cache: str = _CACHE_ARGUMENT,
         force: bool = typer.Option(
             False,
             "--force",
@@ -383,11 +383,7 @@ class CLIManager:
 
     def info(
         self,
-        cache: str = typer.Argument(
-            ...,
-            help="Path to SQLite cache file",
-            parser=as_path,
-        ),
+        cache: str = _CACHE_ARGUMENT,
     ) -> None:
         """Show project information from cache.
 
@@ -463,7 +459,7 @@ def _create_app(cli_manager):
     app = typer.Typer(
         name="yagua",
         help="🐕 Yagua - Tool for collecting and managing test information",
-        add_completion=False,
+        add_completion=True,
     )
 
     # Introspect CLI class and register methods as commands
