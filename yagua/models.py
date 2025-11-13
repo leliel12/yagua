@@ -103,7 +103,8 @@ class TestModel(BaseModel):
     file = CharField()
     suite = CharField(null=True)
     test = CharField()
-    coverage = FloatField(null=True, default=None)
+    coverage_alone = FloatField(null=True, default=None)
+    coverage_without = FloatField(null=True, default=None)
 
     class Meta:
         indexes = ((("project", "file", "suite", "test"), True),)  # Unique constraint

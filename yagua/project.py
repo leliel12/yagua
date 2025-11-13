@@ -152,11 +152,10 @@ class Project:
             Tuple of (saved_count, updated_count) indicating the number
             of new tests saved and existing tests updated.
         """
+        saved_count = 0
+        updated_count = 0
         with self.transaction():
-            tests, command, output = suite.get_tests(self.path)
-
-            saved_count = 0
-            updated_count = 0
+            tests, command, stdout, stderr, result = suite.get_tests(self.path)
 
             project = self._get_project_model()
             for file, suite_name, test in tests:
@@ -176,7 +175,9 @@ class Project:
                 project=project,
                 tag="collect_tests",
                 command=command,
-                output=output,
+                stdout=stdout,
+                stderr=stderr,
+                result=result,
             )
 
         return saved_count, updated_count
@@ -270,7 +271,7 @@ class Project:
         float
             Coverage percentage.
         """
-        cov, command, output = suite.get_coverage(self.path, self.name)
+        cov, command, stdout, stderr, result = suite.get_coverage(self.path, self.name)
         with self.transaction():
             project = self._get_project_model()
             project.coverage = cov
@@ -280,7 +281,9 @@ class Project:
                 project=project,
                 tag="collect_coverage::project",
                 command=command,
-                output=output,
+                stdout=stdout,
+                stderr=stderr,
+                result=result,
             )
         return cov
 
