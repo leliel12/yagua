@@ -88,6 +88,9 @@ _CACHE_ARGUMENT = typer.Argument(
     metavar="💾 Project Cache db",
 )
 
+#: DOCUMENTA ESTO
+_DT_COLUMNS = ['created_at', 'modified_at']
+
 # ============================================================================
 # CLI MANAGER CLASS
 # ============================================================================
@@ -281,6 +284,10 @@ class CLIManager:
     def list_tests(
         self,
         cache: str = _CACHE_ARGUMENT,
+        dtinfo: bool = typer.Option(
+            False,
+            help="Show information about creation and modification date and time of every items of the list",
+        ),
     ) -> None:
         """List all tests for a project.
 
@@ -307,6 +314,11 @@ class CLIManager:
 
         with Project(db_path=cache) as proj:
             tests = proj.get_tests_dataframe()
+
+            if not dtinfo:
+                
+                columns = [col for col in tests.columns if col not in _DT_COLUMNS]
+                tests = tests[columns]
 
             if not len(tests):
                 typer.echo(f"⚠️  No tests found for project '{proj.name}'.")
