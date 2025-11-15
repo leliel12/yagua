@@ -2,6 +2,12 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Important Rules
+
+**NEVER perform `git push` without explicit permission from the user.**
+
+When creating commits, ALWAYS ask the user if they want to push the changes to the remote repository. Never assume that push is desired.
+
 ## Project Overview
 
 This repository contains **yagua**, a Python package for collecting and managing test information from pytest-based projects, along with:
