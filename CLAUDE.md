@@ -94,7 +94,8 @@ yagua info project.sqlite
 
 # List tests for a project
 yagua list-tests project.sqlite
-yagua list-tests project.sqlite --dtinfo  # Include timestamp information
+yagua list-tests project.sqlite --long  # Show all columns including timestamps and IDs
+yagua list-tests project.sqlite -l      # Short form
 
 # Collect coverage information
 yagua collect-coverage project.sqlite

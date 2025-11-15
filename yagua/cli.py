@@ -296,15 +296,16 @@ class CLIManager:
 
         This command displays all tests associated with the project,
         including their file paths, suite names (if any), test names, and
-        coverage information. By default, timestamp columns (created_at,
-        modified_at) are hidden unless --dtinfo is specified.
+        coverage information. By default, internal columns (id, project, test_id,
+        created_at, modified_at) are hidden unless --long is specified.
 
         Parameters
         ----------
         cache : Path
             Path to existing SQLite cache file.
-        long: bool
-            [COMPLETA CLAUDE]
+        long : bool, optional
+            Show all test information including timestamps, IDs, and internal fields.
+            Default is False.
 
         Raises
         ------
@@ -313,11 +314,12 @@ class CLIManager:
 
         Examples
         --------
-        List all tests:
+        List all tests (compact view):
             $ yagua list-tests my_project.sqlite
 
-        List tests with timestamp information:
-            $ yagua list-tests my_project.sqlite --dtinfo
+        List tests with all information:
+            $ yagua list-tests my_project.sqlite --long
+            $ yagua list-tests my_project.sqlite -l
         """
         self._validate_cache_exists(cache)
 

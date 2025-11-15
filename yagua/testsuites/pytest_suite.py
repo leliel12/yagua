@@ -110,6 +110,20 @@ class PytestSuite(TestSuiteABC):
     # ========================================================================
 
     def _run(self, cmd, project_path):
+        """Run pytest command using pytest.main() API.
+
+        Parameters
+        ----------
+        cmd : list
+            Command arguments to pass to pytest.main().
+        project_path : str or Path
+            Working directory for pytest execution.
+
+        Returns
+        -------
+        tuple[str, str, str]
+            Tuple of (command_string, stdout, stderr).
+        """
         stdout, stderr = io.StringIO(), io.StringIO()
         with (
             contextlib.chdir(project_path),
@@ -122,7 +136,7 @@ class PytestSuite(TestSuiteABC):
 
     def _parse_test_line(
         self, line: str
-    ) -> tuple[str, str | None, str] | None:
+    ) -> tuple[str, str, str | None, str] | None:
         """Parse a pytest test line into components.
 
         Parameters
@@ -132,14 +146,18 @@ class PytestSuite(TestSuiteABC):
 
         Returns
         -------
-        tuple[str, str | None, str] | None
-            Tuple of (file, suite, test) or None if parsing fails.
+        tuple[str, str, str | None, str] | None
+            Tuple of (test_id, file, suite, test) or None if parsing fails.
+            - test_id: Full pytest nodeid (the complete line)
+            - file: Test file path
+            - suite: Test suite/class name (None if no class)
+            - test: Test function name
         """
         line = line.strip()
         parts = line.split("::")
         if len(parts) == 2:
             # Format: file::test
-            return (parts[0], None, parts[1])
+            return (line, parts[0], None, parts[1])
         elif len(parts) == 3:
             # Format: file::Suite::test
             return (line, parts[0], parts[1], parts[2])
@@ -150,12 +168,12 @@ class PytestSuite(TestSuiteABC):
 
     def get_tests(
         self, project_path
-    ) -> tuple[list[tuple[str, str | None, str]], str, str, str, str]:
+    ) -> tuple[list[tuple[str, str, str | None, str]], str, str, str, str]:
         """Collect all tests from a pytest project.
 
         Executes pytest with the --collect-only flag to discover all tests
-        without running them. Parses the output to extract test information
-        in a structured format.
+        without running them using pytest.main() API. Parses the output to
+        extract test information in a structured format.
 
         Parameters
         ----------
@@ -164,11 +182,14 @@ class PytestSuite(TestSuiteABC):
 
         Returns
         -------
-        tests : list[tuple[str, str | None, str]]
-            List of tuples (file, suite, test) for each test found.
-            The suite element is None if the test is not part of a test class.
+        tests : list[tuple[str, str, str | None, str]]
+            List of tuples (test_id, file, suite, test) for each test found where:
+            - test_id: Full pytest nodeid (e.g., 'file.py::TestClass::test_method')
+            - file: Test file path
+            - suite: Test suite/class name (None if no class)
+            - test: Test function name
         command : str
-            The command that was executed (e.g., "pytest --collect-only -q").
+            The pytest command arguments that were executed.
         stdout : str
             Standard output from the pytest command execution.
         stderr : str
@@ -176,17 +197,12 @@ class PytestSuite(TestSuiteABC):
         data : str
             Additional data (same as stdout for consistency with interface).
 
-        Raises
-        ------
-        subprocess.CalledProcessError
-            If pytest command fails or returns non-zero exit code.
-
         Examples
         --------
         >>> suite = PytestSuite()
         >>> tests, cmd, stdout, stderr, _ = suite.get_tests("/path/to/project")
-        >>> for file, suite_name, test in tests:
-        ...     print(f"{file}::{suite_name or ''}::{test}")
+        >>> for test_id, file, suite_name, test in tests:
+        ...     print(f"{test_id}: {file}::{suite_name or ''}::{test}")
         """
         command, stdout, stderr = self._run(
             ["--collect-only", "-q"],
@@ -207,6 +223,7 @@ class PytestSuite(TestSuiteABC):
         """Run pytest with coverage and return the total coverage percentage.
 
         Executes pytest with pytest-cov to run all tests and measure code coverage.
+        Uses pytest.main() API for better integration.
         Generates a JSON coverage report in a temporary file and extracts the
         total coverage percentage from it.
 

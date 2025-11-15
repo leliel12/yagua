@@ -131,6 +131,8 @@ class TestModel(BaseModel):
     project : ForeignKeyField
         Reference to the ProjectModel (always id=1).
         Accessible via backref as project.tests.
+    test_id : CharField
+        Unique identifier for the test (usually the full pytest nodeid).
     file : CharField
         Path to the test file relative to the project root.
     suite : CharField, optional
@@ -146,8 +148,10 @@ class TestModel(BaseModel):
 
     Notes
     -----
-    The unique constraint on (project, file, suite, test) ensures that
-    each test is only stored once per project.
+    The test_id field is unique across all tests and typically contains
+    the full pytest nodeid (e.g., 'file.py::TestClass::test_method').
+    Additionally, there is a unique constraint on (project, file, suite, test)
+    to ensure each test is only stored once per project.
     """
 
     project = ForeignKeyField(ProjectModel, backref="tests")

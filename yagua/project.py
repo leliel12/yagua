@@ -201,7 +201,7 @@ class Project:
     def add_test(
         self,
         project,
-        test_id,
+        test_id: str,
         file: str,
         suite: str | None,
         test: str,
@@ -212,6 +212,8 @@ class Project:
         ----------
         project : ProjectModel
             Project model instance.
+        test_id : str
+            Unique identifier for the test (usually the full pytest nodeid).
         file : str
             Test file path.
         suite : str, optional
