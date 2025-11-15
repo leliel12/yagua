@@ -151,6 +151,7 @@ class TestModel(BaseModel):
     """
 
     project = ForeignKeyField(ProjectModel, backref="tests")
+    test_id = CharField(unique=True)
     file = CharField()
     suite = CharField(null=True)
     test = CharField()

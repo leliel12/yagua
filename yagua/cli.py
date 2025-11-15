@@ -88,13 +88,6 @@ _CACHE_ARGUMENT = typer.Argument(
     metavar="💾 Project Cache db",
 )
 
-#: List of timestamp column names to exclude from default test listings.
-#:
-#: These columns contain creation and modification timestamps for each test record.
-#: By default, they are hidden in list-tests output unless --dtinfo flag is used.
-#:
-#: Type: list[str]
-_DT_COLUMNS = ["created_at", "modified_at"]
 
 # ============================================================================
 # CLI MANAGER CLASS
@@ -295,9 +288,8 @@ class CLIManager:
     def list_tests(
         self,
         cache: str = _CACHE_ARGUMENT,
-        dtinfo: bool = typer.Option(
-            False,
-            help="Show information about creation and modification date and time of every items of the list",
+        long: bool = typer.Option(
+            False, "--long", "-l", help="Show all the information of the tests"
         ),
     ) -> None:
         """List all tests for a project.
@@ -311,9 +303,8 @@ class CLIManager:
         ----------
         cache : Path
             Path to existing SQLite cache file.
-        dtinfo : bool, optional
-            Show creation and modification timestamps for each test.
-            Default is False.
+        long: bool
+            [COMPLETA CLAUDE]
 
         Raises
         ------
@@ -333,10 +324,18 @@ class CLIManager:
         with Project(db_path=cache) as proj:
             tests = proj.get_tests_dataframe()
 
-            if not dtinfo:
+            if not long:
+
+                ignore_columns = [
+                    "id",
+                    "project",
+                    "test_id",
+                    "created_at",
+                    "modified_at",
+                ]
 
                 columns = [
-                    col for col in tests.columns if col not in _DT_COLUMNS
+                    col for col in tests.columns if col not in ignore_columns
                 ]
                 tests = tests[columns]
 

@@ -173,9 +173,10 @@ class Project:
             tests, command, stdout, stderr, result = suite.get_tests(self.path)
 
             project = self._get_project_model()
-            for file, suite_name, test in tests:
+            for test_id, file, suite_name, test in tests:
                 _, created = self.add_test(
                     project=project,
+                    test_id=test_id,
                     file=file,
                     suite=suite_name,
                     test=test,
@@ -200,6 +201,7 @@ class Project:
     def add_test(
         self,
         project,
+        test_id,
         file: str,
         suite: str | None,
         test: str,
@@ -231,6 +233,7 @@ class Project:
         with self.transaction():
             test_obj, created = TestModel.get_or_create(
                 project=project,
+                test_id=test_id,
                 file=file,
                 suite=suite,
                 test=test,

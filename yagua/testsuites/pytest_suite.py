@@ -4,13 +4,12 @@ Yagua - Pytest Suite.
 This module provides a test suite handler for pytest-based projects.
 """
 
-import re
+import io
 import contextlib
 import tempfile
-import subprocess
-import sys
-from pathlib import Path
 import json
+
+import pytest
 
 from .abc import TestSuiteABC
 
@@ -110,27 +109,20 @@ class PytestSuite(TestSuiteABC):
     # Private Methods
     # ========================================================================
 
-    def _run(self, cmd, cwd):
-        """Run subprocess command with standard configuration.
+    def _run(self, cmd, project_path):
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with (
+            contextlib.chdir(project_path),
+            contextlib.redirect_stdout(stdout),
+            contextlib.redirect_stderr(stderr),
+        ):
+            pytest.main(cmd)
 
-        Parameters
-        ----------
-        cmd : list
-            Command and arguments to execute.
-        cwd : str or Path
-            Working directory for command execution.
+        return " ".join(cmd), stdout.getvalue(), stderr.getvalue()
 
-        Returns
-        -------
-        subprocess.CompletedProcess
-            Result of the subprocess execution.
-        """
-        result = subprocess.run(
-            cmd, cwd=cwd, capture_output=True, text=True, check=True
-        )
-        return " ".join(cmd), result
-
-    def _parse_test_line(self, line: str) -> tuple[str, str | None, str] | None:
+    def _parse_test_line(
+        self, line: str
+    ) -> tuple[str, str | None, str] | None:
         """Parse a pytest test line into components.
 
         Parameters
@@ -143,13 +135,14 @@ class PytestSuite(TestSuiteABC):
         tuple[str, str | None, str] | None
             Tuple of (file, suite, test) or None if parsing fails.
         """
-        parts = line.strip().split("::")
+        line = line.strip()
+        parts = line.split("::")
         if len(parts) == 2:
             # Format: file::test
             return (parts[0], None, parts[1])
         elif len(parts) == 3:
             # Format: file::Suite::test
-            return (parts[0], parts[1], parts[2])
+            return (line, parts[0], parts[1], parts[2])
 
     # ========================================================================
     # Public Methods
@@ -195,24 +188,18 @@ class PytestSuite(TestSuiteABC):
         >>> for file, suite_name, test in tests:
         ...     print(f"{file}::{suite_name or ''}::{test}")
         """
-        command, result = self._run(
-            ["pytest", "--collect-only", "-q"],
-            cwd=project_path,
+        command, stdout, stderr = self._run(
+            ["--collect-only", "-q"],
+            project_path,
         )
 
         tests = []
-        for line in result.stdout.splitlines():
+        for line in stdout.splitlines():
             parsed = self._parse_test_line(line)
             if parsed:
                 tests.append(parsed)
 
-        return tests, command, result.stdout, result.stderr, result.stdout
-
-    def get_tests(self, project_path):
-        import pytest
-        with contextlib.chdir(project_path):
-            coso = pytest.main(["--collect-only", "-q"])
-            import ipdb; ipdb.set_trace()
+        return tests, command, stdout, stderr, stdout
 
     def get_coverage(
         self, project_path, project_name
@@ -269,17 +256,13 @@ class PytestSuite(TestSuiteABC):
             dir=self._temp_dir.name, suffix=".json", prefix="yagua_cov_"
         ) as fp:
             cmd = [
-                "pytest",
                 f"--cov={project_name}",
                 f"--cov-report=json:{fp.name}",
             ]
-            command, result = self._run(
-                cmd,
-                cwd=project_path,
-            )
+            command, stdout, stderr = self._run(cmd, project_path)
             json_src = fp.read()
             data = json.loads(json_src)
 
         cov = data["totals"]["percent_covered"]
 
-        return cov, command, result.stdout, result.stderr, json_src
+        return cov, command, stdout, stderr, json_src

@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="https://github.com/leliel12/qa_entropy/raw/master/res/logo.png" alt="Yagua Logo" width="300"/>
+<img src="https://github.com/leliel12/yagua/raw/master/res/logo.png" alt="Yagua Logo" width="300"/>
 
 # Yagua
 
@@ -30,7 +30,7 @@
 
 ## 📖 About
 
-Yagua is a Python package that helps you collect, store, and manage test information from pytest-based projects using a SQLite database. Part of the **qa_entropy** research workspace.
+Yagua is a Python package that helps you collect, store, and manage test information from pytest-based projects using a SQLite database.
 
 ## ✨ Features
 

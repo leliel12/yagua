@@ -4,11 +4,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This repository contains **qa_entropy**, a research/testing workspace that includes:
-- **yagua**: A Python package for collecting and managing test information from pytest-based projects
-- **External projects**: Git submodules (like `astroalign`) managed via `update_projects.py`
+This repository contains **yagua**, a Python package for collecting and managing test information from pytest-based projects, along with:
+- **External projects**: Git submodules (like `astroalign`) managed via `update_projects.py` for testing and research
 
-The working directory is `/home/juanbc/proyectos/qa_entropy/src`.
+The working directory is `/home/juanbc/proyectos/yagua/src`.
 
 ## yagua Package Architecture
 
