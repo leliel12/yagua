@@ -54,9 +54,10 @@ class TestSuiteABC(ABC):
 
         Notes
         -----
-        The return tuple provides complete information about the test collection
-        process, allowing the caller to log the command executed and store
-        execution details (stdout, stderr, and additional data) for audit purposes.
+        The return tuple provides complete information about the test
+        collection process, allowing the caller to log the command executed
+        and store execution details (stdout, stderr, and additional data)
+        for audit purposes.
         """
         pass
 

@@ -29,10 +29,10 @@ ALL_MODELS = [BaseModel] + MODELS_TO_CREATE
 class Project:
     """Project manager for QA testing.
 
-    This class manages the database connection and provides methods to interact
-    with projects, tests, and execution history. The database instance is created
-    per-project and models are dynamically bound to it. Each cache file represents
-    a single project.
+    This class manages the database connection and provides methods to
+    interact with projects, tests, and execution history. The database
+    instance is created per-project and models are dynamically bound to it.
+    Each cache file represents a single project.
 
     Parameters
     ----------
@@ -148,8 +148,9 @@ class Project:
     def collect_tests(self, suite) -> tuple[int, int]:
         """Collect tests from a test suite and save them to the database.
 
-        This method runs the suite's get_tests() method to discover all tests,
-        saves them to the database, and logs the execution in the history table.
+        This method runs the suite's get_tests() method to discover all
+        tests, saves them to the database, and logs the execution in the
+        history table.
 
         Parameters
         ----------
@@ -288,7 +289,8 @@ class Project:
         Parameters
         ----------
         suite : TestSuiteABC
-            Test suite handler with a get_coverage() method (e.g., PytestSuite).
+            Test suite handler with a get_coverage() method
+            (e.g., PytestSuite).
 
         Returns
         -------

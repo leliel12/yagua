@@ -199,7 +199,8 @@ class CLIManager:
             $ yagua create-project /path/to/project
 
         Create cache with custom name and location:
-            $ yagua create-project /path/to/project my_cache.sqlite -n "My Project"
+            $ yagua create-project /path/to/project my_cache.sqlite \
+                -n "My Project"
         """
         if not project_path.exists():
             typer.echo(
@@ -296,16 +297,17 @@ class CLIManager:
 
         This command displays all tests associated with the project,
         including their file paths, suite names (if any), test names, and
-        coverage information. By default, internal columns (id, project, test_id,
-        created_at, modified_at) are hidden unless --long is specified.
+        coverage information. By default, internal columns (id, project,
+        test_id, created_at, modified_at) are hidden unless --long is
+        specified.
 
         Parameters
         ----------
         cache : Path
             Path to existing SQLite cache file.
         long : bool, optional
-            Show all test information including timestamps, IDs, and internal fields.
-            Default is False.
+            Show all test information including timestamps, IDs, and
+            internal fields. Default is False.
 
         Raises
         ------

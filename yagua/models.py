@@ -90,9 +90,11 @@ class HistoryModel(BaseModel):
         Reference to the ProjectModel (always id=1).
         Accessible via backref as project.history.
     tag : CharField
-        Tag identifying the command type (e.g., 'collect_tests', 'collect_coverage::project').
+        Tag identifying the command type
+        (e.g., 'collect_tests', 'collect_coverage::project').
     command : TextField
-        The full command string that was executed (e.g., 'pytest --collect-only -q').
+        The full command string that was executed
+        (e.g., 'pytest --collect-only -q').
     stdout : TextField
         Standard output from the command execution.
     stderr : TextField

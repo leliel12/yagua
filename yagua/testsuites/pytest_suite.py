@@ -45,7 +45,8 @@ class YaguaPlugin:
         they are executed. You can modify the items list or extract metadata.
 
         Examples of what you can extract from each item:
-        - item.nodeid: Full test path (e.g., "tests/test_foo.py::TestClass::test_method")
+        - item.nodeid: Full test path
+          (e.g., "tests/test_foo.py::TestClass::test_method")
         - item.obj: The actual test function/method object
         - item.keywords: Dictionary of markers and keywords
         - item.callspec: Parametrization info (if test is parametrized)
@@ -69,9 +70,9 @@ class PytestSuite(TestSuiteABC):
     providing methods to discover tests and collect coverage information using
     pytest's built-in collection and coverage mechanisms.
 
-    The class uses subprocess calls to pytest CLI commands and returns structured
-    data including the executed command, output, and additional metadata for
-    audit logging purposes.
+    The class uses subprocess calls to pytest CLI commands and returns
+    structured data including the executed command, output, and additional
+    metadata for audit logging purposes.
 
     Attributes
     ----------
@@ -88,7 +89,9 @@ class PytestSuite(TestSuiteABC):
     >>> suite = PytestSuite()
     >>> tests, cmd, stdout, stderr, data = suite.get_tests("/path/to/project")
     >>> print(f"Found {len(tests)} tests using command: {cmd}")
-    >>> coverage, cmd, stdout, stderr, data = suite.get_coverage("/path/to/project", "myproject")
+    >>> coverage, cmd, stdout, stderr, data = suite.get_coverage(
+    ...     "/path/to/project", "myproject"
+    ... )
     >>> print(f"Coverage: {coverage}%")
     """
 
@@ -99,8 +102,9 @@ class PytestSuite(TestSuiteABC):
     def __init__(self):
         """Initialize PytestSuite with temporary directory for coverage files.
 
-        Creates a temporary directory that will be used to store coverage report
-        files during coverage collection. The directory is automatically cleaned
+        Creates a temporary directory that will be used to store coverage
+        report files during coverage collection. The directory is
+        automatically cleaned
         up when the object is destroyed.
         """
         self._temp_dir = tempfile.TemporaryDirectory()
@@ -183,8 +187,10 @@ class PytestSuite(TestSuiteABC):
         Returns
         -------
         tests : list[tuple[str, str, str | None, str]]
-            List of tuples (test_id, file, suite, test) for each test found where:
-            - test_id: Full pytest nodeid (e.g., 'file.py::TestClass::test_method')
+            List of tuples (test_id, file, suite, test) for each test
+            found where:
+            - test_id: Full pytest nodeid
+              (e.g., 'file.py::TestClass::test_method')
             - file: Test file path
             - suite: Test suite/class name (None if no class)
             - test: Test function name
@@ -222,8 +228,8 @@ class PytestSuite(TestSuiteABC):
     ) -> tuple[float | None, str, str, str, dict]:
         """Run pytest with coverage and return the total coverage percentage.
 
-        Executes pytest with pytest-cov to run all tests and measure code coverage.
-        Uses pytest.main() API for better integration.
+        Executes pytest with pytest-cov to run all tests and measure code
+        coverage. Uses pytest.main() API for better integration.
         Generates a JSON coverage report in a temporary file and extracts the
         total coverage percentage from it.
 
@@ -241,13 +247,15 @@ class PytestSuite(TestSuiteABC):
             Total coverage percentage (0-100) or None if coverage could not
             be determined.
         command : str
-            The command that was executed (e.g., "pytest --cov=package --cov-report=json:...").
+            The command that was executed
+            (e.g., "pytest --cov=package --cov-report=json:...").
         stdout : str
             Standard output from the pytest command execution.
         stderr : str
             Standard error output from the pytest command execution.
         data : dict
-            The parsed JSON coverage report containing detailed coverage information.
+            The parsed JSON coverage report containing detailed coverage
+            information.
 
         Raises
         ------
@@ -259,13 +267,15 @@ class PytestSuite(TestSuiteABC):
         Notes
         -----
         This method requires pytest-cov to be installed in the environment.
-        The coverage report is generated in a temporary file that is automatically
-        cleaned up after parsing.
+        The coverage report is generated in a temporary file that is
+        automatically cleaned up after parsing.
 
         Examples
         --------
         >>> suite = PytestSuite()
-        >>> cov, cmd, stdout, stderr, data = suite.get_coverage("/path/to/project", "mypackage")
+        >>> cov, cmd, stdout, stderr, data = suite.get_coverage(
+        ...     "/path/to/project", "mypackage"
+        ... )
         >>> print(f"Total coverage: {cov:.2f}%")
         >>> print(f"Files covered: {len(data.get('files', {}))}")
         """
