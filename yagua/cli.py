@@ -14,6 +14,7 @@ import numpy as np
 import typer
 
 from rich.console import Console
+from rich.panel import Panel
 from rich.table import Table
 
 from .project import Project
@@ -223,9 +224,12 @@ class CLIManager:
                 -n "My Project"
         """
         if not project_path.exists():
-            typer.echo(
-                f"❌ Error: Project path does not exist: {project_path}",
-                err=True,
+            console.print(
+                Panel(
+                    f"[red]Project path does not exist:[/red]\n{project_path}",
+                    title="❌ Error",
+                    border_style="red",
+                )
             )
             raise typer.Exit(code=1)
 
@@ -234,8 +238,9 @@ class CLIManager:
         # Use provided cache path or default to <project_name>.sqlite
         cache = cache or as_path(project_path.name + ".sqlite")
 
-        typer.echo(f"📦 Creating empty cache for project: {project_name}")
-        typer.echo(f"💾 Cache file: {cache.name}")
+        console.print(
+            f"\n[bold cyan]📦 Creating project cache...[/bold cyan]\n"
+        )
 
         try:
             proj = Project.from_project_info(
@@ -245,14 +250,35 @@ class CLIManager:
                 db_path=cache,
             )
         except Exception as err:
-            typer.echo(f"❌ {err}", err=True)
+            console.print(
+                Panel(
+                    f"[red]{err}[/red]",
+                    title="❌ Error",
+                    border_style="red",
+                )
+            )
             raise typer.Exit(code=1)
 
-        typer.echo(f"✅ Project created: {proj.name}")
-        typer.echo(f"📁 Path: {proj.path}")
+        # Build success message
+        info_lines = [
+            f"[bold green]✅ Project created successfully![/bold green]\n",
+            f"[cyan]📝 Name:[/cyan] {proj.name}",
+            f"[cyan]📁 Path:[/cyan] {proj.path}",
+            f"[cyan]💾 Cache:[/cyan] {cache}",
+        ]
+
         if proj.description:
-            typer.echo(f"🪪 Description: {proj.description}")
-        typer.echo("✨ Cache initialized successfully (0 tests)")
+            info_lines.append(f"[cyan]🪪 Description:[/cyan] {proj.description}")
+
+        info_lines.append(f"\n[dim]✨ Cache initialized with 0 tests[/dim]")
+
+        console.print(
+            Panel(
+                "\n".join(info_lines),
+                border_style="green",
+                padding=(1, 2),
+            )
+        )
 
     # ========================================================================
     # Public Commands - Test Management
