@@ -320,6 +320,14 @@ class Project:
             )
         return cov
 
+    def collect_coverage_for_test(self, suite, test_id):
+        cov, command, stdout, stderr, result = suite.get_coverage_for_test(
+            self.path, self.name, test_id
+        )
+        import ipdb
+
+        ipdb.set_trace()
+
     # ========================================================================
     # Public Methods - Project Information
     # ========================================================================

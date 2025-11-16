@@ -18,16 +18,16 @@ from .abc import TestSuiteABC
 # ============================================================================
 
 
-class YaguaPlugin:
+class IgnoreTest:
     """Pytest plugin for collecting test metadata.
 
     This plugin hooks into pytest's collection phase to capture additional
     test metadata that can be stored in the yagua database.
     """
 
-    def __init__(self):
+    def __init__(self, test_id):
         """Initialize the plugin with empty collected items."""
-        self.collected_items = []
+        self.ignore_test_id = test_id
 
     def pytest_collection_modifyitems(self, config, items):
         """Called after collection is completed.
@@ -53,7 +53,9 @@ class YaguaPlugin:
         """
         # Store collected items for later processing
         self.collected_items = items
+        import ipdb
 
+        ipdb.set_trace()
         # Access config if needed (currently unused)
         _ = config
 
@@ -113,7 +115,7 @@ class PytestSuite(TestSuiteABC):
     # Private Methods
     # ========================================================================
 
-    def _run(self, cmd, project_path):
+    def _run(self, cmd, project_path, plugins=None):
         """Run pytest command using pytest.main() API.
 
         Parameters
@@ -134,7 +136,7 @@ class PytestSuite(TestSuiteABC):
             contextlib.redirect_stdout(stdout),
             contextlib.redirect_stderr(stderr),
         ):
-            pytest.main(cmd)
+            pytest.main(cmd, plugins=plugins)
 
         return " ".join(cmd), stdout.getvalue(), stderr.getvalue()
 
@@ -288,6 +290,26 @@ class PytestSuite(TestSuiteABC):
             ]
             command, stdout, stderr = self._run(cmd, project_path)
             json_src = fp.read()
+            data = json.loads(json_src)
+
+        cov = data["totals"]["percent_covered"]
+
+        return cov, command, stdout, stderr, json_src
+
+    def get_coverage_for_test(self, project_path, project_name, test_id):
+        print(test_id)
+        with tempfile.NamedTemporaryFile(
+            dir=self._temp_dir.name, suffix=".json", prefix="yagua_fcov_"
+        ) as fp:
+            cmd = [
+                test_id,
+                f"--cov={project_name}",
+                f"--cov-report=json:{fp.name}",
+            ]
+            command, stdout, stderr = self._run(cmd, project_path)
+
+            json_src = fp.read()
+
             data = json.loads(json_src)
 
         cov = data["totals"]["percent_covered"]

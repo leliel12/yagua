@@ -9,6 +9,8 @@ import inspect
 import sys
 from pathlib import Path
 
+from rich.progress import track
+
 import typer
 
 from .project import Project
@@ -229,7 +231,7 @@ class CLIManager:
         typer.echo(f"✅ Project created: {proj.name}")
         typer.echo(f"📁 Path: {proj.path}")
         if proj.description:
-            typer.echo(f"📝 Description: {proj.description}")
+            typer.echo(f"🪪 Description: {proj.description}")
         typer.echo("✨ Cache initialized successfully (0 tests)")
 
     # ========================================================================
@@ -239,6 +241,12 @@ class CLIManager:
     def collect_tests(
         self,
         cache: str = _CACHE_ARGUMENT,
+        force: bool = typer.Option(
+            False,
+            "--force",
+            "-f",
+            help="Force recollection of tests",
+        ),
     ) -> None:
         """Collect tests from a project using pytest.
 
@@ -270,6 +278,15 @@ class CLIManager:
         with Project(
             db_path=cache,
         ) as proj:
+
+            existing_tests = proj.count_tests()
+            if not (force or existing_tests):
+                typer.echo(
+                    f"📊 Test already collected: {existing_tests}%\n"
+                    f"Use --force/-f to recollect."
+                )
+                raise typer.Exit(1)
+
             typer.echo(f"🔍 Using project: {proj.name} ({proj.path})")
 
             # Create test suite and collect tests
@@ -396,21 +413,42 @@ class CLIManager:
         self._validate_cache_exists(cache)
 
         with Project(db_path=cache) as proj:
-            if not proj.count_tests():
-                typer.echo(f"⚠️  No tests found for project '{proj.name}'.")
-                return
-
-            if not (force or proj.coverage is None):
-                typer.echo(
-                    f"📊 Coverage already exists: {proj.coverage:.2f}%\n"
-                    f"Use --force to recalculate."
-                )
-                raise typer.Exit(1)
 
             typer.echo(f"📊 Calculating coverage for: {proj.name}")
+
+            # Si no hay test no hay nada para hacer
+            if not proj.count_tests():
+                typer.echo(f"\t⚠️  No tests found for project '{proj.name}'.")
+                raise typer.Exit(1)
+
+            # backend de calculo de estadisticas segun testsuite
             suite = PytestSuite()
-            cov = proj.collect_coverage(suite)
-            typer.echo(f"💯 Total Coverage: {cov:.4f}%")
+
+            # COVERAGE OF ALL THE TESTS =======================================
+            if proj.coverage or Force:
+                proj.collect_coverage(suite)
+            typer.echo(f"\t💯 Total coverage: {proj.coverage:.4f}% ")
+
+            # COVERAGE OF BY TESTS ============================================
+
+            # Extract the needed columns
+            tests_ids = proj.get_tests_dataframe()[
+                ["test_id", "coverage_alone", "coverage_without"]
+            ].to_numpy()
+
+            # convierte el numpy array en una barra de progreso ===============
+            coverage_test_generator = track(
+                tests_ids, description="Coverage for each test alone"
+            )
+
+            # Test por test vemos que es lo que falta calular
+            for test_id, coverage_alone, _ in coverage_test_generator:
+                if coverage_alone or force:
+                    proj.collect_coverage_for_test(suite, test_id)
+                typer.echo(
+                    f"📄 Coverage alone for {test_id!r}: "
+                    f"{coverage_alone:.4f}% "
+                )
 
     # ========================================================================
     # Public Commands - Project Information
@@ -450,7 +488,7 @@ class CLIManager:
             typer.echo(f"📝 Name: {proj.name}")
             typer.echo(f"📁 Path: {proj.path}")
             if proj.description:
-                typer.echo(f"📄 Description: {proj.description}")
+                typer.echo(f"🪪 Description: {proj.description}")
             if test_count:
                 typer.echo(f"🧪 Tests: {test_count}")
             if proj.coverage:

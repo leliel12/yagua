@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
+requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -44,6 +44,7 @@ Documentation = "https://github.com/yourusername/yagua#readme"
 Repository = "https://github.com/yourusername/yagua"
 Issues = "https://github.com/yourusername/yagua/issues"
 
-[tool.setuptools]
-packages = ["yagua"]
+[tool.setuptools.packages.find]
+include = ["yagua"]
+namespaces = false
 
