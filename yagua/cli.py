@@ -322,16 +322,49 @@ class CLIManager:
         with self._use_project(cache) as proj:
 
             total_tests = proj.count_tests()
+            saved_count, updated_count = 0, 0
+
             if total_tests == 0 or force:
+                console.print(
+                    f"\n[bold cyan]🧪 Collecting tests...[/bold cyan]\n"
+                )
                 suite = PytestSuite()
                 saved_count, updated_count = proj.collect_tests(suite)
                 total_tests = saved_count + updated_count
 
             if total_tests == 0:
-                typer.echo("⚠️  No tests collected.")
+                console.print(
+                    Panel(
+                        "[yellow]No tests found in the project.[/yellow]\n\n"
+                        "[dim]Make sure the project contains pytest-compatible "
+                        "test files.[/dim]",
+                        title="⚠️  Warning",
+                        border_style="yellow",
+                    )
+                )
                 raise typer.Exit(code=1)
 
-            typer.echo(f"✅ Collected {total_tests} tests")
+            # Build success message
+            info_lines = [
+                f"[bold green]✅ Tests collected successfully![/bold green]\n",
+                f"[cyan]📊 Total tests:[/cyan] {total_tests}",
+            ]
+
+            if saved_count or updated_count:
+                if saved_count:
+                    info_lines.append(f"[green]  • New:[/green] {saved_count}")
+                if updated_count:
+                    info_lines.append(
+                        f"[blue]  • Updated:[/blue] {updated_count}"
+                    )
+
+            console.print(
+                Panel(
+                    "\n".join(info_lines),
+                    border_style="green",
+                    padding=(1, 2),
+                )
+            )
 
     def list_tests(
         self,
