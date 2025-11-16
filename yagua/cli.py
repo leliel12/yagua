@@ -455,7 +455,7 @@ class CLIManager:
             table.add_column("Test ID", style="cyan", no_wrap=False)
             table.add_column("Alone", justify="right", style="green")
             table.add_column("Without", justify="right", style="yellow")
-            table.add_column("Delta", justify="right", style="blue")
+            table.add_column("Impact", justify="right", style="blue")
 
             # Iterate through each test to calculate coverage metrics
             for idx, (test_id, cov_alone, cov_wo) in enumerate(tests_ids, 1):
@@ -477,8 +477,8 @@ class CLIManager:
                 if cov_wo is None or force:
                     cov_wo = proj.collect_coverage_without_test(suite, test_id)
 
-                # Calculate delta (impact of removing this test)
-                delta = proj.coverage - cov_wo
+                # Calculate impact (unique coverage contribution of this test)
+                impact = proj.coverage - cov_wo
 
                 # Add row to table
                 table.add_row(
@@ -486,7 +486,7 @@ class CLIManager:
                     test_id,
                     f"{cov_alone:.2f}%",
                     f"{cov_wo:.2f}%",
-                    f"{delta:+.2f}%",
+                    f"{impact:+.2f}%",
                 )
                 console.print(" " * len(proc_test_msg), end="\r")
 
@@ -495,7 +495,7 @@ class CLIManager:
             console.print(
                 f"\n[dim]Legend: Alone = coverage running only this test | "
                 f"Without = coverage without this test | "
-                f"Delta = impact on total coverage[/dim]\n"
+                f"Impact = unique coverage contribution[/dim]\n"
             )
 
     # ========================================================================
