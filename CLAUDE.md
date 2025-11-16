@@ -162,10 +162,14 @@ with Project(db_path="qa.sqlite") as proj:
     cov = proj.collect_coverage(suite)
     print(f"Coverage: {cov:.2f}%")
 
-    # Collect coverage for individual test
+    # Collect coverage for individual test (alone)
     test_id = "test_file.py::test_example"
-    test_cov = proj.collect_coverage_for_test(suite, test_id)
-    print(f"Coverage for {test_id}: {test_cov:.2f}%")
+    test_cov_alone = proj.collect_coverage_for_test(suite, test_id)
+    print(f"Coverage alone for {test_id}: {test_cov_alone:.2f}%")
+
+    # Collect coverage without individual test
+    test_cov_without = proj.collect_coverage_without_test(suite, test_id)
+    print(f"Coverage without {test_id}: {test_cov_without:.2f}%")
 
     # Access project info via properties
     print(f"Project: {proj.name}")
@@ -194,12 +198,12 @@ All models inherit from `BaseModel` which provides:
 - `test`: Test function name
 - `test_id`: Unique pytest node ID for the test (e.g., 'test_file.py::TestClass::test_method')
 - `coverage_alone` (nullable): Coverage when running test in isolation
-- `coverage_without` (nullable): Coverage when running all tests except this one (not yet implemented)
+- `coverage_without` (nullable): Coverage when running all tests except this one
 - Unique constraint on: `(project, file, suite, test)`
 
 **HistoryModel**
 - `project` (FK): Reference to ProjectModel (always id=1)
-- `tag`: Command type identifier (e.g., 'collect_tests', 'collect_coverage', 'collect_coverage_for_test')
+- `tag`: Command type identifier (e.g., 'collect_tests', 'collect_coverage', 'collect_coverage_for_test::{test_id}', 'collect_coverage_without_test::{test_id}')
 - `command`: Full command string executed (e.g., 'pytest --collect-only -q')
 - `stdout`: Standard output from command execution
 - `stderr`: Standard error from command execution
