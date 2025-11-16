@@ -276,6 +276,27 @@ class Project:
                 TestModel.select().where(TestModel.project == project).count()
             )
 
+    def get_test(self, test_id: str) -> TestModel:
+        """Get a specific test by its test_id.
+
+        Parameters
+        ----------
+        test_id : str
+            Unique identifier for the test (pytest nodeid).
+
+        Returns
+        -------
+        TestModel
+            The test model instance with all fields and calculated properties.
+
+        Raises
+        ------
+        peewee.DoesNotExist
+            If no test with the given test_id exists.
+        """
+        with self.transaction():
+            return TestModel.get(TestModel.test_id == test_id)
+
     # ========================================================================
     # Public Methods - Coverage Management
     # ========================================================================

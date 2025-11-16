@@ -456,6 +456,9 @@ class CLIManager:
             table.add_column("Alone", justify="right", style="green")
             table.add_column("Without", justify="right", style="yellow")
             table.add_column("Impact", justify="right", style="blue")
+            table.add_column("Overlap", justify="right", style="magenta")
+            table.add_column("Uniqueness", justify="right", style="red")
+            table.add_column("Redundancy", justify="right", style="dim")
 
             # Iterate through each test to calculate coverage metrics
             for idx, (test_id, cov_alone, cov_wo) in enumerate(tests_ids, 1):
@@ -477,8 +480,14 @@ class CLIManager:
                 if cov_wo is None or force:
                     cov_wo = proj.collect_coverage_without_test(suite, test_id)
 
-                # Calculate impact (unique coverage contribution of this test)
-                impact = proj.coverage - cov_wo
+                # Get the test model to access calculated properties
+                test_model = proj.get_test(test_id)
+
+                # Extract calculated metrics (properties auto-calculate)
+                impact = test_model.coverage_impact
+                overlap = test_model.coverage_overlap
+                uniqueness = test_model.coverage_uniqueness
+                redundancy = test_model.coverage_redundancy
 
                 # Add row to table
                 table.add_row(
@@ -486,16 +495,27 @@ class CLIManager:
                     test_id,
                     f"{cov_alone:.2f}%",
                     f"{cov_wo:.2f}%",
-                    f"{impact:+.2f}%",
+                    f"{impact:+.2f}%" if impact is not None else "N/A",
+                    f"{overlap:.2f}%" if overlap is not None else "N/A",
+                    f"{uniqueness:.2f}%" if uniqueness is not None else "N/A",
+                    f"{redundancy:.2f}%" if redundancy is not None else "N/A",
                 )
                 console.print(" " * len(proc_test_msg), end="\r")
 
             # Clear progress line and show table
             console.print(table)
             console.print(
-                f"\n[dim]Legend: Alone = coverage running only this test | "
-                f"Without = coverage without this test | "
-                f"Impact = unique coverage contribution[/dim]\n"
+                f"\n[dim]Legend:[/dim]\n"
+                f"[dim]  • Alone = coverage running only this test[/dim]\n"
+                f"[dim]  • Without = coverage without this test[/dim]\n"
+                f"[dim]  • Impact = unique coverage contribution "
+                f"(total - without)[/dim]\n"
+                f"[dim]  • Overlap = coverage shared with other tests "
+                f"(total - alone)[/dim]\n"
+                f"[dim]  • Uniqueness = % of test's coverage that is unique "
+                f"(impact/alone × 100)[/dim]\n"
+                f"[dim]  • Redundancy = % of test's coverage that is redundant "
+                f"((alone-impact)/alone × 100)[/dim]\n"
             )
 
     # ========================================================================

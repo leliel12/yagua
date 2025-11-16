@@ -151,12 +151,33 @@ class TestModel(BaseModel):
         Updated via collect-coverage command, useful for identifying
         test redundancy and dependencies.
 
+    Calculated Properties
+    ---------------------
+    coverage_impact : float | None
+        Impact on total coverage (unique contribution).
+        Calculated as: total_coverage - coverage_without
+        Requires: project.coverage and coverage_without
+    coverage_overlap : float | None
+        Coverage shared with other tests.
+        Calculated as: total_coverage - coverage_alone
+        Requires: project.coverage and coverage_alone
+    coverage_uniqueness : float | None
+        Percentage of test's coverage that is unique (0-100).
+        Calculated as: (coverage_impact / coverage_alone) * 100
+        Requires: coverage_alone and coverage_impact
+    coverage_redundancy : float | None
+        Percentage of test's coverage that is redundant (0-100).
+        Calculated as: ((coverage_alone - coverage_impact) / coverage_alone) * 100
+        Requires: coverage_alone and coverage_impact
+
     Notes
     -----
     The test_id field is unique across all tests and typically contains
     the full pytest nodeid (e.g., 'file.py::TestClass::test_method').
     Additionally, there is a unique constraint on (project, file, suite, test)
     to ensure each test is only stored once per project.
+
+    Calculated properties return None if required data is not available.
     """
 
     project = ForeignKeyField(ProjectModel, backref="tests")
@@ -166,6 +187,88 @@ class TestModel(BaseModel):
     test = CharField()
     coverage_alone = FloatField(null=True, default=None)
     coverage_without = FloatField(null=True, default=None)
+
+    @property
+    def coverage_impact(self) -> float | None:
+        """Calculate impact on total coverage (unique contribution).
+
+        Returns
+        -------
+        float | None
+            Impact percentage, or None if data unavailable.
+
+        Formula
+        -------
+        coverage_impact = total_coverage - coverage_without
+
+        This represents how much coverage would be lost if this test
+        were removed from the test suite.
+        """
+        if self.project.coverage is None or self.coverage_without is None:
+            return None
+        return self.project.coverage - self.coverage_without
+
+    @property
+    def coverage_overlap(self) -> float | None:
+        """Calculate coverage shared with other tests.
+
+        Returns
+        -------
+        float | None
+            Overlap percentage, or None if data unavailable.
+
+        Formula
+        -------
+        coverage_overlap = total_coverage - coverage_alone
+
+        This represents how much of the total coverage is NOT unique
+        to this test (i.e., covered by other tests as well).
+        """
+        if self.project.coverage is None or self.coverage_alone is None:
+            return None
+        return self.project.coverage - self.coverage_alone
+
+    @property
+    def coverage_uniqueness(self) -> float | None:
+        """Calculate percentage of test's coverage that is unique.
+
+        Returns
+        -------
+        float | None
+            Uniqueness percentage (0-100), or None if data unavailable.
+
+        Formula
+        -------
+        coverage_uniqueness = (coverage_impact / coverage_alone) * 100
+
+        - 100% = All coverage from this test is unique
+        - 0% = None of this test's coverage is unique (completely redundant)
+        """
+        impact = self.coverage_impact
+        if impact is None or self.coverage_alone is None or self.coverage_alone == 0:
+            return None
+        return (impact / self.coverage_alone) * 100
+
+    @property
+    def coverage_redundancy(self) -> float | None:
+        """Calculate percentage of test's coverage that is redundant.
+
+        Returns
+        -------
+        float | None
+            Redundancy percentage (0-100), or None if data unavailable.
+
+        Formula
+        -------
+        coverage_redundancy = ((coverage_alone - coverage_impact) / coverage_alone) * 100
+
+        - 0% = Test is completely unique (no redundancy)
+        - 100% = Test is completely redundant (all coverage duplicated)
+        """
+        impact = self.coverage_impact
+        if impact is None or self.coverage_alone is None or self.coverage_alone == 0:
+            return None
+        return ((self.coverage_alone - impact) / self.coverage_alone) * 100
 
     class Meta:
         indexes = (

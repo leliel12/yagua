@@ -82,6 +82,7 @@ Project.from_project_info(
    - `collect_tests(suite)`: Orchestrates test collection via suite handlers
    - `add_test()`: Add/update individual test records
    - `get_tests_dataframe()`: Query tests as pandas DataFrame
+   - `get_test(test_id)`: Get specific test by test_id (returns TestModel with calculated properties)
    - `count_tests()`: Get test count
 
 3. **Coverage Management**:
@@ -143,7 +144,12 @@ New test frameworks can be added by implementing TestSuiteABC (e.g., `UnittestSu
 - Represents one project per cache file
 
 **`TestModel`**:
-- Fields: `project` (FK), `file`, `suite`, `test`, `test_id`, `coverage_alone`, `coverage_without`
+- **Database Fields**: `project` (FK), `file`, `suite`, `test`, `test_id`, `coverage_alone`, `coverage_without`
+- **Calculated Properties** (auto-computed from stored fields):
+  - `coverage_impact`: Unique coverage contribution = `total_coverage - coverage_without`
+  - `coverage_overlap`: Coverage shared with other tests = `total_coverage - coverage_alone`
+  - `coverage_uniqueness`: % of test's coverage that is unique = `(coverage_impact / coverage_alone) × 100`
+  - `coverage_redundancy`: % of test's coverage that is redundant = `((coverage_alone - coverage_impact) / coverage_alone) × 100`
 - `test_id`: Unique pytest node ID (e.g., 'test_file.py::TestClass::test_method')
 - `coverage_alone`: Coverage when running this test in isolation
 - `coverage_without`: Coverage when running all tests except this one

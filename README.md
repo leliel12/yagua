@@ -22,6 +22,12 @@
 - [Usage](#usage)
   - [CLI](#cli)
   - [Programmatic API](#programmatic-api)
+- [Coverage Metrics](#coverage-metrics)
+  - [Basic Coverage Metrics](#basic-coverage-metrics)
+  - [Calculated Coverage Metrics](#calculated-coverage-metrics)
+  - [Example Usage](#example-usage)
+  - [CLI Display](#cli-display)
+  - [Use Cases](#use-cases)
 - [Development](#development)
 - [Documentation](#documentation)
 - [License](#license)
@@ -151,6 +157,126 @@ with Project(db_path="qa.sqlite") as proj:
     print(f"Description: {proj.description}")
     print(f"Coverage: {proj.coverage}")
 ```
+
+---
+
+## 📊 Coverage Metrics
+
+Yagua provides advanced coverage metrics to help you understand test quality, redundancy, and unique contributions. These metrics are automatically calculated when you run `collect-coverage`.
+
+### Basic Coverage Metrics
+
+- **Coverage Alone** (`coverage_alone`): Coverage percentage when running only this test in isolation
+- **Coverage Without** (`coverage_without`): Coverage percentage when running all tests except this one
+
+### Calculated Coverage Metrics
+
+Yagua automatically calculates four additional metrics to help analyze test effectiveness:
+
+#### 1. Coverage Impact
+
+**Formula**: `coverage_impact = total_coverage - coverage_without`
+
+**Meaning**: The unique coverage contribution of this test. This represents how much coverage would be lost if you removed this test from your suite.
+
+**Interpretation**:
+- **High Impact** (close to `coverage_alone`): Test contributes unique coverage, not well covered by other tests
+- **Low Impact** (close to 0): Test coverage is mostly redundant, well covered by other tests
+- **Negative Impact**: Should never occur with proper test suite
+
+#### 2. Coverage Overlap
+
+**Formula**: `coverage_overlap = total_coverage - coverage_alone`
+
+**Meaning**: The amount of coverage that this test shares with other tests. This represents the portion of total coverage that is NOT unique to this test.
+
+**Interpretation**:
+- **High Overlap**: This test covers code that is already well covered by other tests
+- **Low Overlap**: This test covers code that few other tests exercise
+
+#### 3. Coverage Uniqueness
+
+**Formula**: `coverage_uniqueness = (coverage_impact / coverage_alone) × 100`
+
+**Meaning**: Percentage of this test's coverage that is unique (not covered by other tests).
+
+**Interpretation**:
+- **100%**: All coverage from this test is unique - removing it would significantly reduce total coverage
+- **50%**: Half of this test's coverage is unique, half is redundant
+- **0%**: None of this test's coverage is unique - completely redundant test
+
+#### 4. Coverage Redundancy
+
+**Formula**: `coverage_redundancy = ((coverage_alone - coverage_impact) / coverage_alone) × 100`
+
+**Meaning**: Percentage of this test's coverage that is redundant (already covered by other tests).
+
+**Interpretation**:
+- **0%**: Test is completely unique - no redundant coverage
+- **50%**: Half of this test's coverage is redundant
+- **100%**: Test is completely redundant - all coverage duplicated by other tests
+
+### Example Usage
+
+```python
+from yagua import Project, PytestSuite
+
+with Project(db_path="qa.sqlite") as proj:
+    suite = PytestSuite()
+
+    # Collect all coverage metrics
+    proj.collect_coverage(suite)
+
+    # Get a specific test to access calculated properties
+    test = proj.get_test("test_file.py::TestClass::test_example")
+
+    # Access calculated metrics (auto-computed from coverage_alone and coverage_without)
+    print(f"Coverage Impact: {test.coverage_impact:.2f}%")
+    print(f"Coverage Overlap: {test.coverage_overlap:.2f}%")
+    print(f"Coverage Uniqueness: {test.coverage_uniqueness:.2f}%")
+    print(f"Coverage Redundancy: {test.coverage_redundancy:.2f}%")
+
+    # High uniqueness = valuable test
+    if test.coverage_uniqueness > 80:
+        print("This test provides unique coverage - keep it!")
+
+    # High redundancy = candidate for removal
+    if test.coverage_redundancy > 90:
+        print("This test is highly redundant - consider removing it")
+```
+
+### CLI Display
+
+When you run `yagua collect-coverage project.sqlite`, all metrics are displayed in a comprehensive table:
+
+```
+🧪 Per-test coverage analysis:
+
+┏━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━━━━┓
+┃ #  ┃ Test ID                 ┃ Alone   ┃ Without  ┃ Impact  ┃ Overlap  ┃ Uniqueness  ┃ Redundancy  ┃
+┡━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━━━━━━┩
+│ 1  │ test_foo.py::test_bar   │ 45.32%  │ 78.91%   │ +5.43%  │ 39.02%   │ 11.98%      │ 88.02%      │
+│ 2  │ test_baz.py::test_qux   │ 67.89%  │ 71.23%   │ +13.11% │ 16.45%   │ 19.31%      │ 80.69%      │
+└────┴─────────────────────────┴─────────┴──────────┴─────────┴──────────┴─────────────┴─────────────┘
+
+Legend:
+  • Alone = coverage running only this test
+  • Without = coverage without this test
+  • Impact = unique coverage contribution (total - without)
+  • Overlap = coverage shared with other tests (total - alone)
+  • Uniqueness = % of test's coverage that is unique (impact/alone × 100)
+  • Redundancy = % of test's coverage that is redundant ((alone-impact)/alone × 100)
+```
+
+### Use Cases
+
+**Identify Critical Tests**: Look for tests with high uniqueness (>80%) - these are critical for your coverage
+
+**Find Redundant Tests**: Look for tests with high redundancy (>90%) - these are candidates for removal or refactoring
+
+**Test Suite Optimization**: Balance coverage with test count by removing highly redundant tests
+
+**Code Review**: Use impact metrics to justify new tests - high impact tests are valuable additions
 
 ---
 
