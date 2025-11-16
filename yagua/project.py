@@ -299,7 +299,7 @@ class Project:
 
         Notes
         -----
-        Creates a HistoryModel record with tag='collect_coverage::project'
+        Creates a HistoryModel record with tag='collect_coverage'
         containing the command executed and its output for audit purposes.
         """
         cov, command, stdout, stderr, result = suite.get_coverage(
@@ -321,6 +321,28 @@ class Project:
         return cov
 
     def collect_coverage_for_test(self, suite, test_id):
+        """Collect and store coverage for a single test in isolation.
+
+        This method runs a specific test alone to measure its isolated
+        coverage contribution. The result is stored in TestModel.coverage_alone.
+
+        Parameters
+        ----------
+        suite : TestSuiteABC
+            Test suite handler with a get_coverage_for_tests() method.
+        test_id : str
+            Unique test identifier (e.g., pytest node ID).
+
+        Returns
+        -------
+        float
+            Coverage percentage (0-100) for this test in isolation.
+
+        Notes
+        -----
+        Creates a HistoryModel record with tag='collect_coverage_for_test::{test_id}'
+        for tracking execution history per test.
+        """
         cov, command, stdout, stderr, result = suite.get_coverage_for_tests(
             self.path, self.name, [test_id]
         )
@@ -342,6 +364,31 @@ class Project:
         return cov
 
     def collect_coverage_without_test(self, suite, test_id):
+        """Collect and store coverage when excluding a specific test.
+
+        This method runs all tests except the specified one to measure
+        coverage without that test's contribution. Useful for identifying
+        test redundancy and dependencies. The result is stored in
+        TestModel.coverage_without.
+
+        Parameters
+        ----------
+        suite : TestSuiteABC
+            Test suite handler with a get_coverage_for_tests() method.
+        test_id : str
+            Unique test identifier to exclude (e.g., pytest node ID).
+
+        Returns
+        -------
+        float
+            Coverage percentage (0-100) when running all tests except this one.
+
+        Notes
+        -----
+        Creates a HistoryModel record with tag='collect_coverage_without_test::{test_id}'
+        for tracking execution history. Queries all test IDs except the target
+        and runs them together to measure combined coverage.
+        """
         with self.transaction():
 
             query = TestModel.select(TestModel.test_id).where(
