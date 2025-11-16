@@ -283,34 +283,22 @@ class CLIManager:
         """
         self._validate_cache_exists(cache)
 
-        with Project(
-            db_path=cache,
-        ) as proj:
-            # Check if tests have already been collected
-            existing_tests = proj.count_tests()
-            if not (force or existing_tests):
-                typer.echo(
-                    f"📊 Test already collected: {existing_tests}%\n"
-                    f"Use --force/-f to recollect."
-                )
-                raise typer.Exit(1)
+        with Project(db_path=cache) as proj:
 
+            # Check if tests have already been collected
             typer.echo(f"🔍 Using project: {proj.name} ({proj.path})")
 
-            # Create test suite instance and collect tests
-            suite = PytestSuite()
-            saved_count, updated_count = proj.collect_tests(suite)
+            total_tests = proj.count_tests()
+            if total_tests == 0 or force:
+                suite = PytestSuite()
+                saved_count, updated_count = proj.collect_tests(suite)
+                total_tests =  saved_count + updated_count
 
-            # Calculate total tests collected
-            total_tests = saved_count + updated_count
             if total_tests == 0:
                 typer.echo("⚠️  No tests collected.")
                 raise typer.Exit(code=1)
 
             typer.echo(f"✅ Collected {total_tests} tests")
-            typer.echo(f"  💾 Saved {saved_count} new tests")
-            if updated_count > 0:
-                typer.echo(f"  🔄 Updated {updated_count} existing tests")
 
     def list_tests(
         self,
