@@ -11,12 +11,10 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import typer
 
 from rich.console import Console
-from rich.progress import track
 from rich.table import Table
-
-import typer
 
 from .project import Project
 from .testsuites import PytestSuite

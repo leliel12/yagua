@@ -230,8 +230,9 @@ class Project:
 
         Notes
         -----
-        Coverage information (coverage_alone, coverage_without) is not yet
-        implemented and should be updated separately once implemented.
+        Coverage information (coverage_alone, coverage_without) should be
+        updated separately using collect_coverage_for_test() and
+        collect_coverage_without_test() methods.
         """
         with self.transaction():
             test_obj, created = TestModel.get_or_create(
@@ -354,7 +355,7 @@ class Project:
 
             HistoryModel.create(
                 project=test.project,
-                tag="collect_coverage_for_test::{test_id}",
+                tag=f"collect_coverage_for_test::{test_id}",
                 command=command,
                 stdout=stdout,
                 stderr=stderr,
@@ -410,7 +411,7 @@ class Project:
 
             HistoryModel.create(
                 project=test.project,
-                tag="collect_coverage_without_test::{test_id}",
+                tag=f"collect_coverage_without_test::{test_id}",
                 command=command,
                 stdout=stdout,
                 stderr=stderr,

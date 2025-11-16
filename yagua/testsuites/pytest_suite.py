@@ -53,9 +53,6 @@ class IgnoreTest:
         """
         # Store collected items for later processing
         self.collected_items = items
-        import ipdb
-
-        ipdb.set_trace()
         # Access config if needed (currently unused)
         _ = config
 
@@ -296,7 +293,70 @@ class PytestSuite(TestSuiteABC):
 
         return cov, command, stdout, stderr, json_src
 
-    def get_coverage_for_tests(self, project_path, project_name, tests_ids):
+    def get_coverage_for_tests(
+        self, project_path, project_name, tests_ids
+    ) -> tuple[float | None, str, str, str, dict]:
+        """Run specific test(s) with coverage and return coverage percentage.
+
+        Executes pytest with pytest-cov to run only the specified tests and
+        measure code coverage. Uses pytest.main() API for better integration.
+        Generates a JSON coverage report in a temporary file and extracts the
+        total coverage percentage from it.
+
+        Parameters
+        ----------
+        project_path : str or Path
+            Path to the project directory to run coverage on.
+        project_name : str
+            Name of the project/package to measure coverage for.
+            This should match the package name in the project.
+        tests_ids : list[str]
+            List of unique identifiers for tests to run (e.g., pytest node IDs).
+            Can be a single-item list for isolated test coverage, or multiple
+            items for combined coverage of specific tests.
+
+        Returns
+        -------
+        coverage : float | None
+            Coverage percentage (0-100) for the specified test(s), or None if
+            coverage could not be determined.
+        command : str
+            The command that was executed
+            (e.g., "test_id1 test_id2 --cov=package --cov-report=json:...").
+        stdout : str
+            Standard output from the pytest command execution.
+        stderr : str
+            Standard error output from the pytest command execution.
+        data : dict
+            The parsed JSON coverage report containing detailed coverage
+            information.
+
+        Notes
+        -----
+        This method provides flexible coverage collection:
+        - Single test ([test_id]): Measures isolated test contribution
+        - Multiple tests ([test_id1, test_id2, ...]): Measures combined coverage
+        - All except one (query result): Enables coverage_without calculation
+
+        This flexibility allows for both coverage_alone (single test) and
+        coverage_without (all tests except one) metrics.
+
+        Examples
+        --------
+        >>> suite = PytestSuite()
+        >>> # Get coverage for single test
+        >>> cov, cmd, _, _, _ = suite.get_coverage_for_tests(
+        ...     "/path/to/project", "mypackage", ["test_file.py::test_foo"]
+        ... )
+        >>> print(f"Test coverage alone: {cov:.2f}%")
+        >>>
+        >>> # Get coverage for multiple tests
+        >>> test_ids = ["test_file.py::test_foo", "test_file.py::test_bar"]
+        >>> cov, cmd, _, _, _ = suite.get_coverage_for_tests(
+        ...     "/path/to/project", "mypackage", test_ids
+        ... )
+        >>> print(f"Combined coverage: {cov:.2f}%")
+        """
         with tempfile.NamedTemporaryFile(
             dir=self._temp_dir.name, suffix=".json", prefix="yagua_ftcov_"
         ) as fp:
@@ -307,7 +367,6 @@ class PytestSuite(TestSuiteABC):
             command, stdout, stderr = self._run(cmd, project_path)
 
             json_src = fp.read()
-
             data = json.loads(json_src)
 
         cov = data["totals"]["percent_covered"]
