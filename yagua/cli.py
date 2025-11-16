@@ -18,7 +18,6 @@ from rich.table import Table
 
 from .project import Project
 from .testsuites import PytestSuite
-from .utils.df2rt import df_to_rich_table
 
 
 # ============================================================================
@@ -374,7 +373,7 @@ class CLIManager:
             typer.echo(f"\n🧪 Tests for project '{proj.name}':")
             typer.echo("")
 
-            console.print(df_to_rich_table(tests))
+            typer.echo(tests)
             typer.echo("")
             typer.echo(f"📊 Total: {len(tests)} tests\n")
 
@@ -518,8 +517,6 @@ class CLIManager:
                 f"[dim]  • Redundancy = % of test's coverage that is redundant "
                 f"((alone-impact)/alone × 100)[/dim]\n"
             )
-
-
 
     # ========================================================================
     # Public Commands - Project Information
