@@ -86,7 +86,8 @@ Project.from_project_info(
 
 3. **Coverage Management**:
    - `collect_coverage(suite)`: Run and store project-level coverage data
-   - `collect_coverage_for_test(suite, test_id)`: Run and store per-test coverage data
+   - `collect_coverage_for_test(suite, test_id)`: Run and store coverage for individual test in isolation
+   - `collect_coverage_without_test(suite, test_id)`: Run and store coverage excluding a specific test
 
 4. **Project Information**:
    - `store_project_info()`: Update project metadata
@@ -115,13 +116,14 @@ testsuites/
 - Abstract methods:
   - `get_tests(project_path)`: Collect test list with pytest node IDs
   - `get_coverage(project_path, project_name)`: Run project-level coverage
-  - `get_coverage_for_test(project_path, project_name, test_id)`: Run per-test coverage
+  - `get_coverage_for_tests(project_path, project_name, test_ids)`: Run coverage for specific test(s)
 
 **`PytestSuite`** (Concrete Implementation):
 - Implements TestSuiteABC for pytest
 - Uses `pytest --collect-only` for test discovery
 - Uses `pytest --cov` with JSON output for project coverage
-- Uses `pytest <test_id> --cov` for individual test coverage
+- Uses `pytest <test_id1> <test_id2> ... --cov` for running specific test(s) with coverage
+- Supports both single test and multiple tests in one execution
 - Parses pytest output to extract test information
 - Returns command, stdout, stderr, and result for history tracking
 - Manages temporary directory for JSON coverage reports
@@ -144,13 +146,13 @@ New test frameworks can be added by implementing TestSuiteABC (e.g., `UnittestSu
 - Fields: `project` (FK), `file`, `suite`, `test`, `test_id`, `coverage_alone`, `coverage_without`
 - `test_id`: Unique pytest node ID (e.g., 'test_file.py::TestClass::test_method')
 - `coverage_alone`: Coverage when running this test in isolation
-- `coverage_without`: Coverage when running all tests except this one (not yet implemented)
+- `coverage_without`: Coverage when running all tests except this one
 - Unique constraint: `(project, file, suite, test)`
 
 **`HistoryModel`**:
 - Fields: `project` (FK), `tag`, `command`, `stdout`, `stderr`, `result`
-- `tag`: Command type identifier (e.g., 'collect_tests', 'collect_coverage', 'collect_coverage_for_test')
-- Tracks execution history for all operations
+- `tag`: Command type identifier with test context (e.g., 'collect_tests', 'collect_coverage', 'collect_coverage_for_test::{test_id}', 'collect_coverage_without_test::{test_id}')
+- Tracks execution history for all operations with granular test-level tracking
 
 **Design Decisions**:
 - Uses Peewee ORM for simplicity
@@ -203,15 +205,22 @@ New test frameworks can be added by implementing TestSuiteABC (e.g., `UnittestSu
 5. Project: Updates ProjectModel.coverage
    - Stores execution history in HistoryModel
          ↓
-6. For each test:
+6. For each test (coverage_alone):
    Project: collect_coverage_for_test(suite, test_id)
-   - Calls suite.get_coverage_for_test(path, name, test_id)
+   - Calls suite.get_coverage_for_tests(path, name, [test_id])
    - Updates TestModel.coverage_alone
-   - Stores execution history in HistoryModel
+   - Stores execution history in HistoryModel with tag 'collect_coverage_for_test::{test_id}'
          ↓
-7. Database: All coverage data persisted
+7. For each test (coverage_without):
+   Project: collect_coverage_without_test(suite, test_id)
+   - Queries all test IDs except the target test
+   - Calls suite.get_coverage_for_tests(path, name, all_other_test_ids)
+   - Updates TestModel.coverage_without
+   - Stores execution history in HistoryModel with tag 'collect_coverage_without_test::{test_id}'
          ↓
-8. CLI: Displays coverage summary with counter [X/N]
+8. Database: All coverage data persisted (project, alone, without)
+         ↓
+9. CLI: Displays coverage summary with hierarchical output per test [X/N]
 ```
 
 ## Architectural Patterns
@@ -341,10 +350,10 @@ Auto-registered as: `yagua my-command`
 
 ## Future Enhancements
 
-1. **Coverage Without Test**:
-   - `TestModel.coverage_without` field exists but not yet implemented
-   - Would measure coverage when running all tests except one specific test
-   - Useful for understanding test dependencies and redundancy
+1. **Performance Optimization**:
+   - Cache test execution results to avoid redundant runs
+   - Parallel execution of coverage collection for multiple tests
+   - Incremental coverage updates for modified tests only
 
 2. **Multiple Test Frameworks**:
    - Add UnittestSuite, NoseSuite
