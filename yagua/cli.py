@@ -443,19 +443,19 @@ class CLIManager:
                 ["test_id", "coverage_alone", "coverage_without"]
             ].to_numpy()
 
-            # Completa claude
+            # Get total count for progress indicator
             tests_count = len(tests_ids)
 
-            # Check each test to see what coverage needs to be calculated
+            # Iterate through each test to calculate coverage metrics
             for idx, (test_id, cov_alone, cov_wo) in enumerate(tests_ids, 1):
                 typer.echo(f"  [{idx}/{tests_count}] {test_id!r}: ")
 
-                # coverage for only this test
+                # Calculate coverage when running only this test in isolation
                 if cov_alone is None or force:
                     cov_alone = proj.collect_coverage_for_test(suite, test_id)
                 typer.echo(f"    Coverage alone: {cov_alone:.4f}% ")
 
-                # coverage without this test
+                # Calculate coverage when running all tests except this one
                 if cov_wo is None or force:
                     cov_wo = proj.collect_coverage_without_test(suite, test_id)
                 typer.echo(f"    Coverage without: {cov_wo:.4f}% ")
