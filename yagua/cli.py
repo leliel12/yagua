@@ -9,12 +9,18 @@ import inspect
 import sys
 from pathlib import Path
 
+from rich.console import Console
 from rich.progress import track
+from rich.table import Table
 
 import typer
 
 from .project import Project
 from .testsuites import PytestSuite
+
+
+# Rich console for colored output
+console = Console()
 
 
 # ============================================================================
@@ -433,10 +439,13 @@ class CLIManager:
             # Calculate coverage for all tests combined
             if proj.coverage is None or force:
                 proj.collect_coverage(suite)
-            typer.echo(f"💯 Total coverage: {proj.coverage:.4f}% ")
+            console.print(
+                f"\n💯 [bold green]Total coverage:[/bold green] "
+                f"[cyan]{proj.coverage:.2f}%[/cyan]\n"
+            )
 
             # Calculate coverage for each individual test
-            typer.echo("🧪 Coverage by tests:")
+            console.print("[bold blue]🧪 Per-test coverage analysis:[/bold blue]\n")
 
             # Extract test IDs and coverage columns from dataframe
             tests_ids = proj.get_tests_dataframe()[
@@ -446,19 +455,50 @@ class CLIManager:
             # Get total count for progress indicator
             tests_count = len(tests_ids)
 
+            # Create table for results
+            table = Table(show_header=True, header_style="bold magenta")
+            table.add_column("#", style="dim", width=4, justify="right")
+            table.add_column("Test ID", style="cyan", no_wrap=False)
+            table.add_column("Alone", justify="right", style="green")
+            table.add_column("Without", justify="right", style="yellow")
+            table.add_column("Delta", justify="right", style="blue")
+
             # Iterate through each test to calculate coverage metrics
             for idx, (test_id, cov_alone, cov_wo) in enumerate(tests_ids, 1):
-                typer.echo(f"  [{idx}/{tests_count}] {test_id!r}: ")
+                # Show progress
+                console.print(
+                    f"  [dim][{idx}/{tests_count}][/dim] Processing {test_id}...",
+                    end="\r",
+                )
 
                 # Calculate coverage when running only this test in isolation
                 if cov_alone is None or force:
                     cov_alone = proj.collect_coverage_for_test(suite, test_id)
-                typer.echo(f"    Coverage alone: {cov_alone:.4f}% ")
 
                 # Calculate coverage when running all tests except this one
                 if cov_wo is None or force:
                     cov_wo = proj.collect_coverage_without_test(suite, test_id)
-                typer.echo(f"    Coverage without: {cov_wo:.4f}% ")
+
+                # Calculate delta (impact of removing this test)
+                delta = proj.coverage - cov_wo
+
+                # Add row to table
+                table.add_row(
+                    str(idx),
+                    test_id,
+                    f"{cov_alone:.2f}%",
+                    f"{cov_wo:.2f}%",
+                    f"{delta:+.2f}%",
+                )
+
+            # Clear progress line and show table
+            console.print(" " * 100, end="\r")
+            console.print(table)
+            console.print(
+                f"\n[dim]Legend: Alone = coverage running only this test | "
+                f"Without = coverage without this test | "
+                f"Delta = impact on total coverage[/dim]\n"
+            )
 
     # ========================================================================
     # Public Commands - Project Information
