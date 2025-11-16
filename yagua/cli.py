@@ -5,9 +5,12 @@ This module provides the command-line interface for yagua, a tool for
 collecting and managing test information from pytest-based projects.
 """
 
+import contextlib
 import inspect
 import sys
 from pathlib import Path
+
+import numpy as np
 
 from rich.console import Console
 from rich.progress import track
@@ -18,6 +21,10 @@ import typer
 from .project import Project
 from .testsuites import PytestSuite
 
+
+# ============================================================================
+# CONSTANTS
+# ============================================================================
 
 # Rich console for colored output
 console = Console()
@@ -133,7 +140,8 @@ class CLIManager:
     # Private Methods
     # ========================================================================
 
-    def _validate_cache_exists(self, cache):
+    @contextlib.contextmanager
+    def _use_project(self, cache):
         """Validate that cache file exists, exit with error if not.
 
         Parameters
@@ -152,6 +160,12 @@ class CLIManager:
                 err=True,
             )
             raise typer.Exit(code=1)
+        proj = Project(db_path=cache)
+        try:
+            typer.echo(f"🔍 Using project: {proj.name} ({proj.path})")
+            yield proj
+        finally:
+            proj.close()
 
     # ========================================================================
     # Public Methods - Project Creation
@@ -281,18 +295,13 @@ class CLIManager:
             $ yagua create-project /path/to/project
             $ yagua collect-tests project.sqlite
         """
-        self._validate_cache_exists(cache)
-
-        with Project(db_path=cache) as proj:
-
-            # Check if tests have already been collected
-            typer.echo(f"🔍 Using project: {proj.name} ({proj.path})")
+        with self._use_project(cache) as proj:
 
             total_tests = proj.count_tests()
             if total_tests == 0 or force:
                 suite = PytestSuite()
                 saved_count, updated_count = proj.collect_tests(suite)
-                total_tests =  saved_count + updated_count
+                total_tests = saved_count + updated_count
 
             if total_tests == 0:
                 typer.echo("⚠️  No tests collected.")
@@ -337,9 +346,8 @@ class CLIManager:
             $ yagua list-tests my_project.sqlite --long
             $ yagua list-tests my_project.sqlite -l
         """
-        self._validate_cache_exists(cache)
+        with self._use_project(cache) as proj:
 
-        with Project(db_path=cache) as proj:
             tests = proj.get_tests_dataframe()
 
             # Filter out internal columns unless --long is specified
@@ -410,11 +418,9 @@ class CLIManager:
         Force recalculation:
             $ yagua collect-coverage my_project.sqlite --force
         """
-        self._validate_cache_exists(cache)
+        with self._use_project(cache) as proj:
 
-        with Project(db_path=cache) as proj:
-
-            typer.echo(f"📊 Calculating coverage for: {proj.name}")
+            typer.echo(f"📊 Calculating coverage...")
 
             # If there are no tests, there's nothing to do
             if not proj.count_tests():
@@ -433,7 +439,9 @@ class CLIManager:
             )
 
             # Calculate coverage for each individual test
-            console.print("[bold blue]🧪 Per-test coverage analysis:[/bold blue]\n")
+            console.print(
+                "[bold blue]🧪 Per-test coverage analysis:[/bold blue]\n"
+            )
 
             # Extract test IDs and coverage columns from dataframe
             tests_ids = proj.get_tests_dataframe()[
@@ -453,17 +461,21 @@ class CLIManager:
 
             # Iterate through each test to calculate coverage metrics
             for idx, (test_id, cov_alone, cov_wo) in enumerate(tests_ids, 1):
+
                 # Show progress
-                console.print(
-                    f"  [dim][{idx}/{tests_count}][/dim] Processing {test_id}...",
-                    end="\r",
+                proc_test_msg = (
+                    f"  [dim][{idx}/{tests_count}][/dim] "
+                    f"Processing {test_id}..."
                 )
+                console.print(proc_test_msg, end="\r")
 
                 # Calculate coverage when running only this test in isolation
+                cov_alone = None if np.isnan(cov_alone) else cov_alone
                 if cov_alone is None or force:
                     cov_alone = proj.collect_coverage_for_test(suite, test_id)
 
                 # Calculate coverage when running all tests except this one
+                cov_wo = None if np.isnan(cov_wo) else cov_wo
                 if cov_wo is None or force:
                     cov_wo = proj.collect_coverage_without_test(suite, test_id)
 
@@ -478,9 +490,9 @@ class CLIManager:
                     f"{cov_wo:.2f}%",
                     f"{delta:+.2f}%",
                 )
+                console.print(" " * len(proc_test_msg), end="\r")
 
             # Clear progress line and show table
-            console.print(" " * 100, end="\r")
             console.print(table)
             console.print(
                 f"\n[dim]Legend: Alone = coverage running only this test | "
@@ -516,9 +528,7 @@ class CLIManager:
         Show project info:
             $ yagua info my_project.sqlite
         """
-        self._validate_cache_exists(cache)
-
-        with Project(db_path=cache) as proj:
+        with self._use_project(cache) as proj:
             test_count = proj.count_tests()
 
             typer.echo("\n📊 Project Information -----------")

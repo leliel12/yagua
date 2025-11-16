@@ -492,15 +492,6 @@ class Project:
         ]
         return super().__dir__() + fields
 
-    def __enter__(self):
-        """Context manager entry."""
-        self.db.connect(reuse_if_open=True)
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        """Context manager exit - closes database connection."""
-        self.close()
-
     def __repr__(self):
         """String representation."""
         return f"Project(db_path={self.db.database})"
