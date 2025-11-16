@@ -136,10 +136,14 @@ with Project(db_path="qa.sqlite") as proj:
     cov = proj.collect_coverage(suite)
     print(f"Coverage: {cov:.2f}%")
 
-    # Collect coverage for individual test
+    # Collect coverage for individual test (alone)
     test_id = "test_file.py::test_example"
-    test_cov = proj.collect_coverage_for_test(suite, test_id)
-    print(f"Test coverage: {test_cov:.2f}%")
+    test_cov_alone = proj.collect_coverage_for_test(suite, test_id)
+    print(f"Test coverage alone: {test_cov_alone:.2f}%")
+
+    # Collect coverage without individual test
+    test_cov_without = proj.collect_coverage_without_test(suite, test_id)
+    print(f"Coverage without test: {test_cov_without:.2f}%")
 
     # Access project info via properties
     print(f"Project: {proj.name}")
