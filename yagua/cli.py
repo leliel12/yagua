@@ -447,13 +447,18 @@ class CLIManager:
             tests_count = len(tests_ids)
 
             # Check each test to see what coverage needs to be calculated
-            for idx,(test_id, coverage_alone, _) in enumerate(tests_ids, 1):
-                if coverage_alone is None or force:
-                    coverage_alone= proj.collect_coverage_for_test(suite, test_id)
-                typer.echo(
-                    f"  [{idx}/{tests_count}] Coverage alone for {test_id!r}: "
-                    f"{coverage_alone:.4f}% "
-                )
+            for idx, (test_id, cov_alone, cov_wo) in enumerate(tests_ids, 1):
+                typer.echo(f"  [{idx}/{tests_count}] {test_id!r}: ")
+
+                # coverage for only this test
+                if cov_alone is None or force:
+                    cov_alone = proj.collect_coverage_for_test(suite, test_id)
+                typer.echo(f"    Coverage alone: {cov_alone:.4f}% ")
+
+                # coverage without this test
+                if cov_wo is None or force:
+                    cov_wo = proj.collect_coverage_without_test(suite, test_id)
+                typer.echo(f"    Coverage without: {cov_wo:.4f}% ")
 
     # ========================================================================
     # Public Commands - Project Information

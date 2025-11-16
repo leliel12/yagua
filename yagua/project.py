@@ -321,18 +321,49 @@ class Project:
         return cov
 
     def collect_coverage_for_test(self, suite, test_id):
-        cov, command, stdout, stderr, result = suite.get_coverage_for_test(
-            self.path, self.name, test_id
+        cov, command, stdout, stderr, result = suite.get_coverage_for_tests(
+            self.path, self.name, [test_id]
         )
         with self.transaction():
 
-            test = TestModel.get(TestModel.test_id ==test_id)
+            test = TestModel.get(TestModel.test_id == test_id)
             test.coverage_alone = cov
             test.save()
 
             HistoryModel.create(
                 project=test.project,
-                tag="collect_coverage_for_test",
+                tag="collect_coverage_for_test::{test_id}",
+                command=command,
+                stdout=stdout,
+                stderr=stderr,
+                result=result,
+            )
+
+        return cov
+
+    def collect_coverage_without_test(self, suite, test_id):
+        with self.transaction():
+
+            query = TestModel.select(TestModel.test_id).where(
+                TestModel.test_id != test_id
+            )
+            tids_to_run = [test.test_id for test in query]
+
+            (
+                cov,
+                command,
+                stdout,
+                stderr,
+                result,
+            ) = suite.get_coverage_for_tests(self.path, self.name, tids_to_run)
+
+            test = TestModel.get(TestModel.test_id == test_id)
+            test.coverage_without = cov
+            test.save()
+
+            HistoryModel.create(
+                project=test.project,
+                tag="collect_coverage_without_test::{test_id}",
                 command=command,
                 stdout=stdout,
                 stderr=stderr,

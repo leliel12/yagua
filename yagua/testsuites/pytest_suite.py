@@ -296,12 +296,11 @@ class PytestSuite(TestSuiteABC):
 
         return cov, command, stdout, stderr, json_src
 
-    def get_coverage_for_test(self, project_path, project_name, test_id):
+    def get_coverage_for_tests(self, project_path, project_name, tests_ids):
         with tempfile.NamedTemporaryFile(
-            dir=self._temp_dir.name, suffix=".json", prefix="yagua_fcov_"
+            dir=self._temp_dir.name, suffix=".json", prefix="yagua_ftcov_"
         ) as fp:
-            cmd = [
-                test_id,
+            cmd = list(tests_ids) + [
                 f"--cov={project_name}",
                 f"--cov-report=json:{fp.name}",
             ]

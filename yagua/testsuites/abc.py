@@ -100,7 +100,7 @@ class TestSuiteABC(ABC):
         pass
 
     @abstractmethod
-    def get_coverage_for_test(
+    def get_coverage_for_tests(
         self, project_path, project_name, test_id
     ) -> tuple[float | None, str, str, str, object]:
         """Run a specific test with coverage and return its coverage percentage.
