@@ -211,7 +211,9 @@ class CLIManager:
             )
             raise typer.Exit(code=1)
 
+        # Use provided name or default to directory name
         project_name = name or project_path.name
+        # Use provided cache path or default to <project_name>.sqlite
         cache = cache or as_path(project_path.name + ".sqlite")
 
         typer.echo(f"📦 Creating empty cache for project: {project_name}")
@@ -278,7 +280,7 @@ class CLIManager:
         with Project(
             db_path=cache,
         ) as proj:
-
+            # Check if tests have already been collected
             existing_tests = proj.count_tests()
             if not (force or existing_tests):
                 typer.echo(
@@ -289,10 +291,11 @@ class CLIManager:
 
             typer.echo(f"🔍 Using project: {proj.name} ({proj.path})")
 
-            # Create test suite and collect tests
+            # Create test suite instance and collect tests
             suite = PytestSuite()
             saved_count, updated_count = proj.collect_tests(suite)
 
+            # Calculate total tests collected
             total_tests = saved_count + updated_count
             if total_tests == 0:
                 typer.echo("⚠️  No tests collected.")
@@ -345,8 +348,9 @@ class CLIManager:
         with Project(db_path=cache) as proj:
             tests = proj.get_tests_dataframe()
 
+            # Filter out internal columns unless --long is specified
             if not long:
-
+                # Define columns to hide in compact view
                 ignore_columns = [
                     "id",
                     "project",
@@ -355,11 +359,13 @@ class CLIManager:
                     "modified_at",
                 ]
 
+                # Keep only user-facing columns
                 columns = [
                     col for col in tests.columns if col not in ignore_columns
                 ]
                 tests = tests[columns]
 
+            # Check if any tests were found
             if not len(tests):
                 typer.echo(f"⚠️  No tests found for project '{proj.name}'.")
                 return
@@ -416,37 +422,36 @@ class CLIManager:
 
             typer.echo(f"📊 Calculating coverage for: {proj.name}")
 
-            # Si no hay test no hay nada para hacer
+            # If there are no tests, there's nothing to do
             if not proj.count_tests():
-                typer.echo(f"\t⚠️  No tests found for project '{proj.name}'.")
+                typer.echo(f"⚠️  No tests found for project '{proj.name}'.")
                 raise typer.Exit(1)
 
-            # backend de calculo de estadisticas segun testsuite
+            # Create test suite backend for collecting statistics
             suite = PytestSuite()
 
-            # COVERAGE OF ALL THE TESTS =======================================
-            if proj.coverage or Force:
+            # Calculate coverage for all tests combined
+            if proj.coverage is None or force:
                 proj.collect_coverage(suite)
-            typer.echo(f"\t💯 Total coverage: {proj.coverage:.4f}% ")
+            typer.echo(f"💯 Total coverage: {proj.coverage:.4f}% ")
 
-            # COVERAGE OF BY TESTS ============================================
+            # Calculate coverage for each individual test
+            typer.echo("🧪 Coverage by tests:")
 
-            # Extract the needed columns
+            # Extract test IDs and coverage columns from dataframe
             tests_ids = proj.get_tests_dataframe()[
                 ["test_id", "coverage_alone", "coverage_without"]
             ].to_numpy()
 
-            # convierte el numpy array en una barra de progreso ===============
-            coverage_test_generator = track(
-                tests_ids, description="Coverage for each test alone"
-            )
+            # Completa claude
+            tests_count = len(tests_ids)
 
-            # Test por test vemos que es lo que falta calular
-            for test_id, coverage_alone, _ in coverage_test_generator:
-                if coverage_alone or force:
-                    proj.collect_coverage_for_test(suite, test_id)
+            # Check each test to see what coverage needs to be calculated
+            for idx,(test_id, coverage_alone, _) in enumerate(tests_ids, 1):
+                if coverage_alone is None or force:
+                    coverage_alone= proj.collect_coverage_for_test(suite, test_id)
                 typer.echo(
-                    f"📄 Coverage alone for {test_id!r}: "
+                    f"  [{idx}/{tests_count}] Coverage alone for {test_id!r}: "
                     f"{coverage_alone:.4f}% "
                 )
 
@@ -535,11 +540,14 @@ def _create_app(cli_manager):
         add_completion=True,
     )
 
-    # Introspect CLI class and register methods as commands
+    # Introspect CLIManager instance and register all public methods as commands
     members = inspect.getmembers(cli_manager, predicate=inspect.ismethod)
     for name, method in members:
+        # Only register public methods (those not starting with underscore)
         if not name.startswith("_"):
+            # Extract help text from method docstring
             command_help = _make_help(method)
+            # Create command with hyphenated name (e.g., collect_tests -> collect-tests)
             cmd_wrapper = app.command(
                 name=name.replace("_", "-"), help=command_help
             )

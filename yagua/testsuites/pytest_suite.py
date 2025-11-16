@@ -297,7 +297,6 @@ class PytestSuite(TestSuiteABC):
         return cov, command, stdout, stderr, json_src
 
     def get_coverage_for_test(self, project_path, project_name, test_id):
-        print(test_id)
         with tempfile.NamedTemporaryFile(
             dir=self._temp_dir.name, suffix=".json", prefix="yagua_fcov_"
         ) as fp:

@@ -312,7 +312,7 @@ class Project:
 
             HistoryModel.create(
                 project=project,
-                tag="collect_coverage::project",
+                tag="collect_coverage",
                 command=command,
                 stdout=stdout,
                 stderr=stderr,
@@ -324,9 +324,22 @@ class Project:
         cov, command, stdout, stderr, result = suite.get_coverage_for_test(
             self.path, self.name, test_id
         )
-        import ipdb
+        with self.transaction():
 
-        ipdb.set_trace()
+            test = TestModel.get(TestModel.test_id ==test_id)
+            test.coverage_alone = cov
+            test.save()
+
+            HistoryModel.create(
+                project=test.project,
+                tag="collect_coverage_for_test",
+                command=command,
+                stdout=stdout,
+                stderr=stderr,
+                result=result,
+            )
+
+        return cov
 
     # ========================================================================
     # Public Methods - Project Information
