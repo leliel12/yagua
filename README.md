@@ -34,11 +34,12 @@ Yagua is a Python package that helps you collect, store, and manage test informa
 
 ## ✨ Features
 
-- Collect test information from pytest projects
-- Store test metadata in SQLite database (one cache file per project)
-- Track test coverage information
-- CLI and programmatic API
-- Automatic project creation and updates
+- **Test Discovery**: Collect test information from pytest-based projects
+- **SQLite Storage**: Store test metadata in SQLite database (one cache file per project)
+- **Coverage Tracking**: Track both project-level and per-test coverage information
+- **Flexible API**: Both CLI and programmatic Python API
+- **History Tracking**: Keep execution history for all operations
+- **Force Recollection**: Option to force recollection of tests and coverage data
 
 ---
 
@@ -89,14 +90,16 @@ yagua create-project /path/to/project my_cache.sqlite --name "My Project" --desc
 
 # Collect tests from a project
 yagua collect-tests project.sqlite
+yagua collect-tests project.sqlite --force  # Force recollection
 
 # Show project information
 yagua info project.sqlite
 
 # List tests for a project
 yagua list-tests project.sqlite
+yagua list-tests project.sqlite --long  # Show all columns including IDs and timestamps
 
-# Collect coverage information
+# Collect coverage information (project + per-test coverage)
 yagua collect-coverage project.sqlite
 yagua collect-coverage project.sqlite --force  # Force recalculation
 ```
@@ -121,22 +124,28 @@ with Project(db_path="qa.sqlite") as proj:
     saved, updated = proj.collect_tests(suite)
     print(f"Collected {saved + updated} tests")
 
-    # List all tests as DataFrame
-    tests_df = proj.list_tests()
+    # Get all tests as DataFrame
+    tests_df = proj.get_tests_dataframe()
     print(tests_df)
 
     # Count tests
     count = proj.count_tests()
     print(f"Total tests: {count}")
 
-    # Collect coverage
+    # Collect coverage for all tests
     cov = proj.collect_coverage(suite)
     print(f"Coverage: {cov:.2f}%")
 
-    # Access project info via magic methods
+    # Collect coverage for individual test
+    test_id = "test_file.py::test_example"
+    test_cov = proj.collect_coverage_for_test(suite, test_id)
+    print(f"Test coverage: {test_cov:.2f}%")
+
+    # Access project info via properties
     print(f"Project: {proj.name}")
     print(f"Path: {proj.path}")
     print(f"Description: {proj.description}")
+    print(f"Coverage: {proj.coverage}")
 ```
 
 ---

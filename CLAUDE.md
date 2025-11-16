@@ -105,7 +105,11 @@ yagua list-tests project.sqlite -l      # Short form
 
 # Collect coverage information
 yagua collect-coverage project.sqlite
-yagua collect-coverage project.sqlite --force  # Force recalculation
+yagua collect-coverage project.sqlite --force  # Force recalculation of all coverage
+
+# Force recollection of tests
+yagua collect-tests project.sqlite --force
+yagua collect-tests project.sqlite -f  # Short form
 
 # Alternatively, using Python module
 python -m yagua <command>
@@ -154,11 +158,16 @@ with Project(db_path="qa.sqlite") as proj:
     # Count tests
     count = proj.count_tests()
 
-    # Collect coverage
+    # Collect coverage for all tests
     cov = proj.collect_coverage(suite)
     print(f"Coverage: {cov:.2f}%")
 
-    # Access project info via magic methods
+    # Collect coverage for individual test
+    test_id = "test_file.py::test_example"
+    test_cov = proj.collect_coverage_for_test(suite, test_id)
+    print(f"Coverage for {test_id}: {test_cov:.2f}%")
+
+    # Access project info via properties
     print(f"Project: {proj.name}")
     print(f"Path: {proj.path}")
     print(f"Description: {proj.description}")
@@ -183,19 +192,18 @@ All models inherit from `BaseModel` which provides:
 - `file`: Test file path
 - `suite` (nullable): Test suite/class name
 - `test`: Test function name
-- `coverage_alone` (nullable): Coverage when running test in isolation (not yet implemented)
+- `test_id`: Unique pytest node ID for the test (e.g., 'test_file.py::TestClass::test_method')
+- `coverage_alone` (nullable): Coverage when running test in isolation
 - `coverage_without` (nullable): Coverage when running all tests except this one (not yet implemented)
 - Unique constraint on: `(project, file, suite, test)`
 
 **HistoryModel**
 - `project` (FK): Reference to ProjectModel (always id=1)
-- `tag`: Command type identifier (e.g., 'collect_tests', 'collect_coverage::project')
+- `tag`: Command type identifier (e.g., 'collect_tests', 'collect_coverage', 'collect_coverage_for_test')
 - `command`: Full command string executed (e.g., 'pytest --collect-only -q')
 - `stdout`: Standard output from command execution
 - `stderr`: Standard error from command execution
 - `result`: Additional result data (e.g., raw output, JSON data)
-
-**Note**: Currently, coverage is stored at the project level only. Per-test coverage tracking (`coverage_alone`, `coverage_without`) is planned for future releases.
 
 ## Development Notes
 
@@ -245,18 +253,20 @@ The command will be auto-registered as `my-command`. Use NumPy-style docstrings 
 4. Update `MODELS_TO_CREATE` constant in `project.py` if adding new models
 
 
-### Oden de los contenidos en un modulo
+### Module Content Organization
 
-1. Documentacion
+Code should be organized in the following order:
+
+1. Documentation (module docstring)
 2. Imports
-3. Constantes
-4. Globales (siempre privados)
-5. Funciones privadas utiles en clases
-6. Clases
-    0. Variables de clase
-    1. Constructor (__init__)
-    2. Contructores alternativos (normalmente con los nombres "from_something" y decorados con @classmethod)
-    3. Privados ("_name" or "__name")
-    4. Propiedades
-    5. MEtodos publicos
-7. Funciones publicas
+3. Constants
+4. Globals (always private)
+5. Private helper functions (used by classes)
+6. Classes
+    - Class variables
+    - Constructor (`__init__`)
+    - Alternative constructors (typically named `from_something` and decorated with `@classmethod`)
+    - Private methods (`_name` or `__name`)
+    - Properties (decorated with `@property`)
+    - Public methods
+7. Public functions

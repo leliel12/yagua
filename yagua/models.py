@@ -91,7 +91,7 @@ class HistoryModel(BaseModel):
         Accessible via backref as project.history.
     tag : CharField
         Tag identifying the command type
-        (e.g., 'collect_tests', 'collect_coverage::project').
+        (e.g., 'collect_tests', 'collect_coverage', 'collect_coverage_for_test').
     command : TextField
         The full command string that was executed
         (e.g., 'pytest --collect-only -q').
@@ -142,10 +142,10 @@ class TestModel(BaseModel):
     test : CharField
         Test function name.
     coverage_alone : FloatField, optional
-        Coverage percentage when running this test in isolation.
-        Not yet implemented.
+        Coverage percentage when running this test in isolation (0-100).
+        Updated via collect-coverage command with per-test analysis.
     coverage_without : FloatField, optional
-        Coverage percentage when running all tests except this one.
+        Coverage percentage when running all tests except this one (0-100).
         Not yet implemented.
 
     Notes

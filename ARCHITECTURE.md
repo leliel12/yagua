@@ -37,10 +37,10 @@ Yagua follows a layered architecture with clear separation of concerns:
 **Key Classes**:
 - `CLIManager`: Contains all CLI commands as public methods
   - `create_project()`: Initialize new project cache
-  - `collect_tests()`: Collect tests from a project
-  - `collect_coverage()`: Run coverage analysis
+  - `collect_tests()`: Collect tests from a project (with --force option)
+  - `collect_coverage()`: Run coverage analysis for project and individual tests (with --force option)
   - `info()`: Display project information
-  - `list_tests()`: Show all tests
+  - `list_tests()`: Show all tests (with --long option for full details)
 
 **Design Pattern**: Command Pattern with introspection
 - Methods are auto-registered as CLI commands via `_create_app()`
@@ -85,7 +85,8 @@ Project.from_project_info(
    - `count_tests()`: Get test count
 
 3. **Coverage Management**:
-   - `collect_coverage(suite)`: Run and store coverage data
+   - `collect_coverage(suite)`: Run and store project-level coverage data
+   - `collect_coverage_for_test(suite, test_id)`: Run and store per-test coverage data
 
 4. **Project Information**:
    - `store_project_info()`: Update project metadata
@@ -112,14 +113,18 @@ testsuites/
 **`TestSuiteABC`** (Abstract Base Class):
 - Defines interface for all test suite handlers
 - Abstract methods:
-  - `get_tests(project_path)`: Collect test list
-  - `get_coverage(project_path, project_name)`: Run coverage
+  - `get_tests(project_path)`: Collect test list with pytest node IDs
+  - `get_coverage(project_path, project_name)`: Run project-level coverage
+  - `get_coverage_for_test(project_path, project_name, test_id)`: Run per-test coverage
 
 **`PytestSuite`** (Concrete Implementation):
 - Implements TestSuiteABC for pytest
 - Uses `pytest --collect-only` for test discovery
-- Uses `pytest --cov` with JSON output for coverage
+- Uses `pytest --cov` with JSON output for project coverage
+- Uses `pytest <test_id> --cov` for individual test coverage
 - Parses pytest output to extract test information
+- Returns command, stdout, stderr, and result for history tracking
+- Manages temporary directory for JSON coverage reports
 
 **Extensibility**:
 New test frameworks can be added by implementing TestSuiteABC (e.g., `UnittestSuite`, `NoseSuite`)
@@ -136,9 +141,16 @@ New test frameworks can be added by implementing TestSuiteABC (e.g., `UnittestSu
 - Represents one project per cache file
 
 **`TestModel`**:
-- Fields: `project` (FK), `file`, `suite`, `test`, `coverage`
+- Fields: `project` (FK), `file`, `suite`, `test`, `test_id`, `coverage_alone`, `coverage_without`
+- `test_id`: Unique pytest node ID (e.g., 'test_file.py::TestClass::test_method')
+- `coverage_alone`: Coverage when running this test in isolation
+- `coverage_without`: Coverage when running all tests except this one (not yet implemented)
 - Unique constraint: `(project, file, suite, test)`
-- Currently `coverage` field is unused (project-level only)
+
+**`HistoryModel`**:
+- Fields: `project` (FK), `tag`, `command`, `stdout`, `stderr`, `result`
+- `tag`: Command type identifier (e.g., 'collect_tests', 'collect_coverage', 'collect_coverage_for_test')
+- Tracks execution history for all operations
 
 **Design Decisions**:
 - Uses Peewee ORM for simplicity
@@ -189,10 +201,17 @@ New test frameworks can be added by implementing TestSuiteABC (e.g., `UnittestSu
    - Returns: coverage percentage
          ↓
 5. Project: Updates ProjectModel.coverage
+   - Stores execution history in HistoryModel
          ↓
-6. Database: Coverage persisted
+6. For each test:
+   Project: collect_coverage_for_test(suite, test_id)
+   - Calls suite.get_coverage_for_test(path, name, test_id)
+   - Updates TestModel.coverage_alone
+   - Stores execution history in HistoryModel
          ↓
-7. CLI: Displays coverage to user
+7. Database: All coverage data persisted
+         ↓
+8. CLI: Displays coverage summary with counter [X/N]
 ```
 
 ## Architectural Patterns
@@ -322,10 +341,10 @@ Auto-registered as: `yagua my-command`
 
 ## Future Enhancements
 
-1. **Per-Test Coverage**:
-   - Currently only project-level
-   - TestModel.coverage field exists but unused
-   - Requires framework-specific implementation
+1. **Coverage Without Test**:
+   - `TestModel.coverage_without` field exists but not yet implemented
+   - Would measure coverage when running all tests except one specific test
+   - Useful for understanding test dependencies and redundancy
 
 2. **Multiple Test Frameworks**:
    - Add UnittestSuite, NoseSuite
