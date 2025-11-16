@@ -101,9 +101,9 @@ class TestSuiteABC(ABC):
 
     @abstractmethod
     def get_coverage_for_tests(
-        self, project_path, project_name, test_id
+        self, project_path, project_name, test_ids
     ) -> tuple[float | None, str, str, str, object]:
-        """Run a specific test with coverage and return its coverage percentage.
+        """Run specific test(s) with coverage and return coverage percentage.
 
         Parameters
         ----------
@@ -111,13 +111,15 @@ class TestSuiteABC(ABC):
             Path to the project directory to run coverage on.
         project_name : str
             Name of the project/package to measure coverage for.
-        test_id : str
-            Unique identifier for the test to run (e.g., pytest node ID).
+        test_ids : list[str]
+            List of unique identifiers for tests to run (e.g., pytest node IDs).
+            Can be a single-item list for isolated test coverage, or multiple
+            items for combined coverage of specific tests.
 
         Returns
         -------
         coverage : float | None
-            Coverage percentage (0-100) for this specific test, or None if
+            Coverage percentage (0-100) for the specified test(s), or None if
             coverage could not be determined.
         command : str
             The command that was executed to collect coverage.
@@ -130,9 +132,12 @@ class TestSuiteABC(ABC):
 
         Notes
         -----
-        This method runs a single test in isolation to determine what
-        code coverage it provides when executed alone. This is useful for
-        understanding the individual contribution of each test to overall
-        coverage.
+        This method provides flexible coverage collection:
+        - Single test ([test_id]): Measures isolated test contribution
+        - Multiple tests ([test_id1, test_id2, ...]): Measures combined coverage
+        - All except one (query result): Enables coverage_without calculation
+
+        This flexibility allows for both coverage_alone (single test) and
+        coverage_without (all tests except one) metrics.
         """
         pass
