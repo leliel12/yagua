@@ -1,8 +1,68 @@
-"""
-Yagua - Test Suite Abstract Base Class.
+"""Yagua - Test Suite Abstract Base Class.
 
 This module defines the abstract interface that all test suite handlers
-must implement.
+must implement to integrate with yagua's test collection and coverage
+analysis system.
+
+Classes
+-------
+TestSuiteABC : ABC
+    Abstract base class defining the required interface for test suite handlers.
+
+Interface Contract
+------------------
+All test suite handlers must implement three abstract methods that return
+consistent data structures:
+
+1. get_tests(project_path) -> tuple[list, str, str, str, object]
+   - Discovers all tests in a project
+   - Returns: (tests_list, command, stdout, stderr, additional_data)
+
+2. get_coverage(project_path, project_name) -> tuple[float, str, str, str, object]
+   - Measures total coverage for all tests
+   - Returns: (coverage_percent, command, stdout, stderr, additional_data)
+
+3. get_coverage_for_tests(project_path, project_name, test_ids) -> tuple[float, str, str, str, object]
+   - Measures coverage for specific test(s)
+   - Returns: (coverage_percent, command, stdout, stderr, additional_data)
+
+Return Value Format
+-------------------
+All methods return a consistent 5-tuple structure:
+- Element 1: Primary result (test list or coverage percentage)
+- Element 2: Command string that was executed
+- Element 3: Standard output from command
+- Element 4: Standard error from command
+- Element 5: Additional framework-specific data
+
+This format enables comprehensive audit logging through HistoryModel.
+
+Notes
+-----
+The abstract methods use @abstractmethod decorator, ensuring that concrete
+implementations must provide all required functionality. Attempting to
+instantiate a subclass without implementing all abstract methods will raise
+TypeError.
+
+Examples
+--------
+Implementing a new test suite handler:
+
+>>> from yagua.testsuites import TestSuiteABC
+>>>
+>>> class UnittestSuite(TestSuiteABC):
+...     def get_tests(self, project_path):
+...         # Implementation for unittest framework
+...         tests = []  # Discover tests
+...         return tests, "command", "stdout", "stderr", {}
+...
+...     def get_coverage(self, project_path, project_name):
+...         # Implementation for coverage
+...         return 85.5, "command", "stdout", "stderr", {}
+...
+...     def get_coverage_for_tests(self, project_path, project_name, test_ids):
+...         # Implementation for specific tests
+...         return 42.0, "command", "stdout", "stderr", {}
 """
 
 from abc import ABC, abstractmethod
@@ -14,12 +74,23 @@ from abc import ABC, abstractmethod
 
 
 class TestSuiteABC(ABC):
-    """
-    Abstract base class for test suite handlers.
+    """Abstract base class for test suite handlers.
 
     This class defines the interface that all test suite implementations
     must follow. Subclasses should implement methods for collecting tests
-    and optionally coverage information from different testing frameworks.
+    and coverage information from different testing frameworks.
+
+    All concrete implementations must provide three methods:
+    - get_tests(): For test discovery
+    - get_coverage(): For total coverage measurement
+    - get_coverage_for_tests(): For selective coverage measurement
+
+    The consistent return format across all methods enables yagua to
+    store comprehensive audit logs of all operations in HistoryModel.
+
+    See Also
+    --------
+    PytestSuite : Concrete implementation for pytest-based projects.
     """
 
     # ========================================================================

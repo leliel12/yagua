@@ -1,7 +1,56 @@
-"""
-Yagua - Pytest Suite.
+"""Yagua - Pytest Suite Handler.
 
-This module provides a test suite handler for pytest-based projects.
+This module provides a test suite handler for pytest-based projects,
+implementing the TestSuiteABC interface using pytest's built-in APIs
+and pytest-cov for coverage measurement.
+
+Classes
+-------
+IgnoreTest : class
+    Pytest plugin for test collection hooks (currently minimal implementation).
+PytestSuite : class
+    Main test suite handler for pytest-based projects.
+
+Implementation Details
+----------------------
+This implementation uses:
+- pytest.main() API for running pytest programmatically
+- --collect-only flag for test discovery
+- pytest-cov plugin for coverage measurement
+- Temporary files for coverage JSON reports
+- Context managers for stdout/stderr redirection
+
+Key Features
+------------
+- Non-invasive test discovery (no test execution during collection)
+- JSON-based coverage reporting for reliable parsing
+- Flexible coverage measurement (total, per-test, and selective)
+- Complete audit trail (captures command, stdout, stderr, and results)
+
+Dependencies
+------------
+- pytest: Test framework
+- pytest-cov: Coverage plugin for pytest
+- coverage: Underlying coverage measurement library
+
+Examples
+--------
+Basic usage:
+>>> from yagua.testsuites import PytestSuite
+>>> suite = PytestSuite()
+>>> tests, cmd, stdout, stderr, data = suite.get_tests("/path/to/project")
+>>> print(f"Found {len(tests)} tests")
+>>> cov, cmd, stdout, stderr, report = suite.get_coverage(
+...     "/path/to/project", "mypackage"
+... )
+>>> print(f"Total coverage: {cov}%")
+
+Per-test coverage:
+>>> test_ids = ["test_file.py::test_function"]
+>>> cov, cmd, _, _, _ = suite.get_coverage_for_tests(
+...     "/path/to/project", "mypackage", test_ids
+... )
+>>> print(f"Test coverage: {cov}%")
 """
 
 import io
@@ -22,38 +71,75 @@ class IgnoreTest:
     """Pytest plugin for collecting test metadata.
 
     This plugin hooks into pytest's collection phase to capture additional
-    test metadata that can be stored in the yagua database.
+    test metadata that can be stored in the yagua database. Currently it
+    provides a minimal implementation but can be extended for advanced
+    metadata extraction.
+
+    Attributes
+    ----------
+    ignore_test_id : str
+        Test ID to potentially ignore (currently stored but not used).
+    collected_items : list[pytest.Item] or None
+        List of collected test items, populated by the hook.
+
+    Notes
+    -----
+    This is a pytest plugin that uses the hook system. It can be registered
+    via the pytest_plugins mechanism or passed to pytest.main() via the
+    plugins parameter.
+
+    Future enhancements could include:
+    - Extracting test markers and tags
+    - Capturing test parametrization information
+    - Filtering tests based on criteria
+    - Collecting test dependencies
     """
 
     def __init__(self, test_id):
-        """Initialize the plugin with empty collected items."""
+        """Initialize the plugin.
+
+        Parameters
+        ----------
+        test_id : str
+            Test ID to track (currently stored for future use).
+        """
         self.ignore_test_id = test_id
 
     def pytest_collection_modifyitems(self, config, items):
-        """Called after collection is completed.
+        """Hook called after pytest collection is completed.
+
+        This hook is invoked by pytest after all tests have been collected
+        but before they are executed. It provides an opportunity to modify
+        the test list or extract metadata.
 
         Parameters
         ----------
         config : pytest.Config
-            Pytest configuration object.
+            Pytest configuration object containing session settings.
         items : list[pytest.Item]
-            List of collected test items.
+            List of collected test items. Each item represents a test
+            and contains:
+            - nodeid: Full test path (e.g., "test_foo.py::TestClass::test_method")
+            - obj: The actual test function/method object
+            - keywords: Dictionary of markers and keywords
+            - callspec: Parametrization info (if test is parametrized)
 
         Notes
         -----
-        This hook is called after pytest has collected all tests but before
-        they are executed. You can modify the items list or extract metadata.
+        This method stores the collected items for later processing but
+        doesn't currently modify them. The config parameter is available
+        but not currently used.
 
-        Examples of what you can extract from each item:
-        - item.nodeid: Full test path
-          (e.g., "tests/test_foo.py::TestClass::test_method")
-        - item.obj: The actual test function/method object
-        - item.keywords: Dictionary of markers and keywords
-        - item.callspec: Parametrization info (if test is parametrized)
+        Examples
+        --------
+        Accessing test information:
+        >>> for item in items:
+        ...     print(f"Test: {item.nodeid}")
+        ...     print(f"Markers: {list(item.keywords)}")
         """
         # Store collected items for later processing
         self.collected_items = items
-        # Access config if needed (currently unused)
+        # Config available but currently unused
         _ = config
 
 
@@ -115,17 +201,45 @@ class PytestSuite(TestSuiteABC):
     def _run(self, cmd, project_path, plugins=None):
         """Run pytest command using pytest.main() API.
 
+        This internal method executes pytest programmatically, redirecting
+        output to string buffers and changing to the project directory.
+
         Parameters
         ----------
-        cmd : list
-            Command arguments to pass to pytest.main().
+        cmd : list[str]
+            Command arguments to pass to pytest.main() (e.g., ['--collect-only', '-q']).
         project_path : str or Path
-            Working directory for pytest execution.
+            Working directory for pytest execution. Pytest will run as if
+            executed from this directory.
+        plugins : list, optional
+            List of plugin instances to register with pytest. Default is None.
 
         Returns
         -------
-        tuple[str, str, str]
-            Tuple of (command_string, stdout, stderr).
+        command : str
+            Space-joined command string for audit logging.
+        stdout : str
+            Captured standard output from pytest execution.
+        stderr : str
+            Captured standard error from pytest execution.
+
+        Notes
+        -----
+        This method uses context managers to:
+        1. Change to the project directory (contextlib.chdir)
+        2. Redirect stdout to a StringIO buffer
+        3. Redirect stderr to a StringIO buffer
+
+        All context changes are automatically reverted when the method returns.
+
+        Examples
+        --------
+        >>> cmd, stdout, stderr = self._run(
+        ...     ['--collect-only', '-q'],
+        ...     '/path/to/project'
+        ... )
+        >>> print(f"Executed: {cmd}")
+        >>> print(f"Output: {stdout}")
         """
         stdout, stderr = io.StringIO(), io.StringIO()
         with (
@@ -142,28 +256,59 @@ class PytestSuite(TestSuiteABC):
     ) -> tuple[str, str, str | None, str] | None:
         """Parse a pytest test line into components.
 
+        This method parses pytest nodeid strings into their component parts,
+        handling both standalone test functions and class-based tests.
+
         Parameters
         ----------
         line : str
-            Test line in format 'file::Suite::test' or 'file::test'.
+            Test line in pytest nodeid format:
+            - 'file.py::test_function' for standalone tests
+            - 'file.py::TestClass::test_method' for class-based tests
 
         Returns
         -------
         tuple[str, str, str | None, str] | None
-            Tuple of (test_id, file, suite, test) or None if parsing fails.
-            - test_id: Full pytest nodeid (the complete line)
-            - file: Test file path
-            - suite: Test suite/class name (None if no class)
-            - test: Test function name
+            Parsed test components as (test_id, file, suite, test), or None
+            if the line doesn't match expected formats:
+            - test_id: Full pytest nodeid (the complete input line)
+            - file: Test file path (e.g., 'test_foo.py')
+            - suite: Test suite/class name (e.g., 'TestFoo'), or None
+            - test: Test function name (e.g., 'test_bar')
+
+        Notes
+        -----
+        This parser handles the two most common pytest nodeid formats:
+        - 2 parts (file::test): Standalone test functions
+        - 3 parts (file::class::test): Class-based test methods
+
+        Lines with other formats (e.g., 1 part, 4+ parts) return None.
+
+        Examples
+        --------
+        >>> parser = PytestSuite()
+        >>> # Standalone test function
+        >>> parser._parse_test_line("test_foo.py::test_bar")
+        ('test_foo.py::test_bar', 'test_foo.py', None, 'test_bar')
+        >>>
+        >>> # Class-based test method
+        >>> parser._parse_test_line("test_foo.py::TestFoo::test_bar")
+        ('test_foo.py::TestFoo::test_bar', 'test_foo.py', 'TestFoo', 'test_bar')
+        >>>
+        >>> # Invalid format
+        >>> parser._parse_test_line("invalid")
+        None
         """
         line = line.strip()
         parts = line.split("::")
         if len(parts) == 2:
-            # Format: file::test
+            # Format: file::test (standalone function)
             return (line, parts[0], None, parts[1])
         elif len(parts) == 3:
-            # Format: file::Suite::test
+            # Format: file::Suite::test (class-based test)
             return (line, parts[0], parts[1], parts[2])
+        # Return None for unexpected formats
+        return None
 
     # ========================================================================
     # Public Methods

@@ -87,6 +87,28 @@ def _make_help(obj) -> str:
     return "\n".join(lines)
 
 def _coverage_format(column, value):
+    """Format coverage values with percentage symbol.
+
+    This function is a helper for formatting coverage-related columns
+    in table displays.
+
+    Parameters
+    ----------
+    column : str
+        Column name to check if it's a coverage column.
+    value : float or Any
+        Value to format.
+
+    Returns
+    -------
+    str or Any
+        Formatted string with percentage if column is coverage-related,
+        otherwise returns value unchanged.
+
+    Notes
+    -----
+    Currently not in active use but kept for potential future formatting needs.
+    """
     if column.startswith("coverage_"):
         return "{:.3f}%".format(value)
     return value
@@ -147,17 +169,37 @@ class CLIManager:
 
     @contextlib.contextmanager
     def _use_project(self, cache):
-        """Validate that cache file exists, exit with error if not.
+        """Context manager to validate cache and provide Project instance.
+
+        This method validates that the cache file exists, creates a Project
+        instance, displays project information to the user, and ensures the
+        database connection is properly closed when done.
 
         Parameters
         ----------
         cache : Path
-            Path to cache file to validate.
+            Path to cache file to validate and open.
+
+        Yields
+        ------
+        Project
+            Project instance connected to the cache database.
 
         Raises
         ------
         typer.Exit
-            If cache file does not exist.
+            If cache file does not exist (exits with code 1).
+
+        Notes
+        -----
+        This is the recommended way to access projects in CLI commands as it
+        handles validation, error reporting, and cleanup automatically.
+
+        Examples
+        --------
+        >>> with self._use_project(cache) as proj:
+        ...     tests_df = proj.get_tests_dataframe()
+        ...     # Project is automatically closed after block
         """
         if not cache.exists():
             console.print(
@@ -474,8 +516,13 @@ class CLIManager:
     ) -> None:
         """Collect and store coverage information for the project.
 
-        This command runs pytest with coverage enabled and stores the
-        total coverage percentage in the project database.
+        This command runs pytest with coverage enabled in three phases:
+        1. Total project coverage (all tests)
+        2. Per-test coverage (each test in isolation)
+        3. Coverage without each test (all tests except one)
+
+        The collected data enables calculation of test uniqueness,
+        redundancy, and impact metrics.
 
         Parameters
         ----------
@@ -483,11 +530,18 @@ class CLIManager:
             Path to existing SQLite cache file.
         force : bool, optional
             Force recalculation of coverage even if it already exists.
+            Default is False.
 
         Raises
         ------
         typer.Exit
             If cache file does not exist or no tests found.
+
+        Notes
+        -----
+        Coverage collection can be time-consuming for large test suites
+        as it runs each test individually and then all tests except each one.
+        For N tests, this results in approximately 2N+1 test runs.
 
         Examples
         --------
@@ -496,12 +550,13 @@ class CLIManager:
 
         Force recalculation:
             $ yagua collect-coverage my_project.sqlite --force
+            $ yagua collect-coverage my_project.sqlite -f
         """
         with self._use_project(cache) as proj:
 
             typer.echo(f"📊 Calculating coverage...")
 
-            # If there are no tests, there's nothing to do
+            # Validate that there are tests to analyze
             if not proj.count_tests():
                 typer.echo(f"⚠️  No tests found for project '{proj.name}'.")
                 raise typer.Exit(1)
@@ -509,7 +564,7 @@ class CLIManager:
             # Create test suite backend for collecting statistics
             suite = PytestSuite()
 
-            # Calculate coverage for all tests combined
+            # Phase 1: Calculate coverage for all tests combined
             if proj.coverage is None or force:
                 proj.collect_coverage(suite)
             console.print(
@@ -517,12 +572,12 @@ class CLIManager:
                 f"[cyan]{proj.coverage:.2f}%[/cyan]\n"
             )
 
-            # Calculate coverage for each individual test
+            # Phase 2 & 3: Calculate per-test coverage metrics
             console.print(
                 "[bold blue]🧪 Per-test coverage analysis:[/bold blue]\n"
             )
 
-            # Extract test IDs and coverage columns from dataframe
+            # Extract test IDs and existing coverage data from dataframe
             tests_ids = proj.get_tests_dataframe()[
                 ["test_id", "coverage_alone", "coverage_without"]
             ].to_numpy()
@@ -533,23 +588,26 @@ class CLIManager:
             # Iterate through each test to calculate coverage metrics
             for idx, (test_id, cov_alone, cov_wo) in enumerate(tests_ids, 1):
 
-                # Show progress
+                # Show progress to user
                 proc_test_msg = (
                     f"  [dim][{idx}/{tests_count}][/dim] "
                     f"Processing {test_id}..."
                 )
                 console.print(proc_test_msg, end="\r")
 
-                # Calculate coverage when running only this test in isolation
+                # Phase 2: Calculate coverage when running only this test in isolation
+                # This shows what this specific test covers on its own
                 cov_alone = None if np.isnan(cov_alone) else cov_alone
                 if cov_alone is None or force:
                     cov_alone = proj.collect_coverage_for_test(suite, test_id)
 
-                # Calculate coverage when running all tests except this one
+                # Phase 3: Calculate coverage when running all tests except this one
+                # This helps identify if this test adds unique coverage
                 cov_wo = None if np.isnan(cov_wo) else cov_wo
                 if cov_wo is None or force:
                     cov_wo = proj.collect_coverage_without_test(suite, test_id)
 
+                # Clear progress message
                 console.print(" " * len(proc_test_msg), end="\r")
 
     # ========================================================================

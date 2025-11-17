@@ -1,5 +1,34 @@
-"""
-Yagua - Database Models.
+"""Yagua - Database Models.
+
+This module defines the Peewee ORM models for the yagua project database.
+Each cache file contains exactly one project with its associated tests and
+command history. Models are dynamically bound to database instances at runtime.
+
+Models
+------
+BaseModel : class
+    Abstract base class providing timestamp fields and utility methods.
+ProjectModel : class
+    Stores project metadata (limited to one row per database).
+TestModel : class
+    Stores individual test information and coverage metrics.
+HistoryModel : class
+    Stores command execution history for audit purposes.
+
+Database Design
+---------------
+- One SQLite file = One project
+- Each project can have many tests
+- Each project can have many history entries
+- All timestamps are stored in UTC
+- Models are bound to database instances in Project.__init__()
+
+Notes
+-----
+Models in this module do not have a hardcoded database connection.
+The database binding happens dynamically in the Project class using
+Peewee's bind_ctx() context manager, allowing multiple Project instances
+to each have their own database connection.
 """
 
 from datetime import datetime, timezone
@@ -39,10 +68,27 @@ class BaseModel(Model):
 
     @classmethod
     def _fields(cls):
+        """Get list of field names defined in the model.
+
+        Returns
+        -------
+        list[str]
+            List of field names in the order they are defined.
+        """
         return [field.name for field in cls._meta.sorted_fields]
 
     @classmethod
     def _hproperties(cls):
+        """Get list of hybrid property names defined in the model.
+
+        Hybrid properties are computed attributes that can be accessed
+        both at the instance level and in database queries.
+
+        Returns
+        -------
+        list[str]
+            Sorted list of hybrid property names (excludes private properties).
+        """
         props = []
         for k, v in vars(cls).items():
             if k.startswith("_"):
@@ -53,11 +99,46 @@ class BaseModel(Model):
         return props
 
     def save(self, *args, **kwargs):
-        """Override save to update modified_at timestamp."""
+        """Save model instance and update modified_at timestamp.
+
+        This method overrides the default save() to automatically update
+        the modified_at field to the current UTC time on every save.
+
+        Parameters
+        ----------
+        *args
+            Positional arguments passed to parent save().
+        **kwargs
+            Keyword arguments passed to parent save().
+
+        Returns
+        -------
+        int
+            Number of rows modified (typically 1).
+        """
         self.modified_at = datetime.now(timezone.utc)
         return super().save(*args, **kwargs)
 
     def to_records(self):
+        """Convert model instance to list of (field_name, value) tuples.
+
+        This method includes both regular fields and hybrid properties,
+        making it useful for converting model data to formats like
+        DataFrames or dictionaries.
+
+        Returns
+        -------
+        list[tuple[str, Any]]
+            List of tuples containing (field_name, field_value) for all
+            fields and hybrid properties in the model.
+
+        Examples
+        --------
+        >>> test = TestModel.get_by_id(1)
+        >>> records = test.to_records()
+        >>> dict(records)
+        {'id': 1, 'file': 'test_foo.py', 'coverage_alone': 45.5, ...}
+        """
         data = []
         fields = self._fields() + self._hproperties()
         for field in fields:
