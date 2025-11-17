@@ -87,31 +87,32 @@ def _make_help(obj) -> str:
     return "\n".join(lines)
 
 
-def _coverage_format(column, value):
-    """Format coverage values with percentage symbol.
+def _coerce_na(value):
+    """
+    Coerces input values that are None or NaN (Not a Number) to None.
 
-    This function is a helper for formatting coverage-related columns
-    in table displays.
+    This function is useful in data cleaning pipelines where you need a consistent
+    representation for missing data points before further processing or storage
+    (e.g., storing in a database that uses NULL).
 
     Parameters
     ----------
-    column : str
-        Column name to check if it's a coverage column.
-    value : float or Any
-        Value to format.
+    value : Any
+        The input value to check. Can be of various types (float, int, str, None, etc.).
 
     Returns
     -------
-    str or Any
-        Formatted string with percentage if column is coverage-related,
-        otherwise returns value unchanged.
+    Union[Any, None]
+        Returns ``None`` if the input value is ``None`` or if it is a
+        floating-point ``NaN`` value from numpy. Otherwise, the original value
+        is returned unchanged.
 
-    Notes
-    -----
-    Currently not in active use but kept for potential future formatting needs.
+    See Also
+    --------
+    numpy.isnan : Function used internally to check for NaN values.
     """
-    if column.startswith("coverage_"):
-        return "{:.3f}%".format(value)
+    if value is None or (isinstance(value, float) and np.isnan(value)):
+        return None
     return value
 
 
@@ -293,9 +294,7 @@ class CLIManager:
         # Use provided cache path or default to <project_name>.sqlite
         cache = cache or as_path(project_path.name + ".sqlite")
 
-        console.print(
-            f"\n[bold cyan]📦 Creating project cache...[/bold cyan]\n"
-        )
+        console.print(f"\n[bold cyan]📦 Creating project cache...[/bold cyan]\n")
 
         try:
             proj = Project.from_project_info(
@@ -323,9 +322,7 @@ class CLIManager:
         ]
 
         if proj.description:
-            info_lines.append(
-                f"[cyan]🪪 Description:[/cyan] {proj.description}"
-            )
+            info_lines.append(f"[cyan]🪪 Description:[/cyan] {proj.description}")
 
         info_lines.append(f"\n[dim]✨ Cache initialized with 0 tests[/dim]")
 
@@ -382,9 +379,7 @@ class CLIManager:
             saved_count, updated_count = 0, 0
 
             if total_tests == 0 or force:
-                console.print(
-                    f"\n[bold cyan]🧪 Collecting tests...[/bold cyan]\n"
-                )
+                console.print(f"\n[bold cyan]🧪 Collecting tests...[/bold cyan]\n")
                 suite = PytestSuite()
                 saved_count, updated_count = proj.collect_tests(suite)
                 total_tests = saved_count + updated_count
@@ -468,9 +463,7 @@ class CLIManager:
                 ]
 
                 # Keep only user-facing columns
-                columns = [
-                    col for col in tests.columns if col not in ignore_columns
-                ]
+                columns = [col for col in tests.columns if col not in ignore_columns]
                 tests = tests[columns]
 
             # Check if any tests were found
@@ -558,7 +551,7 @@ class CLIManager:
         """
         with self._use_project(cache) as proj:
 
-            typer.echo(f"📊 Calculating coverage...")
+            console.print(f"[bold blue]📊 Calculating coverage...[/bold blue]")
 
             # Validate that there are tests to analyze
             if not proj.count_tests():
@@ -577,9 +570,7 @@ class CLIManager:
             )
 
             # Phase 2 & 3: Calculate per-test coverage metrics
-            console.print(
-                "[bold blue]🧪 Per-test coverage analysis:[/bold blue]\n"
-            )
+            console.print("[bold blue]🧪 Per-test coverage analysis...[/bold blue]\n")
 
             # Extract test IDs and existing coverage data from dataframe
             tests_ids = proj.get_tests_dataframe()[
@@ -594,34 +585,33 @@ class CLIManager:
 
                 # Show progress to user
                 proc_test_msg = (
-                    f"  [dim][{idx}/{tests_count}][/dim] "
-                    f"Processing {test_id}..."
+                    f"  [dim][{idx}/{tests_count}][/dim] " f"Processing {test_id}..."
                 )
                 console.print(proc_test_msg, end="\r")
 
                 # Phase 2: Calculate coverage when running only this test
                 # in isolation
                 # This shows what this specific test covers on its own
-                cov_alone = None if np.isnan(cov_alone) else cov_alone
+                cov_alone = _coerce_na(cov_alone)
                 if cov_alone is None or force:
                     cov_alone = proj.collect_coverage_for_test(suite, test_id)
 
                 # Phase 3: Calculate coverage when running all tests except
                 # this one
                 # This helps identify if this test adds unique coverage
-                cov_wo = None if np.isnan(cov_wo) else cov_wo
+                cov_wo = _coerce_na(cov_wo)
                 if cov_wo is None or force:
                     cov_wo = proj.collect_coverage_without_test(suite, test_id)
 
                 # Clear progress message
                 console.print(" " * len(proc_test_msg), end="\r")
 
-            # Test retrieval of first test (validation check)
-            proj.get_test(1)
-
-        # Display test list as a summary of coverage results
-        # This provides immediate feedback showing all coverage metrics
-        self.list_tests(cache, False)
+        console.print(
+            "[bold green]✅ Coverage collection complete!"
+            "[/bold green]\n\n"
+            f"[dim]💡 Use[/dim] [cyan]'yagua list-tests {cache.name}'[/cyan][dim] "
+            "to view all coverage metrics[/dim]\n"
+        )
 
     # ========================================================================
     # Public Commands - Project Information
@@ -716,9 +706,7 @@ def _create_app(cli_manager):
             command_help = _make_help(method)
             # Create command with hyphenated name
             # (e.g., collect_tests -> collect-tests)
-            cmd_wrapper = app.command(
-                name=name.replace("_", "-"), help=command_help
-            )
+            cmd_wrapper = app.command(name=name.replace("_", "-"), help=command_help)
             cmd_wrapper(method)
 
     return app

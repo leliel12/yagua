@@ -167,8 +167,8 @@ class PytestSuite(TestSuiteABC):
             contextlib.redirect_stdout(stdout),
             contextlib.redirect_stderr(stderr),
         ):
-            pytest.main(cmd, plugins=plugins)
-
+            status = pytest.main(cmd, plugins=plugins)
+        
         return " ".join(cmd), stdout.getvalue(), stderr.getvalue()
 
     def _parse_test_line(
