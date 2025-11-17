@@ -4,7 +4,8 @@
 
 # Yagua
 
-**A tool for collecting and managing test information from pytest-based projects**
+**A tool for collecting and managing test information from**
+**pytest-based projects**
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -36,16 +37,20 @@
 
 ## 📖 About
 
-Yagua is a Python package that helps you collect, store, and manage test information from pytest-based projects using a SQLite database.
+Yagua is a Python package that helps you collect, store, and manage
+test information from pytest-based projects using a SQLite database.
 
 ## ✨ Features
 
 - **Test Discovery**: Collect test information from pytest-based projects
-- **SQLite Storage**: Store test metadata in SQLite database (one cache file per project)
-- **Coverage Tracking**: Track both project-level and per-test coverage information
+- **SQLite Storage**: Store test metadata in SQLite database (one cache
+  file per project)
+- **Coverage Tracking**: Track both project-level and per-test coverage
+  information
 - **Flexible API**: Both CLI and programmatic Python API
 - **History Tracking**: Keep execution history for all operations
-- **Force Recollection**: Option to force recollection of tests and coverage data
+- **Force Recollection**: Option to force recollection of tests and
+  coverage data
 
 ---
 
@@ -103,7 +108,8 @@ yagua info project.sqlite
 
 # List tests for a project
 yagua list-tests project.sqlite
-yagua list-tests project.sqlite --long  # Show all columns including IDs and timestamps
+# Show all columns including IDs and timestamps
+yagua list-tests project.sqlite --long
 
 # Collect coverage information (project + per-test coverage)
 yagua collect-coverage project.sqlite
@@ -162,59 +168,77 @@ with Project(db_path="qa.sqlite") as proj:
 
 ## 📊 Coverage Metrics
 
-Yagua provides advanced coverage metrics to help you understand test quality, redundancy, and unique contributions. These metrics are automatically calculated when you run `collect-coverage`.
+Yagua provides advanced coverage metrics to help you understand test
+quality, redundancy, and unique contributions. These metrics are
+automatically calculated when you run `collect-coverage`.
 
 ### Basic Coverage Metrics
 
-- **Coverage Alone** (`coverage_alone`): Coverage percentage when running only this test in isolation
-- **Coverage Without** (`coverage_without`): Coverage percentage when running all tests except this one
+- **Coverage Alone** (`coverage_alone`): Coverage percentage when
+  running only this test in isolation
+- **Coverage Without** (`coverage_without`): Coverage percentage when
+  running all tests except this one
 
 ### Calculated Coverage Metrics
 
-Yagua automatically calculates four additional metrics to help analyze test effectiveness:
+Yagua automatically calculates four additional metrics to help analyze
+test effectiveness:
 
 #### 1. Coverage Impact
 
 **Formula**: `coverage_impact = total_coverage - coverage_without`
 
-**Meaning**: The unique coverage contribution of this test. This represents how much coverage would be lost if you removed this test from your suite.
+**Meaning**: The unique coverage contribution of this test. This
+represents how much coverage would be lost if you removed this test
+from your suite.
 
 **Interpretation**:
-- **High Impact** (close to `coverage_alone`): Test contributes unique coverage, not well covered by other tests
-- **Low Impact** (close to 0): Test coverage is mostly redundant, well covered by other tests
+- **High Impact** (close to `coverage_alone`): Test contributes unique
+  coverage, not well covered by other tests
+- **Low Impact** (close to 0): Test coverage is mostly redundant, well
+  covered by other tests
 - **Negative Impact**: Should never occur with proper test suite
 
 #### 2. Coverage Overlap
 
 **Formula**: `coverage_overlap = total_coverage - coverage_alone`
 
-**Meaning**: The amount of coverage that this test shares with other tests. This represents the portion of total coverage that is NOT unique to this test.
+**Meaning**: The amount of coverage that this test shares with other
+tests. This represents the portion of total coverage that is NOT
+unique to this test.
 
 **Interpretation**:
-- **High Overlap**: This test covers code that is already well covered by other tests
+- **High Overlap**: This test covers code that is already well covered
+  by other tests
 - **Low Overlap**: This test covers code that few other tests exercise
 
 #### 3. Coverage Uniqueness
 
 **Formula**: `coverage_uniqueness = (coverage_impact / coverage_alone) × 100`
 
-**Meaning**: Percentage of this test's coverage that is unique (not covered by other tests).
+**Meaning**: Percentage of this test's coverage that is unique (not
+covered by other tests).
 
 **Interpretation**:
-- **100%**: All coverage from this test is unique - removing it would significantly reduce total coverage
+- **100%**: All coverage from this test is unique - removing it would
+  significantly reduce total coverage
 - **50%**: Half of this test's coverage is unique, half is redundant
-- **0%**: None of this test's coverage is unique - completely redundant test
+- **0%**: None of this test's coverage is unique - completely
+  redundant test
 
 #### 4. Coverage Redundancy
 
-**Formula**: `coverage_redundancy = ((coverage_alone - coverage_impact) / coverage_alone) × 100`
+**Formula**: `coverage_redundancy =
+((coverage_alone - coverage_impact) / coverage_alone) × 100`
 
-**Meaning**: Percentage of this test's coverage that is redundant (already covered by other tests).
+**Meaning**: Percentage of this test's coverage that is redundant
+(already covered by other tests).
 
 **Interpretation**:
 - **0%**: Test is completely unique - no redundant coverage
 - **50%**: Half of this test's coverage is redundant
-- **100%**: Test is completely redundant - all coverage duplicated by other tests
+- **100%**: Test is completely redundant - all coverage duplicated by
+  other tests
 
 ### Example Usage
 
@@ -247,26 +271,11 @@ with Project(db_path="qa.sqlite") as proj:
 
 ### CLI Display
 
-When you run `yagua collect-coverage project.sqlite`, all metrics are displayed in a comprehensive table:
+When you run `yagua collect-coverage project.sqlite`,
+or  `yagua list-tests project.sqlite` all metrics are displayed in a comprehensive table:
 
-```
-🧪 Per-test coverage analysis:
+![list-tests](res/list_tests.png)
 
-┏━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━━━━┓
-┃ #  ┃ Test ID                 ┃ Alone   ┃ Without  ┃ Impact  ┃ Overlap  ┃ Uniqueness  ┃ Redundancy  ┃
-┡━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━━━━━━┩
-│ 1  │ test_foo.py::test_bar   │ 45.32%  │ 78.91%   │ +5.43%  │ 39.02%   │ 11.98%      │ 88.02%      │
-│ 2  │ test_baz.py::test_qux   │ 67.89%  │ 71.23%   │ +13.11% │ 16.45%   │ 19.31%      │ 80.69%      │
-└────┴─────────────────────────┴─────────┴──────────┴─────────┴──────────┴─────────────┴─────────────┘
-
-Legend:
-  • Alone = coverage running only this test
-  • Without = coverage without this test
-  • Impact = unique coverage contribution (total - without)
-  • Overlap = coverage shared with other tests (total - alone)
-  • Uniqueness = % of test's coverage that is unique (impact/alone × 100)
-  • Redundancy = % of test's coverage that is redundant ((alone-impact)/alone × 100)
-```
 
 ### Use Cases
 

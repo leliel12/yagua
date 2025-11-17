@@ -271,7 +271,8 @@ class TestModel(BaseModel):
         Requires: coverage_alone and coverage_impact
     coverage_redundancy : float | None
         Percentage of test's coverage that is redundant (0-100).
-        Calculated as: ((coverage_alone - coverage_impact) / coverage_alone) * 100
+        Calculated as:
+            ((coverage_alone - coverage_impact) / coverage_alone) * 100
         Requires: coverage_alone and coverage_impact
 
     Notes
@@ -369,7 +370,8 @@ class TestModel(BaseModel):
 
         Formula
         -------
-        coverage_redundancy = ((coverage_alone - coverage_impact) / coverage_alone) * 100
+        coverage_redundancy =
+            ((coverage_alone - coverage_impact) / coverage_alone) * 100
 
         - 0% = Test is completely unique (no redundancy)
         - 100% = Test is completely redundant (all coverage duplicated)

@@ -126,7 +126,8 @@ class PytestSuite(TestSuiteABC):
         Parameters
         ----------
         cmd : list[str]
-            Command arguments to pass to pytest.main() (e.g., ['--collect-only', '-q']).
+            Command arguments to pass to pytest.main()
+            (e.g., ['--collect-only', '-q']).
         project_path : str or Path
             Working directory for pytest execution. Pytest will run as if
             executed from this directory.
@@ -212,7 +213,8 @@ class PytestSuite(TestSuiteABC):
         >>>
         >>> # Class-based test method
         >>> parser._parse_test_line("test_foo.py::TestFoo::test_bar")
-        ('test_foo.py::TestFoo::test_bar', 'test_foo.py', 'TestFoo', 'test_bar')
+        ('test_foo.py::TestFoo::test_bar', 'test_foo.py', 'TestFoo',
+         'test_bar')
         >>>
         >>> # Invalid format
         >>> parser._parse_test_line("invalid")
@@ -375,9 +377,10 @@ class PytestSuite(TestSuiteABC):
             Name of the project/package to measure coverage for.
             This should match the package name in the project.
         tests_ids : list[str]
-            List of unique identifiers for tests to run (e.g., pytest node IDs).
-            Can be a single-item list for isolated test coverage, or multiple
-            items for combined coverage of specific tests.
+            List of unique identifiers for tests to run
+            (e.g., pytest node IDs). Can be a single-item list for isolated
+            test coverage, or multiple items for combined coverage of
+            specific tests.
 
         Returns
         -------
@@ -399,8 +402,10 @@ class PytestSuite(TestSuiteABC):
         -----
         This method provides flexible coverage collection:
         - Single test ([test_id]): Measures isolated test contribution
-        - Multiple tests ([test_id1, test_id2, ...]): Measures combined coverage
-        - All except one (query result): Enables coverage_without calculation
+        - Multiple tests ([test_id1, test_id2, ...]): Measures combined
+          coverage
+        - All except one (query result): Enables coverage_without
+          calculation
 
         This flexibility allows for both coverage_alone (single test) and
         coverage_without (all tests except one) metrics.

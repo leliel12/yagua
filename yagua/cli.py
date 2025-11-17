@@ -215,7 +215,7 @@ class CLIManager:
         try:
             console.print(
                 f"[dim]🔍 Using project:[/dim] [cyan]{proj.name}[/cyan] "
-                f"[dim]({proj.path})[/dim]"
+                f"[dim]({proj.path})[/dim]\n"
             )
             yield proj
         finally:
@@ -393,8 +393,8 @@ class CLIManager:
                 console.print(
                     Panel(
                         "[yellow]No tests found in the project.[/yellow]\n\n"
-                        "[dim]Make sure the project contains pytest-compatible "
-                        "test files.[/dim]",
+                        "[dim]Make sure the project contains "
+                        "pytest-compatible test files.[/dim]",
                         title="⚠️  Warning",
                         border_style="yellow",
                     )
@@ -544,6 +544,9 @@ class CLIManager:
         as it runs each test individually and then all tests except each one.
         For N tests, this results in approximately 2N+1 test runs.
 
+        After collecting coverage, the command automatically displays a summary
+        of all tests with their coverage metrics using the list-tests command.
+
         Examples
         --------
         Collect coverage:
@@ -596,13 +599,15 @@ class CLIManager:
                 )
                 console.print(proc_test_msg, end="\r")
 
-                # Phase 2: Calculate coverage when running only this test in isolation
+                # Phase 2: Calculate coverage when running only this test
+                # in isolation
                 # This shows what this specific test covers on its own
                 cov_alone = None if np.isnan(cov_alone) else cov_alone
                 if cov_alone is None or force:
                     cov_alone = proj.collect_coverage_for_test(suite, test_id)
 
-                # Phase 3: Calculate coverage when running all tests except this one
+                # Phase 3: Calculate coverage when running all tests except
+                # this one
                 # This helps identify if this test adds unique coverage
                 cov_wo = None if np.isnan(cov_wo) else cov_wo
                 if cov_wo is None or force:
@@ -610,6 +615,13 @@ class CLIManager:
 
                 # Clear progress message
                 console.print(" " * len(proc_test_msg), end="\r")
+
+            # Test retrieval of first test (validation check)
+            proj.get_test(1)
+
+        # Display test list as a summary of coverage results
+        # This provides immediate feedback showing all coverage metrics
+        self.list_tests(cache, False)
 
     # ========================================================================
     # Public Commands - Project Information
@@ -694,14 +706,16 @@ def _create_app(cli_manager):
         add_completion=True,
     )
 
-    # Introspect CLIManager instance and register all public methods as commands
+    # Introspect CLIManager instance and register all public methods
+    # as commands
     members = inspect.getmembers(cli_manager, predicate=inspect.ismethod)
     for name, method in members:
         # Only register public methods (those not starting with underscore)
         if not name.startswith("_"):
             # Extract help text from method docstring
             command_help = _make_help(method)
-            # Create command with hyphenated name (e.g., collect_tests -> collect-tests)
+            # Create command with hyphenated name
+            # (e.g., collect_tests -> collect-tests)
             cmd_wrapper = app.command(
                 name=name.replace("_", "-"), help=command_help
             )

@@ -7,7 +7,8 @@ analysis system.
 Classes
 -------
 TestSuiteABC : ABC
-    Abstract base class defining the required interface for test suite handlers.
+    Abstract base class defining the required interface for test suite
+    handlers.
 
 Interface Contract
 ------------------
@@ -18,11 +19,13 @@ consistent data structures:
    - Discovers all tests in a project
    - Returns: (tests_list, command, stdout, stderr, additional_data)
 
-2. get_coverage(project_path, project_name) -> tuple[float, str, str, str, object]
+2. get_coverage(project_path, project_name) ->
+       tuple[float, str, str, str, object]
    - Measures total coverage for all tests
    - Returns: (coverage_percent, command, stdout, stderr, additional_data)
 
-3. get_coverage_for_tests(project_path, project_name, test_ids) -> tuple[float, str, str, str, object]
+3. get_coverage_for_tests(project_path, project_name, test_ids) ->
+       tuple[float, str, str, str, object]
    - Measures coverage for specific test(s)
    - Returns: (coverage_percent, command, stdout, stderr, additional_data)
 
@@ -183,9 +186,10 @@ class TestSuiteABC(ABC):
         project_name : str
             Name of the project/package to measure coverage for.
         test_ids : list[str]
-            List of unique identifiers for tests to run (e.g., pytest node IDs).
-            Can be a single-item list for isolated test coverage, or multiple
-            items for combined coverage of specific tests.
+            List of unique identifiers for tests to run
+            (e.g., pytest node IDs). Can be a single-item list for isolated
+            test coverage, or multiple items for combined coverage of
+            specific tests.
 
         Returns
         -------
@@ -205,8 +209,10 @@ class TestSuiteABC(ABC):
         -----
         This method provides flexible coverage collection:
         - Single test ([test_id]): Measures isolated test contribution
-        - Multiple tests ([test_id1, test_id2, ...]): Measures combined coverage
-        - All except one (query result): Enables coverage_without calculation
+        - Multiple tests ([test_id1, test_id2, ...]): Measures combined
+          coverage
+        - All except one (query result): Enables coverage_without
+          calculation
 
         This flexibility allows for both coverage_alone (single test) and
         coverage_without (all tests except one) metrics.

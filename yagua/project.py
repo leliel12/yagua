@@ -1,8 +1,9 @@
 """Yagua - Project Class.
 
-This module provides the Project class, which serves as the main interface for
-managing project databases, tests, and coverage information. Each Project instance
-represents a single SQLite database file containing one project's test data.
+This module provides the Project class, which serves as the main
+interface for managing project databases, tests, and coverage
+information. Each Project instance represents a single SQLite database
+file containing one project's test data.
 
 Classes
 -------
@@ -13,16 +14,22 @@ Project : class
 Architecture
 ------------
 - Each Project instance creates its own SqliteDatabase connection
-- Models are dynamically bound to the database via transaction() context manager
-- All database operations are wrapped in transactions for ACID compliance
+- Models are dynamically bound to the database via transaction()
+  context manager
+- All database operations are wrapped in transactions for ACID
+  compliance
 - The database schema is automatically created on first instantiation
 
 Key Patterns
 ------------
-1. **One Cache File Per Project**: Each SQLite file contains exactly one project
-2. **Dynamic Model Binding**: Models are bound to database instances at runtime
-3. **Transaction Management**: All DB operations use atomic transactions
-4. **Context Manager Support**: Project can be used with 'with' statement
+1. **One Cache File Per Project**: Each SQLite file contains exactly
+   one project
+2. **Dynamic Model Binding**: Models are bound to database instances
+   at runtime
+3. **Transaction Management**: All DB operations use atomic
+   transactions
+4. **Context Manager Support**: Project can be used with 'with'
+   statement
 
 Examples
 --------
@@ -328,11 +335,15 @@ class Project:
             - suite: Test suite/class name (nullable)
             - test: Test function name
             - coverage_alone: Coverage when running test in isolation
-            - coverage_without: Coverage when running all tests except this one
+            - coverage_without: Coverage when running all tests except
+              this one
             - coverage_impact: Unique coverage contribution (calculated)
-            - coverage_overlap: Coverage shared with other tests (calculated)
-            - coverage_uniqueness: Percentage of unique coverage (calculated)
-            - coverage_redundancy: Percentage of redundant coverage (calculated)
+            - coverage_overlap: Coverage shared with other tests
+              (calculated)
+            - coverage_uniqueness: Percentage of unique coverage
+              (calculated)
+            - coverage_redundancy: Percentage of redundant coverage
+              (calculated)
             - created_at: Record creation timestamp
             - modified_at: Record modification timestamp
 
@@ -362,10 +373,12 @@ class Project:
         with self.transaction():
             project = self._get_project_model()
             query = TestModel.select().where(TestModel.project == project)
-            # Convert each model to dict using to_records() which includes hybrid properties
+            # Convert each model to dict using to_records() which
+            # includes hybrid properties
             dicts = (dict(mdl.to_records()) for mdl in query)
             df = pd.DataFrame.from_dict(dicts)
-            # Option to group coverage columns into multiindex (currently disabled)
+            # Option to group coverage columns into multiindex
+            # (currently disabled)
             # df.columns = group_coverage_columns(df.columns)
 
         return df
@@ -384,27 +397,65 @@ class Project:
                 TestModel.select().where(TestModel.project == project).count()
             )
 
-    def get_test(self, test_id: str) -> TestModel:
-        """Get a specific test by its test_id.
+    def get_test(self, test_id: str | int) -> pd.Series:
+        """Get a specific test by its test_id or database ID.
+
+        This method retrieves a test from the database and returns it as
+        a pandas Series with all fields and calculated properties. It supports
+        lookup by both the database integer ID and the string test_id (pytest nodeid).
 
         Parameters
         ----------
-        test_id : str
-            Unique identifier for the test (pytest nodeid).
+        test_id : str | int
+            Unique identifier for the test. Can be either:
+            - int: Database primary key ID (e.g., 1, 2, 3)
+            - str: Pytest nodeid (e.g., 'test_file.py::TestClass::test_method')
 
         Returns
         -------
-        TestModel
-            The test model instance with all fields and calculated properties.
+        pd.Series
+            Pandas Series containing all test fields and calculated properties
+            (coverage_impact, coverage_overlap, coverage_uniqueness,
+            coverage_redundancy). The series name is set to "test".
 
         Raises
         ------
         peewee.DoesNotExist
             If no test with the given test_id exists.
+
+        Examples
+        --------
+        Get test by database ID:
+        >>> test = proj.get_test(1)
+        >>> print(test['test_id'])
+        'test_foo.py::test_bar'
+
+        Get test by pytest nodeid:
+        >>> test = proj.get_test('test_foo.py::TestFoo::test_bar')
+        >>> print(test['coverage_alone'])
+        45.5
         """
         with self.transaction():
-            test = TestModel.get(TestModel.test_id == test_id)
-            return model_to_serie(test)
+            # Build filter condition based on test_id type
+            # Integer: lookup by database primary key ID
+            # String: lookup by pytest nodeid (test_id field)
+            flt = (
+                (TestModel.id == test_id)
+                if isinstance(test_id, int)
+                else (TestModel.test_id == test_id)
+            )
+
+            # Retrieve test model instance
+            test = TestModel.get(flt)
+
+            # Convert to dictionary including hybrid properties
+            test_dict = dict(test.to_records())
+
+            # Convert to pandas Series for easier data manipulation
+            series = pd.DataFrame.from_dict([test_dict]).iloc[0]
+            series.name = "test"
+
+            return series
 
     # ========================================================================
     # Public Methods - Coverage Management
