@@ -145,6 +145,7 @@ def df_to_rich_table(
     index_name: Optional[str] = None,
     header_style: str = "bold magenta",
     float_fmt: str = "{:.3f}",
+    fillna: str="-",
 ) -> Table:
     """Convert a pandas DataFrame into a Rich Table object.
 
@@ -170,6 +171,8 @@ def df_to_rich_table(
     float_fmt : str, optional
         Format string for float values (e.g., "{:.2f}" for 2 decimals).
         Defaults to "{:.3f}".
+    fillna : str, optional
+        Value to replace, pd.NA and nans.
 
     Returns
     -------
@@ -188,32 +191,6 @@ def df_to_rich_table(
     - Applies custom float formatting to all float values
     - Converts all values to strings for display
 
-    Examples
-    --------
-    Basic usage with index:
-    >>> import pandas as pd
-    >>> from yagua.utils.df2rt import df_to_rich_table
-    >>> df = pd.DataFrame({
-    ...     'Name': ['Alice', 'Bob', 'Charlie'],
-    ...     'Score': [95.5, 87.3, 91.2]
-    ... })
-    >>> table = df_to_rich_table(df, show_index=True, index_name='#')
-    >>> console.print(table)
-
-    Without index and custom float format:
-    >>> table = df_to_rich_table(
-    ...     df,
-    ...     show_index=False,
-    ...     float_fmt="{:.1f}"
-    ... )
-    >>> console.print(table)
-
-    Custom header style:
-    >>> table = df_to_rich_table(
-    ...     df,
-    ...     header_style="bold cyan"
-    ... )
-    >>> console.print(table)
     """
     # Initialize Rich Table with header styling
     rich_table = Table(show_header=True, header_style=header_style)
@@ -229,6 +206,7 @@ def df_to_rich_table(
         rich_table.add_column(str(column), **column_fmt)
 
     # Populate table rows with formatted values
+    pandas_dataframe = pandas_dataframe.fillna(fillna)
     for index, value_list in enumerate(pandas_dataframe.values.tolist()):
         row = [str(index)] if show_index else []
         row += [format_value(x, float_fmt) for x in value_list]

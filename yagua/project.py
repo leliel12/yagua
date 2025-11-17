@@ -219,20 +219,21 @@ class Project:
         saved_count = 0
         updated_count = 0
         with self.transaction():
-            project = self._get_project_model()
-            for test_id, file, suite_name, test in result.value:
-                _, created = self.add_test(
-                    project=project,
-                    test_id=test_id,
-                    file=file,
-                    suite=suite_name,
-                    test=test,
-                )
+            if not result.error:
+                project = self._get_project_model()
+                for test_id, file, suite_name, test in result.value:
+                    _, created = self.add_test(
+                        project=project,
+                        test_id=test_id,
+                        file=file,
+                        suite=suite_name,
+                        test=test,
+                    )
 
-                if created:
-                    saved_count += 1
-                else:
-                    updated_count += 1
+                    if created:
+                        saved_count += 1
+                    else:
+                        updated_count += 1
 
             HistoryModel.create(
                 project=project,
@@ -243,6 +244,8 @@ class Project:
                 stderr=result.stderr,
                 result=result.result,
             )
+
+        result.raise_if_error()
 
         return saved_count, updated_count
 
@@ -425,9 +428,10 @@ class Project:
         result = suite.get_coverage(self.path, self.name)
 
         with self.transaction():
-            project = self._get_project_model()
-            project.coverage = result.value
-            project.save()
+            if not result.error:
+                project = self._get_project_model()
+                project.coverage = result.value
+                project.save()
 
             HistoryModel.create(
                 project=project,
@@ -438,6 +442,8 @@ class Project:
                 stderr=result.stderr,
                 result=result.result,
             )
+
+        result.raise_if_error()
 
         return result.value
 
@@ -467,9 +473,11 @@ class Project:
         result = suite.get_coverage_for_tests(self.path, self.name, [test_id])
 
         with self.transaction():
-            test = TestModel.get(TestModel.test_id == test_id)
-            test.coverage_alone = result.value
-            test.save()
+            
+            if not result.error:
+                test = TestModel.get(TestModel.test_id == test_id)
+                test.coverage_alone = result.value
+                test.save()
 
             HistoryModel.create(
                 project=test.project,
@@ -480,6 +488,8 @@ class Project:
                 stderr=result.stderr,
                 result=result.result,
             )
+
+        result.raise_if_error()
 
         return result.value
 
@@ -518,19 +528,23 @@ class Project:
             result = suite.get_coverage_for_tests(
                 self.path, self.name, tids_to_run
             )
-
-            test = TestModel.get(TestModel.test_id == test_id)
-            test.coverage_without = result.value
-            test.save()
+            
+            if not result.error:
+                test = TestModel.get(TestModel.test_id == test_id)
+                test.coverage_without = result.value
+                test.save()
 
             HistoryModel.create(
                 project=test.project,
                 tag=f"collect_coverage_without_test::{test_id}",
+                status_code=result.status_code,
                 command=result.command,
                 stdout=result.stdout,
                 stderr=result.stderr,
                 result=result.result,
             )
+
+        result.raise_if_error()
 
         return result.value
 
