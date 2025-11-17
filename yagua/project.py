@@ -28,8 +28,6 @@ Key Patterns
    at runtime
 3. **Transaction Management**: All DB operations use atomic
    transactions
-4. **Context Manager Support**: Project can be used with 'with'
-   statement
 
 Examples
 --------
@@ -43,11 +41,9 @@ Create a new project:
 
 Open existing project:
     >>> proj = Project(db_path="qa.sqlite")
-
-Use as context manager:
-    >>> with Project(db_path="qa.sqlite") as proj:
-    ...     tests_df = proj.get_tests_dataframe()
-    ...     print(f"Project: {proj.name}, Tests: {len(tests_df)}")
+    >>> tests_df = proj.get_tests_dataframe()
+    >>> print(f"Project: {proj.name}, Tests: {len(tests_df)}")
+    >>> proj.close()  # Close database connection when done
 """
 
 import contextlib
