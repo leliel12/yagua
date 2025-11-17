@@ -6,6 +6,11 @@ analysis system.
 
 Classes
 -------
+SuiteRunResult : dataclass
+    Structured result from a test suite execution containing the value,
+    command, status code, stdout, stderr, and additional data.
+SuiteRunResultError : Exception
+    Exception raised when a suite run fails (non-zero exit status).
 TestSuiteABC : ABC
     Abstract base class defining the required interface for test suite
     handlers.
@@ -13,30 +18,30 @@ TestSuiteABC : ABC
 Interface Contract
 ------------------
 All test suite handlers must implement three abstract methods that return
-consistent data structures:
+SuiteRunResult instances or compatible tuple structures:
 
-1. get_tests(project_path) -> tuple[list, str, str, str, object]
+1. get_tests(project_path) -> SuiteRunResult
    - Discovers all tests in a project
-   - Returns: (tests_list, command, stdout, stderr, additional_data)
+   - Returns result with tests_list as value
 
-2. get_coverage(project_path, project_name) ->
-       tuple[float, str, str, str, object]
+2. get_coverage(project_path, project_name) -> SuiteRunResult
    - Measures total coverage for all tests
-   - Returns: (coverage_percent, command, stdout, stderr, additional_data)
+   - Returns result with coverage_percent as value
 
-3. get_coverage_for_tests(project_path, project_name, test_ids) ->
-       tuple[float, str, str, str, object]
+3. get_coverage_for_tests(project_path, project_name, test_ids)
+   -> SuiteRunResult
    - Measures coverage for specific test(s)
-   - Returns: (coverage_percent, command, stdout, stderr, additional_data)
+   - Returns result with coverage_percent as value
 
 Return Value Format
 -------------------
-All methods return a consistent 5-tuple structure:
-- Element 1: Primary result (test list or coverage percentage)
-- Element 2: Command string that was executed
-- Element 3: Standard output from command
-- Element 4: Standard error from command
-- Element 5: Additional framework-specific data
+Methods can return either SuiteRunResult instances or 5-tuple structures:
+- value: Primary result (test list or coverage percentage)
+- command: Command string that was executed
+- status_code: Exit status (0 = success, non-zero = error)
+- stdout: Standard output from command
+- stderr: Standard error from command
+- result: Additional framework-specific data
 
 This format enables comprehensive audit logging through HistoryModel.
 
@@ -51,29 +56,199 @@ Examples
 --------
 Implementing a new test suite handler:
 
->>> from yagua.testsuites import TestSuiteABC
+>>> from yagua.testsuites import TestSuiteABC, SuiteRunResult
 >>>
 >>> class UnittestSuite(TestSuiteABC):
 ...     def get_tests(self, project_path):
 ...         # Implementation for unittest framework
 ...         tests = []  # Discover tests
-...         return tests, "command", "stdout", "stderr", {}
+...         return SuiteRunResult(
+...             value=tests,
+...             command="python -m unittest discover",
+...             status_code=0,
+...             stdout="",
+...             stderr="",
+...             result=None
+...         )
 ...
 ...     def get_coverage(self, project_path, project_name):
 ...         # Implementation for coverage
-...         return 85.5, "command", "stdout", "stderr", {}
+...         return SuiteRunResult(
+...             value=85.5,
+...             command="coverage run -m unittest",
+...             status_code=0,
+...             stdout="",
+...             stderr="",
+...             result={}
+...         )
 ...
 ...     def get_coverage_for_tests(self, project_path, project_name, test_ids):
 ...         # Implementation for specific tests
-...         return 42.0, "command", "stdout", "stderr", {}
+...         return SuiteRunResult(
+...             value=42.0,
+...             command=f"coverage run -m unittest {test_ids[0]}",
+...             status_code=0,
+...             stdout="",
+...             stderr="",
+...             result={}
+...         )
 """
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 
 
 # ============================================================================
-# TEST SUITE ABSTRACT BASE CLASS
+# EXCEPTIONS
 # ============================================================================
+
+
+class SuiteRunResultError(Exception):
+    """Exception raised when a test suite command fails.
+
+    This exception is raised by SuiteRunResult.raise_if_error() when the
+    suite execution returns a non-zero exit status code, indicating an
+    error occurred during test collection, execution, or coverage
+    measurement.
+
+    Parameters
+    ----------
+    status_code : int
+        The non-zero exit status code from the failed command.
+    stderr : str
+        The standard error output from the failed command, containing
+        error messages and diagnostic information.
+
+    Attributes
+    ----------
+    status_code : int
+        The exit status code that triggered the exception.
+    stderr : str
+        The captured error output.
+
+    See Also
+    --------
+    SuiteRunResult : The dataclass that raises this exception.
+    """
+
+    def __init__(self, status_code, stderr):
+        """Initialize the exception with status code and error output.
+
+        Parameters
+        ----------
+        status_code : int
+            The non-zero exit status code from the failed command.
+        stderr : str
+            The standard error output from the failed command.
+        """
+        self.status_code = status_code
+        self.stderr = stderr
+        super().__init__(
+            f"Suite command failed with status code {status_code}:\n{stderr}"
+        )
+
+
+# ============================================================================
+# TEST SUITE RESULT DATACLASS
+# ============================================================================
+
+
+@dataclass(frozen=True)
+class _SuiteRunResult:
+    """Structured result from a test suite execution.
+
+    This dataclass provides a standardized format for capturing the complete
+    outcome of running test suite commands (e.g., test collection, coverage
+    measurement). It encapsulates both the primary result value and all
+    execution metadata necessary for debugging, logging, and audit trails.
+
+    Attributes
+    ----------
+    value : object
+        The primary result value from the operation. Type varies by operation:
+        - For get_tests(): list[tuple[str, str | None, str, str]]
+          (list of test definitions)
+        - For get_coverage(): float | None (coverage percentage 0-100)
+        - For get_coverage_for_tests(): float | None (coverage percentage)
+    command : str
+        The complete command string that was executed (e.g.,
+        "pytest --collect-only -q" or "pytest --cov=myproject").
+        This enables reproducibility and audit logging.
+    status : int
+        The exit status code from the command execution. Zero indicates
+        success; non-zero values indicate errors. Follows standard Unix
+        convention.
+    stdout : str
+        Standard output captured from the command execution. Contains the
+        normal output text produced by the test suite runner.
+    stderr : str
+        Standard error captured from the command execution. Contains error
+        messages, warnings, and diagnostic information.
+    result : object
+        Additional framework-specific data or metadata. Can contain:
+        - Raw pytest output
+        - Parsed JSON coverage reports
+        - Framework-specific objects
+        - Any supplementary information not captured in other fields
+
+    Notes
+    -----
+    This class replaces the older tuple-based return format with a more
+    explicit and self-documenting structure. It provides better type hints
+    and makes code more maintainable by using named fields instead of
+    positional tuple elements.
+
+    The dataclass decorator automatically generates __init__, __repr__,
+    __eq__, and other useful methods.
+
+    See Also
+    --------
+    TestSuiteABC : Abstract base class that uses this dataclass.
+    PytestSuite : Concrete implementation that returns SuiteRunResult instances.
+
+    """
+
+    value: object
+    command: str
+    status_code: int
+    stdout: str
+    stderr: str
+    result: object
+
+    @property
+    def error(self):
+        """Check if the command execution resulted in an error.
+
+        Returns
+        -------
+        bool
+            True if the status_code is non-zero (indicating an error),
+            False if the status_code is zero (indicating success).
+
+        """
+        return self.status_code > 0
+
+    def raise_if_error(self):
+        """Raise an exception if the command execution failed.
+
+        This method checks the error property and raises a
+        SuiteRunResultError if the command returned a non-zero exit
+        status. This is useful for enforcing error handling in
+        test suite operations.
+
+        Raises
+        ------
+        SuiteRunResultError
+            If status_code is non-zero, raises an exception containing
+            the status code and stderr output.
+
+        See Also
+        --------
+        error : Property that checks for error status.
+        SuiteRunResultError : The exception raised by this method.
+        """
+        if self.error:
+            raise SuiteRunResultError(self.status_code, self.stderr)
 
 
 class TestSuiteABC(ABC):
@@ -96,14 +271,22 @@ class TestSuiteABC(ABC):
     PytestSuite : Concrete implementation for pytest-based projects.
     """
 
+    def pkg_result(self, *, value, command, status_code, stdout, stderr, result):
+        return _SuiteRunResult(
+            value=value,
+            command=command,
+            status_code=status_code,
+            stdout=stdout,
+            stderr=stderr,
+            result=result,
+        )
+
     # ========================================================================
     # Abstract Methods
     # ========================================================================
 
     @abstractmethod
-    def get_tests(
-        self, project_path
-    ) -> tuple[list[tuple[str, str | None, str, str]], str, str, str, object]:
+    def get_tests(self, project_path) -> _SuiteRunResult:
         """Collect all tests from a project.
 
         Parameters
@@ -138,9 +321,7 @@ class TestSuiteABC(ABC):
         pass
 
     @abstractmethod
-    def get_coverage(
-        self, project_path, project_name
-    ) -> tuple[float | None, str, str, str, object]:
+    def get_coverage(self, project_path, project_name) -> _SuiteRunResult:
         """Run tests with coverage and return the total coverage percentage.
 
         Parameters
@@ -176,7 +357,7 @@ class TestSuiteABC(ABC):
     @abstractmethod
     def get_coverage_for_tests(
         self, project_path, project_name, test_ids
-    ) -> tuple[float | None, str, str, str, object]:
+    ) -> _SuiteRunResult:
         """Run specific test(s) with coverage and return coverage percentage.
 
         Parameters

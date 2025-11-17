@@ -644,17 +644,36 @@ class CLIManager:
         with self._use_project(cache) as proj:
             test_count = proj.count_tests()
 
-            typer.echo("\n📊 Project Information -----------")
-            typer.echo("")
-            typer.echo(f"📝 Name: {proj.name}")
-            typer.echo(f"📁 Path: {proj.path}")
+            # Build info lines
+            info_lines = [
+                f"[cyan]📝 Name:[/cyan] {proj.name}",
+                f"[cyan]📁 Path:[/cyan] {proj.path}",
+                f"[cyan]💾 Cache:[/cyan] {cache}",
+            ]
+
             if proj.description:
-                typer.echo(f"🪪 Description: {proj.description}")
+                info_lines.append(
+                    f"[cyan]🪪 Description:[/cyan] {proj.description}"
+                )
+
             if test_count:
-                typer.echo(f"🧪 Tests: {test_count}")
+                info_lines.append(f"[cyan]🧪 Tests:[/cyan] {test_count}")
+
             if proj.coverage:
-                typer.echo(f"💯 Total Coverage: {proj.coverage:.4f}%")
-            typer.echo("")
+                info_lines.append(
+                    f"[cyan]💯 Coverage:[/cyan] "
+                    f"[bold green]{proj.coverage:.2f}%[/bold green]"
+                )
+
+            console.print(
+                Panel(
+                    "\n".join(info_lines),
+                    title="📊 Project Information",
+                    border_style="blue",
+                    padding=(1, 2),
+                )
+            )
+            console.print()
 
 
 # ============================================================================
