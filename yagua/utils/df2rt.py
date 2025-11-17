@@ -34,6 +34,7 @@ def df_to_rich_table(
     pandas_dataframe: pd.DataFrame,
     show_index: bool = True,
     index_name: Optional[str] = None,
+    header_style: str="bold magenta",
 ) -> Table:
     """Convert a pandas DataFrame into a Rich Table object.
 
@@ -80,7 +81,7 @@ def df_to_rich_table(
     """
 
     # Initiate a Table instance to be modified
-    rich_table = Table(show_header=True, header_style="bold magenta")
+    rich_table = Table(show_header=True, header_style=header_style)
 
     # Modify the table instance to have the data from the DataFrame
     if show_index:

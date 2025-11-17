@@ -63,6 +63,7 @@ class Project:
         db_path : str or Path
             Path to SQLite database file.
         """
+        self.db_path = db_path
         self.db = SqliteDatabase(str(db_path))
         self.db.connect()
 
@@ -516,4 +517,4 @@ class Project:
 
     def __repr__(self):
         """String representation."""
-        return f"Project(db_path={self.db.database})"
+        return f"Project(db_path={self.db_path})"

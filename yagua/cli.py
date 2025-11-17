@@ -435,6 +435,13 @@ class CLIManager:
                 )
                 return
 
+            # Show coverage info if available
+            if proj.coverage is not None:
+                console.print(
+                    f"\n[dim]📈 Project Coverage:[/dim] "
+                    f"[bold green]{proj.coverage:.2f}%[/bold green]"
+                )
+
             console.print(f"\n[bold cyan]🧪 Tests:[/bold cyan]\n")
             console.print(df_to_rich_table(tests, show_index=False))
             console.print(
