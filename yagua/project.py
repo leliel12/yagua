@@ -255,11 +255,24 @@ class Project:
             DataFrame containing all test information including columns:
             id, project, file, suite, test, coverage_alone, coverage_without,
             created_at, modified_at.
+
         """
+        def group_coverage_columns(columns):
+            levels = []
+            for c in columns:
+                if c.startswith("coverage_"):
+                    sublevel = c.split("_", 1)[-1]
+                    levels.append(("coverage", sublevel))
+                else:
+                    levels.append((None, c))
+            return pd.MultiIndex.from_tuples(levels)
+
         with self.transaction():
             project = self._get_project_model()
             query = TestModel.select().where(TestModel.project == project)
-            df = pd.DataFrame.from_dict(query.dicts())
+            dicts = (dict(mdl.to_records()) for mdl in query)
+            df = pd.DataFrame.from_dict(dicts)
+            #df.columns = group_coverage_columns(df.columns)
 
         return df
 
@@ -296,7 +309,8 @@ class Project:
             If no test with the given test_id exists.
         """
         with self.transaction():
-            return TestModel.get(TestModel.test_id == test_id)
+            test = TestModel.get(TestModel.test_id == test_id)
+            return model_to_serie(test)
 
     # ========================================================================
     # Public Methods - Coverage Management

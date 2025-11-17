@@ -33,12 +33,10 @@ console = Console()
 # PUBLIC FUNCTIONS
 # ============================================================================
 
-
 def format_value(value, float_fmt):
     if isinstance(value, float):
         return float_fmt.format(value)
     return str(value)
-
 
 def column_format(type):
     type = type.type if isinstance(type, np.dtype) else type
@@ -48,12 +46,13 @@ def column_format(type):
     return cfmt
 
 
+
 def df_to_rich_table(
     pandas_dataframe: pd.DataFrame,
     show_index: bool = True,
     index_name: Optional[str] = None,
-    header_style: str = "bold magenta",
-    float_fmt: str = "{:.3f}",
+    header_style: str="bold magenta",
+    float_fmt: str= "{:.3f}"
 ) -> Table:
     """Convert a pandas DataFrame into a Rich Table object.
 

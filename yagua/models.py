@@ -13,6 +13,7 @@ from peewee import (
     DateTimeField,
     TextField,
 )
+from playhouse import hybrid
 
 
 # ============================================================================
@@ -36,10 +37,33 @@ class BaseModel(Model):
     created_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
     modified_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
 
+    @classmethod
+    def _fields(cls):
+        return [field.name for field in cls._meta.sorted_fields]
+
+    @classmethod
+    def _hproperties(cls):
+        props = []
+        for k, v in vars(cls).items():
+            if k.startswith("_"):
+                continue
+            if isinstance(v, hybrid.hybrid_property):
+                props.append(k)
+        props.sort()
+        return props
+
     def save(self, *args, **kwargs):
         """Override save to update modified_at timestamp."""
         self.modified_at = datetime.now(timezone.utc)
         return super().save(*args, **kwargs)
+
+    def to_records(self):
+        data = []
+        fields = self._fields() + self._hproperties()
+        for field in fields:
+            data.append((field, getattr(self, field)))
+        return data
+
 
 
 class ProjectModel(BaseModel):
@@ -188,7 +212,7 @@ class TestModel(BaseModel):
     coverage_alone = FloatField(null=True, default=None)
     coverage_without = FloatField(null=True, default=None)
 
-    @property
+    @hybrid.hybrid_property
     def coverage_impact(self) -> float | None:
         """Calculate impact on total coverage (unique contribution).
 
@@ -209,7 +233,7 @@ class TestModel(BaseModel):
         except TypeError:
             return None
 
-    @property
+    @hybrid.hybrid_property
     def coverage_overlap(self) -> float | None:
         """Calculate coverage shared with other tests.
 
@@ -230,7 +254,7 @@ class TestModel(BaseModel):
         except TypeError:
             return None
 
-    @property
+    @hybrid.hybrid_property
     def coverage_uniqueness(self) -> float | None:
         """Calculate percentage of test's coverage that is unique.
 
@@ -254,7 +278,7 @@ class TestModel(BaseModel):
         except TypeError:
             return None
 
-    @property
+    @hybrid.hybrid_property
     def coverage_redundancy(self) -> float | None:
         """Calculate percentage of test's coverage that is redundant.
 

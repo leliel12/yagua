@@ -86,6 +86,11 @@ def _make_help(obj) -> str:
         lines = lines[:last_line]
     return "\n".join(lines)
 
+def _coverage_format(column, value):
+    if column.startswith("coverage_"):
+        return "{:.3f}%".format(value)
+    return value
+
 
 #: Reusable Typer argument definition for cache file path.
 #:
@@ -437,6 +442,8 @@ class CLIManager:
                 )
                 return
 
+            tests_table = df_to_rich_table(tests, show_index=False )
+
             # Show coverage info if available
             if proj.coverage is not None:
                 console.print(
@@ -445,7 +452,7 @@ class CLIManager:
                 )
 
             console.print(f"\n[bold cyan]🧪 Tests:[/bold cyan]\n")
-            console.print(df_to_rich_table(tests, show_index=False))
+            console.print(tests_table)
             console.print(
                 f"\n[dim]📊 Total:[/dim] [bold]{len(tests)}[/bold] "
                 f"[dim]tests[/dim]\n"
