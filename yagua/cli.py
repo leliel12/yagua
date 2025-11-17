@@ -154,14 +154,20 @@ class CLIManager:
             If cache file does not exist.
         """
         if not cache.exists():
-            typer.echo(
-                f"❌ Error: Cache file does not exist: {cache}",
-                err=True,
+            console.print(
+                Panel(
+                    f"[red]Cache file does not exist:[/red]\n{cache}",
+                    title="❌ Error",
+                    border_style="red",
+                )
             )
             raise typer.Exit(code=1)
         proj = Project(db_path=cache)
         try:
-            typer.echo(f"🔍 Using project: {proj.name} ({proj.path})")
+            console.print(
+                f"[dim]🔍 Using project:[/dim] [cyan]{proj.name}[/cyan] "
+                f"[dim]({proj.path})[/dim]"
+            )
             yield proj
         finally:
             proj.close()
