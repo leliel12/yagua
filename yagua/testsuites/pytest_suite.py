@@ -38,19 +38,17 @@ Examples
 Basic usage:
 >>> from yagua.testsuites import PytestSuite
 >>> suite = PytestSuite()
->>> tests, cmd, stdout, stderr, data = suite.get_tests("/path/to/project")
->>> print(f"Found {len(tests)} tests")
->>> cov, cmd, stdout, stderr, report = suite.get_coverage(
-...     "/path/to/project", "mypackage"
-... )
->>> print(f"Total coverage: {cov}%")
+>>> result = suite.get_tests("/path/to/project")
+>>> print(f"Found {len(result.value)} tests")
+>>> result = suite.get_coverage("/path/to/project", "mypackage")
+>>> print(f"Total coverage: {result.value}%")
 
 Per-test coverage:
 >>> test_ids = ["test_file.py::test_function"]
->>> cov, cmd, _, _, _ = suite.get_coverage_for_tests(
+>>> result = suite.get_coverage_for_tests(
 ...     "/path/to/project", "mypackage", test_ids
 ... )
->>> print(f"Test coverage: {cov}%")
+>>> print(f"Test coverage: {result.value}%")
 """
 
 import io
@@ -91,12 +89,10 @@ class PytestSuite(TestSuiteABC):
     Examples
     --------
     >>> suite = PytestSuite()
-    >>> tests, cmd, stdout, stderr, data = suite.get_tests("/path/to/project")
-    >>> print(f"Found {len(tests)} tests using command: {cmd}")
-    >>> coverage, cmd, stdout, stderr, data = suite.get_coverage(
-    ...     "/path/to/project", "myproject"
-    ... )
-    >>> print(f"Coverage: {coverage}%")
+    >>> result = suite.get_tests("/path/to/project")
+    >>> print(f"Found {len(result.value)} tests using: {result.command}")
+    >>> result = suite.get_coverage("/path/to/project", "myproject")
+    >>> print(f"Coverage: {result.value}%")
     """
 
     # ========================================================================
@@ -169,7 +165,7 @@ class PytestSuite(TestSuiteABC):
         ):
             status = pytest.main(cmd, plugins=plugins)
         
-        return " ".join(cmd), stdout.getvalue(), stderr.getvalue()
+        return " ".join(cmd), status, stdout.getvalue(), stderr.getvalue()
 
     def _parse_test_line(
         self, line: str
@@ -235,9 +231,7 @@ class PytestSuite(TestSuiteABC):
     # Public Methods
     # ========================================================================
 
-    def get_tests(
-        self, project_path
-    ) -> tuple[list[tuple[str, str, str | None, str]], str, str, str, str]:
+    def get_tests(self, project_path):
         """Collect all tests from a pytest project.
 
         Executes pytest with the --collect-only flag to discover all tests
@@ -251,31 +245,24 @@ class PytestSuite(TestSuiteABC):
 
         Returns
         -------
-        tests : list[tuple[str, str, str | None, str]]
-            List of tuples (test_id, file, suite, test) for each test
-            found where:
-            - test_id: Full pytest nodeid
-              (e.g., 'file.py::TestClass::test_method')
-            - file: Test file path
-            - suite: Test suite/class name (None if no class)
-            - test: Test function name
-        command : str
-            The pytest command arguments that were executed.
-        stdout : str
-            Standard output from the pytest command execution.
-        stderr : str
-            Standard error output from the pytest command execution.
-        data : str
-            Additional data (same as stdout for consistency with interface).
+        SuiteRunResult
+            Result containing:
+            - value: list[tuple[str, str, str | None, str]] - List of tuples
+              (test_id, file, suite, test) for each test found
+            - command: str - The pytest command arguments executed
+            - status_code: int - Exit status from pytest
+            - stdout: str - Standard output from pytest
+            - stderr: str - Standard error from pytest
+            - result: str - Additional data (stdout copy)
 
         Examples
         --------
         >>> suite = PytestSuite()
-        >>> tests, cmd, stdout, stderr, _ = suite.get_tests("/path/to/project")
-        >>> for test_id, file, suite_name, test in tests:
+        >>> result = suite.get_tests("/path/to/project")
+        >>> for test_id, file, suite_name, test in result.value:
         ...     print(f"{test_id}: {file}::{suite_name or ''}::{test}")
         """
-        command, stdout, stderr = self._run(
+        command, status, stdout, stderr = self._run(
             ["--collect-only", "-q"],
             project_path,
         )
@@ -286,11 +273,16 @@ class PytestSuite(TestSuiteABC):
             if parsed:
                 tests.append(parsed)
 
-        return tests, command, stdout, stderr, stdout
+        return self.pkg_result(
+            value=tests,
+            command=command,
+            status_code=status,
+            stdout=stdout,
+            stderr=stderr,
+            result=stdout,
+        )
 
-    def get_coverage(
-        self, project_path, project_name
-    ) -> tuple[float | None, str, str, str, dict]:
+    def get_coverage(self, project_path, project_name):
         """Run pytest with coverage and return the total coverage percentage.
 
         Executes pytest with pytest-cov to run all tests and measure code
@@ -308,24 +300,17 @@ class PytestSuite(TestSuiteABC):
 
         Returns
         -------
-        coverage : float | None
-            Total coverage percentage (0-100) or None if coverage could not
-            be determined.
-        command : str
-            The command that was executed
-            (e.g., "pytest --cov=package --cov-report=json:...").
-        stdout : str
-            Standard output from the pytest command execution.
-        stderr : str
-            Standard error output from the pytest command execution.
-        data : dict
-            The parsed JSON coverage report containing detailed coverage
-            information.
+        SuiteRunResult
+            Result containing:
+            - value: float | None - Total coverage percentage (0-100)
+            - command: str - The pytest command executed
+            - status_code: int - Exit status from pytest
+            - stdout: str - Standard output from pytest
+            - stderr: str - Standard error from pytest
+            - result: str - Raw JSON coverage report
 
         Raises
         ------
-        subprocess.CalledProcessError
-            If pytest command fails or returns non-zero exit code.
         json.JSONDecodeError
             If the coverage JSON report cannot be parsed.
 
@@ -338,10 +323,9 @@ class PytestSuite(TestSuiteABC):
         Examples
         --------
         >>> suite = PytestSuite()
-        >>> cov, cmd, stdout, stderr, data = suite.get_coverage(
-        ...     "/path/to/project", "mypackage"
-        ... )
-        >>> print(f"Total coverage: {cov:.2f}%")
+        >>> result = suite.get_coverage("/path/to/project", "mypackage")
+        >>> print(f"Total coverage: {result.value:.2f}%")
+        >>> data = json.loads(result.result)
         >>> print(f"Files covered: {len(data.get('files', {}))}")
         """
         with tempfile.NamedTemporaryFile(
@@ -351,17 +335,22 @@ class PytestSuite(TestSuiteABC):
                 f"--cov={project_name}",
                 f"--cov-report=json:{fp.name}",
             ]
-            command, stdout, stderr = self._run(cmd, project_path)
+            command, status, stdout, stderr = self._run(cmd, project_path)
             json_src = fp.read()
             data = json.loads(json_src)
 
         cov = data["totals"]["percent_covered"]
 
-        return cov, command, stdout, stderr, json_src
+        return self.pkg_result(
+            value=cov,
+            command=command,
+            status_code=status,
+            stdout=stdout,
+            stderr=stderr,
+            result=json_src,
+        )
 
-    def get_coverage_for_tests(
-        self, project_path, project_name, tests_ids
-    ) -> tuple[float | None, str, str, str, dict]:
+    def get_coverage_for_tests(self, project_path, project_name, tests_ids):
         """Run specific test(s) with coverage and return coverage percentage.
 
         Executes pytest with pytest-cov to run only the specified tests and
@@ -384,19 +373,15 @@ class PytestSuite(TestSuiteABC):
 
         Returns
         -------
-        coverage : float | None
-            Coverage percentage (0-100) for the specified test(s), or None if
-            coverage could not be determined.
-        command : str
-            The command that was executed
-            (e.g., "test_id1 test_id2 --cov=package --cov-report=json:...").
-        stdout : str
-            Standard output from the pytest command execution.
-        stderr : str
-            Standard error output from the pytest command execution.
-        data : dict
-            The parsed JSON coverage report containing detailed coverage
-            information.
+        SuiteRunResult
+            Result containing:
+            - value: float | None - Coverage percentage (0-100) for the
+              specified test(s)
+            - command: str - The pytest command executed
+            - status_code: int - Exit status from pytest
+            - stdout: str - Standard output from pytest
+            - stderr: str - Standard error from pytest
+            - result: str - Raw JSON coverage report
 
         Notes
         -----
@@ -414,17 +399,17 @@ class PytestSuite(TestSuiteABC):
         --------
         >>> suite = PytestSuite()
         >>> # Get coverage for single test
-        >>> cov, cmd, _, _, _ = suite.get_coverage_for_tests(
+        >>> result = suite.get_coverage_for_tests(
         ...     "/path/to/project", "mypackage", ["test_file.py::test_foo"]
         ... )
-        >>> print(f"Test coverage alone: {cov:.2f}%")
+        >>> print(f"Test coverage alone: {result.value:.2f}%")
         >>>
         >>> # Get coverage for multiple tests
         >>> test_ids = ["test_file.py::test_foo", "test_file.py::test_bar"]
-        >>> cov, cmd, _, _, _ = suite.get_coverage_for_tests(
+        >>> result = suite.get_coverage_for_tests(
         ...     "/path/to/project", "mypackage", test_ids
         ... )
-        >>> print(f"Combined coverage: {cov:.2f}%")
+        >>> print(f"Combined coverage: {result.value:.2f}%")
         """
         with tempfile.NamedTemporaryFile(
             dir=self._temp_dir.name, suffix=".json", prefix="yagua_ftcov_"
@@ -433,11 +418,18 @@ class PytestSuite(TestSuiteABC):
                 f"--cov={project_name}",
                 f"--cov-report=json:{fp.name}",
             ]
-            command, stdout, stderr = self._run(cmd, project_path)
+            command, status, stdout, stderr = self._run(cmd, project_path)
 
             json_src = fp.read()
             data = json.loads(json_src)
 
         cov = data["totals"]["percent_covered"]
 
-        return cov, command, stdout, stderr, json_src
+        return self.pkg_result(
+            value=cov,
+            command=command,
+            status_code=status,
+            stdout=stdout,
+            stderr=stderr,
+            result=json_src,
+        )
