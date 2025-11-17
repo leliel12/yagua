@@ -231,6 +231,42 @@ class TestSuiteABC(ABC):
     """
 
     def pkg_result(self, *, value, command, status_code, stdout, stderr, result):
+        """Package test suite execution results into a SuiteRunResult object.
+
+        This helper method creates a standardized SuiteRunResult dataclass
+        instance from test suite execution data. It ensures consistent
+        return format across all test suite handler methods.
+
+        Parameters
+        ----------
+        value : object
+            The primary result value (tests list or coverage percentage).
+        command : str
+            The command string that was executed.
+        status_code : int
+            Exit status code (0 = success, non-zero = error).
+        stdout : str
+            Standard output captured from command execution.
+        stderr : str
+            Standard error captured from command execution.
+        result : object
+            Additional framework-specific data or metadata.
+
+        Returns
+        -------
+        _SuiteRunResult
+            Immutable dataclass containing all execution results and metadata.
+
+        Notes
+        -----
+        This method should be used by all abstract method implementations
+        (get_tests, get_coverage, get_coverage_for_tests) to ensure
+        consistent return format for audit logging and result processing.
+
+        See Also
+        --------
+        _SuiteRunResult : The dataclass returned by this method.
+        """
         return _SuiteRunResult(
             value=value,
             command=command,
