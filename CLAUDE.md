@@ -274,3 +274,32 @@ Code should be organized in the following order:
     - Properties (decorated with `@property`)
     - Public methods
 7. Public functions
+
+## Documentation Standards
+
+### NumPy-Style Docstrings
+
+All docstrings must follow the NumPy documentation style guide.
+
+### No Examples in Docstrings
+
+**IMPORTANT**: Do NOT include "Examples" sections in any docstrings.
+
+Docstrings should contain:
+- Summary/description
+- Parameters section
+- Returns section
+- Raises section (if applicable)
+- Notes section (if applicable)
+- See Also section (if applicable)
+
+But NEVER include:
+- Examples section
+- Usage examples
+- Code snippets showing how to use the function/class
+
+This rule applies to:
+- Module docstrings
+- Class docstrings
+- Method docstrings
+- Function docstrings

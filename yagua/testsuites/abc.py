@@ -51,47 +51,6 @@ The abstract methods use @abstractmethod decorator, ensuring that concrete
 implementations must provide all required functionality. Attempting to
 instantiate a subclass without implementing all abstract methods will raise
 TypeError.
-
-Examples
---------
-Implementing a new test suite handler:
-
->>> from yagua.testsuites import TestSuiteABC, SuiteRunResult
->>>
->>> class UnittestSuite(TestSuiteABC):
-...     def get_tests(self, project_path):
-...         # Implementation for unittest framework
-...         tests = []  # Discover tests
-...         return SuiteRunResult(
-...             value=tests,
-...             command="python -m unittest discover",
-...             status_code=0,
-...             stdout="",
-...             stderr="",
-...             result=None
-...         )
-...
-...     def get_coverage(self, project_path, project_name):
-...         # Implementation for coverage
-...         return SuiteRunResult(
-...             value=85.5,
-...             command="coverage run -m unittest",
-...             status_code=0,
-...             stdout="",
-...             stderr="",
-...             result={}
-...         )
-...
-...     def get_coverage_for_tests(self, project_path, project_name, test_ids):
-...         # Implementation for specific tests
-...         return SuiteRunResult(
-...             value=42.0,
-...             command=f"coverage run -m unittest {test_ids[0]}",
-...             status_code=0,
-...             stdout="",
-...             stderr="",
-...             result={}
-...         )
 """
 
 from abc import ABC, abstractmethod

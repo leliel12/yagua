@@ -32,23 +32,6 @@ Dependencies
 - pytest: Test framework
 - pytest-cov: Coverage plugin for pytest
 - coverage: Underlying coverage measurement library
-
-Examples
---------
-Basic usage:
->>> from yagua.testsuites import PytestSuite
->>> suite = PytestSuite()
->>> result = suite.get_tests("/path/to/project")
->>> print(f"Found {len(result.value)} tests")
->>> result = suite.get_coverage("/path/to/project", "mypackage")
->>> print(f"Total coverage: {result.value}%")
-
-Per-test coverage:
->>> test_ids = ["test_file.py::test_function"]
->>> result = suite.get_coverage_for_tests(
-...     "/path/to/project", "mypackage", test_ids
-... )
->>> print(f"Test coverage: {result.value}%")
 """
 
 import io
@@ -85,14 +68,6 @@ class PytestSuite(TestSuiteABC):
     -----
     This implementation requires pytest and pytest-cov to be installed in the
     environment where the project tests are being collected.
-
-    Examples
-    --------
-    >>> suite = PytestSuite()
-    >>> result = suite.get_tests("/path/to/project")
-    >>> print(f"Found {len(result.value)} tests using: {result.command}")
-    >>> result = suite.get_coverage("/path/to/project", "myproject")
-    >>> print(f"Coverage: {result.value}%")
     """
 
     # ========================================================================
@@ -147,15 +122,6 @@ class PytestSuite(TestSuiteABC):
         3. Redirect stderr to a StringIO buffer
 
         All context changes are automatically reverted when the method returns.
-
-        Examples
-        --------
-        >>> cmd, stdout, stderr = self._run(
-        ...     ['--collect-only', '-q'],
-        ...     '/path/to/project'
-        ... )
-        >>> print(f"Executed: {cmd}")
-        >>> print(f"Output: {stdout}")
         """
         stdout, stderr = io.StringIO(), io.StringIO()
         with (
@@ -199,22 +165,6 @@ class PytestSuite(TestSuiteABC):
         - 3 parts (file::class::test): Class-based test methods
 
         Lines with other formats (e.g., 1 part, 4+ parts) return None.
-
-        Examples
-        --------
-        >>> parser = PytestSuite()
-        >>> # Standalone test function
-        >>> parser._parse_test_line("test_foo.py::test_bar")
-        ('test_foo.py::test_bar', 'test_foo.py', None, 'test_bar')
-        >>>
-        >>> # Class-based test method
-        >>> parser._parse_test_line("test_foo.py::TestFoo::test_bar")
-        ('test_foo.py::TestFoo::test_bar', 'test_foo.py', 'TestFoo',
-         'test_bar')
-        >>>
-        >>> # Invalid format
-        >>> parser._parse_test_line("invalid")
-        None
         """
         line = line.strip()
         parts = line.split("::")
@@ -254,13 +204,6 @@ class PytestSuite(TestSuiteABC):
             - stdout: str - Standard output from pytest
             - stderr: str - Standard error from pytest
             - result: str - Additional data (stdout copy)
-
-        Examples
-        --------
-        >>> suite = PytestSuite()
-        >>> result = suite.get_tests("/path/to/project")
-        >>> for test_id, file, suite_name, test in result.value:
-        ...     print(f"{test_id}: {file}::{suite_name or ''}::{test}")
         """
         command, status, stdout, stderr = self._run(
             ["--collect-only", "-q"],
@@ -319,14 +262,6 @@ class PytestSuite(TestSuiteABC):
         This method requires pytest-cov to be installed in the environment.
         The coverage report is generated in a temporary file that is
         automatically cleaned up after parsing.
-
-        Examples
-        --------
-        >>> suite = PytestSuite()
-        >>> result = suite.get_coverage("/path/to/project", "mypackage")
-        >>> print(f"Total coverage: {result.value:.2f}%")
-        >>> data = json.loads(result.result)
-        >>> print(f"Files covered: {len(data.get('files', {}))}")
         """
         with tempfile.NamedTemporaryFile(
             dir=self._temp_dir.name, suffix=".json", prefix="yagua_cov_"
@@ -394,22 +329,6 @@ class PytestSuite(TestSuiteABC):
 
         This flexibility allows for both coverage_alone (single test) and
         coverage_without (all tests except one) metrics.
-
-        Examples
-        --------
-        >>> suite = PytestSuite()
-        >>> # Get coverage for single test
-        >>> result = suite.get_coverage_for_tests(
-        ...     "/path/to/project", "mypackage", ["test_file.py::test_foo"]
-        ... )
-        >>> print(f"Test coverage alone: {result.value:.2f}%")
-        >>>
-        >>> # Get coverage for multiple tests
-        >>> test_ids = ["test_file.py::test_foo", "test_file.py::test_bar"]
-        >>> result = suite.get_coverage_for_tests(
-        ...     "/path/to/project", "mypackage", test_ids
-        ... )
-        >>> print(f"Combined coverage: {result.value:.2f}%")
         """
         with tempfile.NamedTemporaryFile(
             dir=self._temp_dir.name, suffix=".json", prefix="yagua_ftcov_"

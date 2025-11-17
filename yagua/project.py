@@ -28,22 +28,6 @@ Key Patterns
    at runtime
 3. **Transaction Management**: All DB operations use atomic
    transactions
-
-Examples
---------
-Create a new project:
-    >>> proj = Project.from_project_info(
-    ...     name="my_project",
-    ...     path="/path/to/project",
-    ...     description="My test project",
-    ...     db_path="qa.sqlite"
-    ... )
-
-Open existing project:
-    >>> proj = Project(db_path="qa.sqlite")
-    >>> tests_df = proj.get_tests_dataframe()
-    >>> print(f"Project: {proj.name}, Tests: {len(tests_df)}")
-    >>> proj.close()  # Close database connection when done
 """
 
 import contextlib
@@ -194,12 +178,6 @@ class Project:
         -----
         All database operations should be wrapped in this context manager
         to ensure proper model binding and transaction management.
-
-        Examples
-        --------
-        >>> with self.transaction():
-        ...     test = TestModel.create(project=proj, file="test.py", ...)
-        ...     # Changes are automatically committed
         """
         with self.db.bind_ctx(ALL_MODELS):
             with self.db.atomic() as txn:
@@ -330,13 +308,6 @@ class Project:
         -----
         Calculated properties (coverage_impact, coverage_uniqueness, etc.)
         will be None if the required coverage data has not been collected yet.
-
-        Examples
-        --------
-        >>> df = proj.get_tests_dataframe()
-        >>> print(df[['file', 'test', 'coverage_alone']])
-        >>> # Filter tests with high uniqueness
-        >>> unique_tests = df[df['coverage_uniqueness'] > 80]
         """
         # Helper function to group coverage columns (currently commented out)
         # def group_coverage_columns(columns):
@@ -401,18 +372,6 @@ class Project:
         ------
         peewee.DoesNotExist
             If no test with the given test_id exists.
-
-        Examples
-        --------
-        Get test by database ID:
-        >>> test = proj.get_test(1)
-        >>> print(test['test_id'])
-        'test_foo.py::test_bar'
-
-        Get test by pytest nodeid:
-        >>> test = proj.get_test('test_foo.py::TestFoo::test_bar')
-        >>> print(test['coverage_alone'])
-        45.5
         """
         with self.transaction():
             # Build filter condition based on test_id type
@@ -612,13 +571,6 @@ class Project:
 
         This method should be called when done using the Project instance
         to properly close the database connection and release resources.
-        It's automatically called when using Project as a context manager.
-
-        Examples
-        --------
-        >>> proj = Project(db_path="qa.sqlite")
-        >>> # ... use project ...
-        >>> proj.close()
         """
         if not self.db.is_closed():
             self.db.close()
@@ -643,12 +595,6 @@ class Project:
         ------
         AttributeError
             If the attribute doesn't exist in ProjectModel.
-
-        Examples
-        --------
-        >>> proj = Project(db_path="qa.sqlite")
-        >>> print(proj.name)  # Accesses ProjectModel.name
-        >>> print(proj.coverage)  # Accesses ProjectModel.coverage
         """
         if a not in dir(self):
             raise AttributeError(a)
@@ -666,14 +612,6 @@ class Project:
         list
             List of available attributes including both Project instance
             attributes and ProjectModel fields (excluding 'id').
-
-        Examples
-        --------
-        >>> proj = Project(db_path="qa.sqlite")
-        >>> 'name' in dir(proj)
-        True
-        >>> 'coverage' in dir(proj)
-        True
         """
         fields = [
             f for f in ProjectModel._meta.sorted_field_names if f != "id"
@@ -687,11 +625,5 @@ class Project:
         -------
         str
             String in format "Project(db_path=<path>)".
-
-        Examples
-        --------
-        >>> proj = Project(db_path="qa.sqlite")
-        >>> repr(proj)
-        'Project(db_path=qa.sqlite)'
         """
         return f"Project(db_path={self.db_path})"

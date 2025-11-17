@@ -196,12 +196,6 @@ class CLIManager:
         -----
         This is the recommended way to access projects in CLI commands as it
         handles validation, error reporting, and cleanup automatically.
-
-        Examples
-        --------
-        >>> with self._use_project(cache) as proj:
-        ...     tests_df = proj.get_tests_dataframe()
-        ...     # Project is automatically closed after block
         """
         if not cache.exists():
             console.print(
@@ -269,15 +263,6 @@ class CLIManager:
         ------
         typer.Exit
             If project path does not exist or cache file already exists.
-
-        Examples
-        --------
-        Create cache with default name:
-            $ yagua create-project /path/to/project
-
-        Create cache with custom name and location:
-            $ yagua create-project /path/to/project my_cache.sqlite \
-                -n "My Project"
         """
         if not project_path.exists():
             console.print(
@@ -363,15 +348,6 @@ class CLIManager:
         ------
         typer.Exit
             If cache file does not exist or no tests are collected.
-
-        Examples
-        --------
-        Collect tests from existing cache:
-            $ yagua collect-tests my_project.sqlite
-
-        Typical workflow:
-            $ yagua create-project /path/to/project
-            $ yagua collect-tests project.sqlite
         """
         with self._use_project(cache) as proj:
 
@@ -437,15 +413,6 @@ class CLIManager:
         ------
         typer.Exit
             If cache file does not exist.
-
-        Examples
-        --------
-        List all tests (compact view):
-            $ yagua list-tests my_project.sqlite
-
-        List tests with all information:
-            $ yagua list-tests my_project.sqlite --long
-            $ yagua list-tests my_project.sqlite -l
         """
         with self._use_project(cache) as proj:
 
@@ -539,15 +506,6 @@ class CLIManager:
 
         After collecting coverage, the command automatically displays a summary
         of all tests with their coverage metrics using the list-tests command.
-
-        Examples
-        --------
-        Collect coverage:
-            $ yagua collect-coverage my_project.sqlite
-
-        Force recalculation:
-            $ yagua collect-coverage my_project.sqlite --force
-            $ yagua collect-coverage my_project.sqlite -f
         """
         with self._use_project(cache) as proj:
 
@@ -635,11 +593,6 @@ class CLIManager:
         ------
         typer.Exit
             If cache file does not exist.
-
-        Examples
-        --------
-        Show project info:
-            $ yagua info my_project.sqlite
         """
         with self._use_project(cache) as proj:
             test_count = proj.count_tests()
