@@ -450,8 +450,8 @@ class CLIManager:
             # Show coverage info if available
             if proj.coverage is not None:
                 console.print(
-                    f"\n[dim]📈 Project Coverage:[/dim] "
-                    f"[bold green]{proj.coverage:.2f}%[/bold green]"
+                    f"\n💯 [bold green]Total coverage:[/bold green] "
+                    f"[cyan]{proj.coverage:.2f}%[/cyan]\n"
                 )
 
             console.print(f"\n[bold cyan]🧪 Tests:[/bold cyan]\n")
@@ -605,9 +605,7 @@ class CLIManager:
             ]
 
             if proj.description:
-                info_lines.append(
-                    f"[cyan]🪪 Description:[/cyan] {proj.description}"
-                )
+                info_lines.append(f"[cyan]🪪 Description:[/cyan] {proj.description}")
 
             if test_count:
                 info_lines.append(f"[cyan]🧪 Tests:[/cyan] {test_count}")
