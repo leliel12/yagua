@@ -9,10 +9,14 @@ Source
 Based on: https://gist.github.com/neelabalan/33ab34cf65b43e305c3f12ec6db05938
 """
 
+import inspect
 from datetime import datetime
 from typing import Optional
 
+import numpy as np
+
 import pandas as pd
+
 from rich import box
 from rich.console import Console
 from rich.table import Table
@@ -30,11 +34,26 @@ console = Console()
 # ============================================================================
 
 
+def format_value(value, float_fmt):
+    if isinstance(value, float):
+        return float_fmt.format(value)
+    return str(value)
+
+
+def column_format(type):
+    type = type.type if isinstance(type, np.dtype) else type
+    cfmt = {}
+    if issubclass(type, (float, int, complex, np.number)):
+        cfmt["justify"] = "right"
+    return cfmt
+
+
 def df_to_rich_table(
     pandas_dataframe: pd.DataFrame,
     show_index: bool = True,
     index_name: Optional[str] = None,
-    header_style: str="bold magenta",
+    header_style: str = "bold magenta",
+    float_fmt: str = "{:.3f}",
 ) -> Table:
     """Convert a pandas DataFrame into a Rich Table object.
 
@@ -89,11 +108,12 @@ def df_to_rich_table(
         rich_table.add_column(index_name)
 
     for column in pandas_dataframe.columns:
-        rich_table.add_column(str(column))
+        column_fmt = column_format(pandas_dataframe[column].dtype)
+        rich_table.add_column(str(column), **column_fmt)
 
     for index, value_list in enumerate(pandas_dataframe.values.tolist()):
         row = [str(index)] if show_index else []
-        row += [str(x) for x in value_list]
+        row += [format_value(x, float_fmt) for x in value_list]
         rich_table.add_row(*row)
 
     # Update the style of the table

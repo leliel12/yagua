@@ -275,7 +275,9 @@ class CLIManager:
         ]
 
         if proj.description:
-            info_lines.append(f"[cyan]🪪 Description:[/cyan] {proj.description}")
+            info_lines.append(
+                f"[cyan]🪪 Description:[/cyan] {proj.description}"
+            )
 
         info_lines.append(f"\n[dim]✨ Cache initialized with 0 tests[/dim]")
 
@@ -542,7 +544,6 @@ class CLIManager:
                     cov_wo = proj.collect_coverage_without_test(suite, test_id)
 
                 console.print(" " * len(proc_test_msg), end="\r")
-
 
     # ========================================================================
     # Public Commands - Project Information

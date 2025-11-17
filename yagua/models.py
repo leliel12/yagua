@@ -204,9 +204,10 @@ class TestModel(BaseModel):
         This represents how much coverage would be lost if this test
         were removed from the test suite.
         """
-        if self.project.coverage is None or self.coverage_without is None:
+        try:
+            return self.project.coverage - self.coverage_without
+        except TypeError:
             return None
-        return self.project.coverage - self.coverage_without
 
     @property
     def coverage_overlap(self) -> float | None:
@@ -224,9 +225,10 @@ class TestModel(BaseModel):
         This represents how much of the total coverage is NOT unique
         to this test (i.e., covered by other tests as well).
         """
-        if self.project.coverage is None or self.coverage_alone is None:
+        try:
+            return self.project.coverage - self.coverage_alone
+        except TypeError:
             return None
-        return self.project.coverage - self.coverage_alone
 
     @property
     def coverage_uniqueness(self) -> float | None:
@@ -244,10 +246,13 @@ class TestModel(BaseModel):
         - 100% = All coverage from this test is unique
         - 0% = None of this test's coverage is unique (completely redundant)
         """
-        impact = self.coverage_impact
-        if impact is None or self.coverage_alone is None or self.coverage_alone == 0:
+        try:
+            impact = self.coverage_impact
+            return (impact / self.coverage_alone) * 100
+        except ZeroDivisionError:
+            return 0
+        except TypeError:
             return None
-        return (impact / self.coverage_alone) * 100
 
     @property
     def coverage_redundancy(self) -> float | None:
@@ -265,10 +270,13 @@ class TestModel(BaseModel):
         - 0% = Test is completely unique (no redundancy)
         - 100% = Test is completely redundant (all coverage duplicated)
         """
-        impact = self.coverage_impact
-        if impact is None or self.coverage_alone is None or self.coverage_alone == 0:
+        try:
+            impact = self.coverage_impact
+            return ((self.coverage_alone - impact) / self.coverage_alone) * 100
+        except ZeroDivisionError:
+            return 0
+        except TypeError:
             return None
-        return ((self.coverage_alone - impact) / self.coverage_alone) * 100
 
     class Meta:
         indexes = (
