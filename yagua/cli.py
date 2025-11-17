@@ -490,12 +490,19 @@ class CLIManager:
         """
         with self._use_project(cache) as proj:
 
-            typer.echo(f"📊 Calculating coverage...")
-
             # If there are no tests, there's nothing to do
             if not proj.count_tests():
-                typer.echo(f"⚠️  No tests found for project '{proj.name}'.")
+                console.print(
+                    Panel(
+                        f"[yellow]No tests found for project:[/yellow] "
+                        f"[cyan]{proj.name}[/cyan]",
+                        title="⚠️  Warning",
+                        border_style="yellow",
+                    )
+                )
                 raise typer.Exit(1)
+
+            console.print(f"\n[bold cyan]📊 Calculating coverage...[/bold cyan]")
 
             # Create test suite backend for collecting statistics
             suite = PytestSuite()
@@ -503,92 +510,15 @@ class CLIManager:
             # Calculate coverage for all tests combined
             if proj.coverage is None or force:
                 proj.collect_coverage(suite)
+
             console.print(
-                f"\n💯 [bold green]Total coverage:[/bold green] "
-                f"[cyan]{proj.coverage:.2f}%[/cyan]\n"
-            )
-
-            # Calculate coverage for each individual test
-            console.print(
-                "[bold blue]🧪 Per-test coverage analysis:[/bold blue]\n"
-            )
-
-            # Extract test IDs and coverage columns from dataframe
-            tests_ids = proj.get_tests_dataframe()[
-                ["test_id", "coverage_alone", "coverage_without"]
-            ].to_numpy()
-
-            # Get total count for progress indicator
-            tests_count = len(tests_ids)
-
-            # Create table for results
-            table = Table(show_header=True, header_style="bold magenta")
-            table.add_column("#", style="dim", width=4, justify="right")
-            table.add_column("Test ID", style="cyan", no_wrap=False)
-            table.add_column("Alone", justify="right", style="green")
-            table.add_column("Without", justify="right", style="yellow")
-            table.add_column("Impact", justify="right", style="blue")
-            table.add_column("Overlap", justify="right", style="magenta")
-            table.add_column("Uniqueness", justify="right", style="red")
-            table.add_column("Redundancy", justify="right", style="dim")
-
-            # Iterate through each test to calculate coverage metrics
-            for idx, (test_id, cov_alone, cov_wo) in enumerate(tests_ids, 1):
-
-                # Show progress
-                proc_test_msg = (
-                    f"  [dim][{idx}/{tests_count}][/dim] "
-                    f"Processing {test_id}..."
+                Panel(
+                    f"[bold green]{proj.coverage:.2f}%[/bold green]",
+                    title="💯 Total Coverage",
+                    border_style="green",
                 )
-                console.print(proc_test_msg, end="\r")
-
-                # Calculate coverage when running only this test in isolation
-                cov_alone = None if np.isnan(cov_alone) else cov_alone
-                if cov_alone is None or force:
-                    cov_alone = proj.collect_coverage_for_test(suite, test_id)
-
-                # Calculate coverage when running all tests except this one
-                cov_wo = None if np.isnan(cov_wo) else cov_wo
-                if cov_wo is None or force:
-                    cov_wo = proj.collect_coverage_without_test(suite, test_id)
-
-                # Get the test model to access calculated properties
-                test_model = proj.get_test(test_id)
-
-                # Extract calculated metrics (properties auto-calculate)
-                impact = test_model.coverage_impact
-                overlap = test_model.coverage_overlap
-                uniqueness = test_model.coverage_uniqueness
-                redundancy = test_model.coverage_redundancy
-
-                # Add row to table
-                table.add_row(
-                    str(idx),
-                    test_id,
-                    f"{cov_alone:.2f}%",
-                    f"{cov_wo:.2f}%",
-                    f"{impact:+.2f}%" if impact is not None else "N/A",
-                    f"{overlap:.2f}%" if overlap is not None else "N/A",
-                    f"{uniqueness:.2f}%" if uniqueness is not None else "N/A",
-                    f"{redundancy:.2f}%" if redundancy is not None else "N/A",
-                )
-                console.print(" " * len(proc_test_msg), end="\r")
-
-            # Clear progress line and show table
-            console.print(table)
-            console.print(
-                f"\n[dim]Legend:[/dim]\n"
-                f"[dim]  • Alone = coverage running only this test[/dim]\n"
-                f"[dim]  • Without = coverage without this test[/dim]\n"
-                f"[dim]  • Impact = unique coverage contribution "
-                f"(total - without)[/dim]\n"
-                f"[dim]  • Overlap = coverage shared with other tests "
-                f"(total - alone)[/dim]\n"
-                f"[dim]  • Uniqueness = % of test's coverage that is unique "
-                f"(impact/alone × 100)[/dim]\n"
-                f"[dim]  • Redundancy = % of test's coverage that is redundant "
-                f"((alone-impact)/alone × 100)[/dim]\n"
             )
+
 
     # ========================================================================
     # Public Commands - Project Information
