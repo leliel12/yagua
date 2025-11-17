@@ -350,14 +350,6 @@ class CLIManager:
                 f"[cyan]📊 Total tests:[/cyan] {total_tests}",
             ]
 
-            if saved_count or updated_count:
-                if saved_count:
-                    info_lines.append(f"[green]  • New:[/green] {saved_count}")
-                if updated_count:
-                    info_lines.append(
-                        f"[blue]  • Updated:[/blue] {updated_count}"
-                    )
-
             console.print(
                 Panel(
                     "\n".join(info_lines),
