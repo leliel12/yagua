@@ -41,6 +41,7 @@ from peewee import (
     Check,
     DateTimeField,
     TextField,
+    IntegerField,
 )
 from playhouse import hybrid
 
@@ -224,6 +225,7 @@ class HistoryModel(BaseModel):
     project = ForeignKeyField(ProjectModel, backref="history")
     tag = CharField()
     command = TextField()
+    status_code = IntegerField()
     stdout = TextField()
     stderr = TextField()
     result = TextField()

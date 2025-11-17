@@ -264,6 +264,7 @@ class Project:
                 project=project,
                 tag="collect_tests",
                 command=result.command,
+                status_code=result.status_code,
                 stdout=result.stdout,
                 stderr=result.stderr,
                 result=result.result,
@@ -327,25 +328,7 @@ class Project:
         Returns
         -------
         pd.DataFrame
-            DataFrame containing all test information including columns:
-            - id: Test record ID
-            - project: Project ID reference
-            - test_id: Unique pytest nodeid
-            - file: Test file path
-            - suite: Test suite/class name (nullable)
-            - test: Test function name
-            - coverage_alone: Coverage when running test in isolation
-            - coverage_without: Coverage when running all tests except
-              this one
-            - coverage_impact: Unique coverage contribution (calculated)
-            - coverage_overlap: Coverage shared with other tests
-              (calculated)
-            - coverage_uniqueness: Percentage of unique coverage
-              (calculated)
-            - coverage_redundancy: Percentage of redundant coverage
-              (calculated)
-            - created_at: Record creation timestamp
-            - modified_at: Record modification timestamp
+            DataFrame containing all test information.
 
         Notes
         -----
@@ -495,6 +478,7 @@ class Project:
                 project=project,
                 tag="collect_coverage",
                 command=result.command,
+                status_code=result.status_code,
                 stdout=result.stdout,
                 stderr=result.stderr,
                 result=result.result,
@@ -536,6 +520,7 @@ class Project:
                 project=test.project,
                 tag=f"collect_coverage_for_test::{test_id}",
                 command=result.command,
+                status_code=result.status_code,
                 stdout=result.stdout,
                 stderr=result.stderr,
                 result=result.result,
@@ -641,36 +626,6 @@ class Project:
         """
         if not self.db.is_closed():
             self.db.close()
-
-    def __enter__(self):
-        """Enter context manager.
-
-        Returns
-        -------
-        Project
-            This project instance.
-        """
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        """Exit context manager and close database connection.
-
-        Parameters
-        ----------
-        exc_type : type
-            Exception type if an exception occurred.
-        exc_val : Exception
-            Exception instance if an exception occurred.
-        exc_tb : traceback
-            Exception traceback if an exception occurred.
-
-        Returns
-        -------
-        bool
-            False to propagate exceptions.
-        """
-        self.close()
-        return False
 
     def __getattr__(self, a):
         """Provide dynamic access to project model attributes.
