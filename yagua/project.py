@@ -240,13 +240,13 @@ class Project:
         Creates a HistoryModel record with tag='collect_tests' containing
         the command executed and its output for audit purposes.
         """
+        result = suite.get_tests(self.path)
+
         saved_count = 0
         updated_count = 0
         with self.transaction():
-            tests, command, stdout, stderr, result = suite.get_tests(self.path)
-
             project = self._get_project_model()
-            for test_id, file, suite_name, test in tests:
+            for test_id, file, suite_name, test in result.value:
                 _, created = self.add_test(
                     project=project,
                     test_id=test_id,
@@ -263,10 +263,10 @@ class Project:
             HistoryModel.create(
                 project=project,
                 tag="collect_tests",
-                command=command,
-                stdout=stdout,
-                stderr=stderr,
-                result=result,
+                command=result.command,
+                stdout=result.stdout,
+                stderr=result.stderr,
+                result=result.result,
             )
 
         return saved_count, updated_count
@@ -484,23 +484,23 @@ class Project:
         Creates a HistoryModel record with tag='collect_coverage'
         containing the command executed and its output for audit purposes.
         """
-        cov, command, stdout, stderr, result = suite.get_coverage(
-            self.path, self.name
-        )
+        result = suite.get_coverage(self.path, self.name)
+
         with self.transaction():
             project = self._get_project_model()
-            project.coverage = cov
+            project.coverage = result.value
             project.save()
 
             HistoryModel.create(
                 project=project,
                 tag="collect_coverage",
-                command=command,
-                stdout=stdout,
-                stderr=stderr,
-                result=result,
+                command=result.command,
+                stdout=result.stdout,
+                stderr=result.stderr,
+                result=result.result,
             )
-        return cov
+
+        return result.value
 
     def collect_coverage_for_test(self, suite, test_id):
         """Collect and store coverage for a single test in isolation.
@@ -525,25 +525,23 @@ class Project:
         Creates a HistoryModel record with tag='collect_coverage_for_test::{test_id}'
         for tracking execution history per test.
         """
-        cov, command, stdout, stderr, result = suite.get_coverage_for_tests(
-            self.path, self.name, [test_id]
-        )
-        with self.transaction():
+        result = suite.get_coverage_for_tests(self.path, self.name, [test_id])
 
+        with self.transaction():
             test = TestModel.get(TestModel.test_id == test_id)
-            test.coverage_alone = cov
+            test.coverage_alone = result.value
             test.save()
 
             HistoryModel.create(
                 project=test.project,
                 tag=f"collect_coverage_for_test::{test_id}",
-                command=command,
-                stdout=stdout,
-                stderr=stderr,
-                result=result,
+                command=result.command,
+                stdout=result.stdout,
+                stderr=result.stderr,
+                result=result.result,
             )
 
-        return cov
+        return result.value
 
     def collect_coverage_without_test(self, suite, test_id):
         """Collect and store coverage when excluding a specific test.
@@ -572,34 +570,29 @@ class Project:
         and runs them together to measure combined coverage.
         """
         with self.transaction():
-
             query = TestModel.select(TestModel.test_id).where(
                 TestModel.test_id != test_id
             )
             tids_to_run = [test.test_id for test in query]
 
-            (
-                cov,
-                command,
-                stdout,
-                stderr,
-                result,
-            ) = suite.get_coverage_for_tests(self.path, self.name, tids_to_run)
+            result = suite.get_coverage_for_tests(
+                self.path, self.name, tids_to_run
+            )
 
             test = TestModel.get(TestModel.test_id == test_id)
-            test.coverage_without = cov
+            test.coverage_without = result.value
             test.save()
 
             HistoryModel.create(
                 project=test.project,
                 tag=f"collect_coverage_without_test::{test_id}",
-                command=command,
-                stdout=stdout,
-                stderr=stderr,
-                result=result,
+                command=result.command,
+                stdout=result.stdout,
+                stderr=result.stderr,
+                result=result.result,
             )
 
-        return cov
+        return result.value
 
     # ========================================================================
     # Public Methods - Project Information
