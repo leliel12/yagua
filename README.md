@@ -4,8 +4,7 @@
 
 # Yagua
 
-**A tool for collecting and managing test information from**
-**pytest-based projects**
+**Test collection and coverage analysis for pytest-based projects**
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -21,13 +20,12 @@
 - [Installation](#installation)
 - [Quick Start](#quick-start)
 - [Usage](#usage)
-  - [CLI](#cli)
+  - [CLI Commands](#cli-commands)
   - [Programmatic API](#programmatic-api)
 - [Coverage Metrics](#coverage-metrics)
-  - [Basic Coverage Metrics](#basic-coverage-metrics)
-  - [Calculated Coverage Metrics](#calculated-coverage-metrics)
-  - [Example Usage](#example-usage)
-  - [CLI Display](#cli-display)
+  - [Basic Metrics](#basic-metrics)
+  - [Calculated Metrics](#calculated-metrics)
+  - [Interpreting Results](#interpreting-results)
   - [Use Cases](#use-cases)
 - [Development](#development)
 - [Documentation](#documentation)
@@ -37,26 +35,19 @@
 
 ## 📖 About
 
-Yagua is a Python package that helps you collect, store, and manage
-test information from pytest-based projects using a SQLite database.
+Yagua is a Python package for collecting, storing, and analyzing test information from pytest-based projects. It uses SQLite to cache test metadata and coverage metrics, enabling efficient analysis without repeated execution of expensive coverage measurements.
 
-**Key Design Principle**: Yagua is designed to be efficient and
-non-invasive. Once data is collected (tests, coverage metrics), it is
-cached and never recalculated unless explicitly requested using flags
-like `--force` or `-f`. This ensures fast operations and prevents
-unnecessary re-execution of expensive coverage analysis.
+**Key Design Principle**: Yagua operates on a **caching-first** model. Once data is collected (tests, coverage metrics), it is cached and never recalculated unless explicitly requested using flags like `--force` or `-f`. This ensures fast operations and prevents unnecessary re-execution of expensive coverage analysis.
 
 ## ✨ Features
 
-- **Test Discovery**: Collect test information from pytest-based projects
-- **SQLite Storage**: Store test metadata in SQLite database (one cache
-  file per project)
-- **Coverage Tracking**: Track both project-level and per-test coverage
-  information
-- **Flexible API**: Both CLI and programmatic Python API
-- **History Tracking**: Keep execution history for all operations
-- **Force Recollection**: Option to force recollection of tests and
-  coverage data
+- **Test Discovery**: Automatic collection of test information from pytest projects
+- **SQLite Storage**: One cache file per project containing all test metadata
+- **Coverage Analysis**: Project-level and per-test coverage tracking with advanced metrics
+- **Dual Interface**: Both CLI and programmatic Python API
+- **Execution History**: Complete audit trail of all operations with command tracking
+- **Error Handling**: Comprehensive error logging even for failed executions
+- **Flexible Recollection**: Force recalculation of any cached data on demand
 
 ---
 
@@ -66,9 +57,11 @@ unnecessary re-execution of expensive coverage analysis.
 # Install in development mode
 pip install -e .
 
-# Install with development dependencies (pytest, tox, mutmut, cosmic-ray)
+# Install with development dependencies (pytest, coverage, pytest-cov)
 pip install -e ".[dev]"
 ```
+
+After installation, the `yagua` command will be available globally.
 
 ---
 
@@ -84,10 +77,10 @@ yagua collect-tests project.sqlite
 # Show project information
 yagua info project.sqlite
 
-# List all tests
+# List all tests with coverage metrics
 yagua list-tests project.sqlite
 
-# Collect coverage information
+# Collect comprehensive coverage data
 yagua collect-coverage project.sqlite
 ```
 
@@ -95,203 +88,184 @@ yagua collect-coverage project.sqlite
 
 ## 💻 Usage
 
-### 🖥️ CLI
+### 🖥️ CLI Commands
+
+#### Project Management
 
 ```bash
-# Show help
+# Show all available commands
 yagua --help
 
-# Create a new project cache
-yagua create-project /path/to/project
-yagua create-project /path/to/project my_cache.sqlite --name "My Project" --description "Project description"
+# Create new project cache with custom name
+yagua create-project /path/to/project my_cache.sqlite \
+  --name "My Project" \
+  --description "Project description"
 
-# Collect tests from a project
-yagua collect-tests project.sqlite
-yagua collect-tests project.sqlite --force  # Force recollection
-
-# Show project information
+# Display project information
 yagua info project.sqlite
-
-# List tests for a project
-yagua list-tests project.sqlite
-# Show all columns including IDs and timestamps
-yagua list-tests project.sqlite --long
-
-# Collect coverage information (project + per-test coverage)
-yagua collect-coverage project.sqlite
-yagua collect-coverage project.sqlite --force  # Force recalculation
 ```
 
+#### Test Collection
+
+```bash
+# Collect tests (cached after first run)
+yagua collect-tests project.sqlite
+
+# Force recollection of tests
+yagua collect-tests project.sqlite --force
+yagua collect-tests project.sqlite -f  # Short form
+```
+
+#### Test Listing
+
+```bash
+# List tests (compact view)
+yagua list-tests project.sqlite
+
+# Show all columns including IDs and timestamps
+yagua list-tests project.sqlite --long
+yagua list-tests project.sqlite -l  # Short form
+```
+
+#### Coverage Collection
+
+```bash
+# Collect project + per-test coverage (cached)
+yagua collect-coverage project.sqlite
+
+# Force recalculation of all coverage metrics
+yagua collect-coverage project.sqlite --force
+yagua collect-coverage project.sqlite -f  # Short form
+```
+
+**Note**: Coverage collection can be time-consuming for large test suites as it runs each test individually and then all tests except each one. For N tests, this results in approximately 2N+1 test runs.
+
 ### 🐍 Programmatic API
+
+Yagua provides a complete Python API for integration into scripts and tools:
 
 ```python
 from yagua import Project, PytestSuite
 
-# Create a new project with metadata
+# Create new project
 proj = Project.from_project_info(
     name="my_project",
     path="/path/to/project",
-    description="My awesome project",
+    description="Optional description",
     db_path="qa.sqlite"
 )
 
-# Open existing cache and use as context manager
-with Project(db_path="qa.sqlite") as proj:
-    # Collect and save tests from pytest suite
-    suite = PytestSuite()
-    saved, updated = proj.collect_tests(suite)
-    print(f"Collected {saved + updated} tests")
+# Open existing project
+proj = Project(db_path="qa.sqlite")
 
-    # Get all tests as DataFrame
-    tests_df = proj.get_tests_dataframe()
-    print(tests_df)
+# Collect tests
+suite = PytestSuite()
+saved_count, updated_count = proj.collect_tests(suite)
 
-    # Count tests
-    count = proj.count_tests()
-    print(f"Total tests: {count}")
+# Get tests as DataFrame
+tests_df = proj.get_tests_dataframe()
 
-    # Collect coverage for all tests
-    cov = proj.collect_coverage(suite)
-    print(f"Coverage: {cov:.2f}%")
+# Collect coverage
+total_coverage = proj.collect_coverage(suite)
+test_coverage_alone = proj.collect_coverage_for_test(suite, "test_id")
+coverage_without = proj.collect_coverage_without_test(suite, "test_id")
 
-    # Collect coverage for individual test (alone)
-    test_id = "test_file.py::test_example"
-    test_cov_alone = proj.collect_coverage_for_test(suite, test_id)
-    print(f"Test coverage alone: {test_cov_alone:.2f}%")
+# Access project properties
+print(f"Name: {proj.name}")
+print(f"Path: {proj.path}")
+print(f"Coverage: {proj.coverage}")
 
-    # Collect coverage without individual test
-    test_cov_without = proj.collect_coverage_without_test(suite, test_id)
-    print(f"Coverage without test: {test_cov_without:.2f}%")
-
-    # Access project info via properties
-    print(f"Project: {proj.name}")
-    print(f"Path: {proj.path}")
-    print(f"Description: {proj.description}")
-    print(f"Coverage: {proj.coverage}")
+# Close when done
+proj.close()
 ```
+
+For detailed API documentation, see [CLAUDE.md](CLAUDE.md).
 
 ---
 
 ## 📊 Coverage Metrics
 
-Yagua provides advanced coverage metrics to help you understand test
-quality, redundancy, and unique contributions. These metrics are
-automatically calculated when you run `collect-coverage`.
+Yagua provides advanced coverage metrics to analyze test quality, redundancy, and unique contributions. All metrics are automatically calculated when running `yagua collect-coverage`.
 
-### Basic Coverage Metrics
+### Basic Metrics
 
-- **Coverage Alone** (`coverage_alone`): Coverage percentage when
-  running only this test in isolation
-- **Coverage Without** (`coverage_without`): Coverage percentage when
-  running all tests except this one
+These are directly measured by running pytest with coverage:
 
-### Calculated Coverage Metrics
+| Metric | Description |
+|--------|-------------|
+| **Coverage Alone** | Coverage when running only this test in isolation |
+| **Coverage Without** | Coverage when running all tests except this one |
+| **Total Coverage** | Overall project coverage with all tests |
 
-Yagua automatically calculates four additional metrics to help analyze
-test effectiveness:
+### Calculated Metrics
+
+Yagua automatically derives four additional metrics from the basic measurements:
 
 #### 1. Coverage Impact
 
-**Formula**: `coverage_impact = total_coverage - coverage_without`
+**Formula**: `total_coverage - coverage_without`
 
-**Meaning**: The unique coverage contribution of this test. This
-represents how much coverage would be lost if you removed this test
-from your suite.
+**Meaning**: The unique coverage contribution of this test. How much coverage would be lost if you removed this test.
 
 **Interpretation**:
-- **High Impact** (close to `coverage_alone`): Test contributes unique
-  coverage, not well covered by other tests
-- **Low Impact** (close to 0): Test coverage is mostly redundant, well
-  covered by other tests
-- **Negative Impact**: Should never occur with proper test suite
+- **High Impact** (close to coverage_alone): Test provides unique coverage
+- **Low Impact** (close to 0): Test coverage is mostly redundant
+- **Negative Impact**: Should never occur with a proper test suite
 
 #### 2. Coverage Overlap
 
-**Formula**: `coverage_overlap = total_coverage - coverage_alone`
+**Formula**: `total_coverage - coverage_alone`
 
-**Meaning**: The amount of coverage that this test shares with other
-tests. This represents the portion of total coverage that is NOT
-unique to this test.
+**Meaning**: Amount of coverage this test shares with other tests. The portion of total coverage NOT unique to this test.
 
 **Interpretation**:
-- **High Overlap**: This test covers code that is already well covered
-  by other tests
-- **Low Overlap**: This test covers code that few other tests exercise
+- **High Overlap**: Code already well covered by other tests
+- **Low Overlap**: Code exercised by few other tests
 
-#### 3. Coverage Uniqueness
+#### 3. Coverage Uniqueness (%)
 
-**Formula**: `coverage_uniqueness = (coverage_impact / coverage_alone) × 100`
+**Formula**: `(coverage_impact / coverage_alone) × 100`
 
-**Meaning**: Percentage of this test's coverage that is unique (not
-covered by other tests).
+**Meaning**: Percentage of this test's coverage that is unique.
 
 **Interpretation**:
-- **100%**: All coverage from this test is unique - removing it would
-  significantly reduce total coverage
-- **50%**: Half of this test's coverage is unique, half is redundant
-- **0%**: None of this test's coverage is unique - completely
-  redundant test
+- **100%**: All coverage is unique - critical test
+- **50%**: Half unique, half redundant
+- **0%**: Completely redundant test
 
-#### 4. Coverage Redundancy
+#### 4. Coverage Redundancy (%)
 
-**Formula**: `coverage_redundancy =
-((coverage_alone - coverage_impact) / coverage_alone) × 100`
+**Formula**: `((coverage_alone - coverage_impact) / coverage_alone) × 100`
 
-**Meaning**: Percentage of this test's coverage that is redundant
-(already covered by other tests).
+**Meaning**: Percentage of this test's coverage that is redundant.
 
 **Interpretation**:
-- **0%**: Test is completely unique - no redundant coverage
-- **50%**: Half of this test's coverage is redundant
-- **100%**: Test is completely redundant - all coverage duplicated by
-  other tests
+- **0%**: No redundant coverage - completely unique
+- **50%**: Half redundant
+- **100%**: Completely redundant - all coverage duplicated elsewhere
 
-### Example Usage
+### Interpreting Results
 
-```python
-from yagua import Project, PytestSuite
+The calculated metrics are available via the Python API using `proj.get_test(test_id)` which returns a pandas Series with all metrics, or displayed in the CLI using `yagua list-tests project.sqlite`:
 
-with Project(db_path="qa.sqlite") as proj:
-    suite = PytestSuite()
-
-    # Collect all coverage metrics
-    proj.collect_coverage(suite)
-
-    # Get a specific test to access calculated properties
-    test = proj.get_test("test_file.py::TestClass::test_example")
-
-    # Access calculated metrics (auto-computed from coverage_alone and coverage_without)
-    print(f"Coverage Impact: {test.coverage_impact:.2f}%")
-    print(f"Coverage Overlap: {test.coverage_overlap:.2f}%")
-    print(f"Coverage Uniqueness: {test.coverage_uniqueness:.2f}%")
-    print(f"Coverage Redundancy: {test.coverage_redundancy:.2f}%")
-
-    # High uniqueness = valuable test
-    if test.coverage_uniqueness > 80:
-        print("This test provides unique coverage - keep it!")
-
-    # High redundancy = candidate for removal
-    if test.coverage_redundancy > 90:
-        print("This test is highly redundant - consider removing it")
-```
-
-### CLI Display
-
-When you run `yagua collect-coverage project.sqlite`,
-or  `yagua list-tests project.sqlite` all metrics are displayed in a comprehensive table:
-
-![list-tests](res/list_tests.png)
-
+![Test listing with coverage metrics](res/list_tests.png)
 
 ### Use Cases
 
-**Identify Critical Tests**: Look for tests with high uniqueness (>80%) - these are critical for your coverage
+**Identify Critical Tests**
+Tests with high uniqueness (>80%) are critical for maintaining coverage. Removing them would significantly reduce overall coverage.
 
-**Find Redundant Tests**: Look for tests with high redundancy (>90%) - these are candidates for removal or refactoring
+**Find Redundant Tests**
+Tests with high redundancy (>90%) are candidates for removal or refactoring. They test code already covered by other tests.
 
-**Test Suite Optimization**: Balance coverage with test count by removing highly redundant tests
+**Optimize Test Suite**
+Balance coverage with test count by removing highly redundant tests while preserving high-uniqueness tests.
 
-**Code Review**: Use impact metrics to justify new tests - high impact tests are valuable additions
+**Code Review**
+Use impact metrics to justify new tests. Tests with high impact provide valuable additions to the suite.
+
+**Refactoring Guidance**
+Tests with high overlap indicate areas where code is well-tested, making refactoring safer.
 
 ---
 
@@ -304,19 +278,21 @@ pytest
 # Run tests with coverage
 pytest --cov=yagua --cov-report=term-missing
 
-# Run mutation testing
-mutmut run
+# Check code style
+ruff check .
 
-# Run tox
-tox
+# Format code
+ruff format .
 ```
 
 ---
 
 ## 📚 Documentation
 
-- [ARCHITECTURE.md](ARCHITECTURE.md) - Comprehensive architecture documentation explaining the global design, components, data flow, and architectural patterns
-- [CLAUDE.md](CLAUDE.md) - Development guide with usage examples, API reference, and coding conventions
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** - System architecture, components, data flow, and design patterns
+- **[CLAUDE.md](CLAUDE.md)** - Development guide with API reference and coding conventions
+
+---
 
 ## 📄 License
 
