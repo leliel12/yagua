@@ -70,6 +70,7 @@ console = Console()
 # PUBLIC FUNCTIONS
 # ============================================================================
 
+
 def format_value(value, float_fmt):
     """Format a cell value, applying special formatting for floats.
 
@@ -136,7 +137,6 @@ def column_format(type):
     if issubclass(type, (float, int, complex, np.number)):
         cfmt["justify"] = "right"
     return cfmt
-
 
 
 def df_to_rich_table(

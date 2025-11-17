@@ -86,6 +86,7 @@ def _make_help(obj) -> str:
         lines = lines[:last_line]
     return "\n".join(lines)
 
+
 def _coverage_format(column, value):
     """Format coverage values with percentage symbol.
 
@@ -484,7 +485,7 @@ class CLIManager:
                 )
                 return
 
-            tests_table = df_to_rich_table(tests, show_index=False )
+            tests_table = df_to_rich_table(tests, show_index=False)
 
             # Show coverage info if available
             if proj.coverage is not None:

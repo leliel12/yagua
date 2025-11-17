@@ -146,7 +146,6 @@ class BaseModel(Model):
         return data
 
 
-
 class ProjectModel(BaseModel):
     """Project information table.
 
