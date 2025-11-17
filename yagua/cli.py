@@ -19,6 +19,7 @@ from rich.table import Table
 
 from .project import Project
 from .testsuites import PytestSuite
+from .utils.df2rt import df_to_rich_table
 
 
 # ============================================================================
@@ -424,15 +425,22 @@ class CLIManager:
 
             # Check if any tests were found
             if not len(tests):
-                typer.echo(f"⚠️  No tests found for project '{proj.name}'.")
+                console.print(
+                    Panel(
+                        f"[yellow]No tests found for project:[/yellow] "
+                        f"[cyan]{proj.name}[/cyan]",
+                        title="⚠️  Warning",
+                        border_style="yellow",
+                    )
+                )
                 return
 
-            typer.echo(f"\n🧪 Tests for project '{proj.name}':")
-            typer.echo("")
-
-            typer.echo(tests)
-            typer.echo("")
-            typer.echo(f"📊 Total: {len(tests)} tests\n")
+            console.print(f"\n[bold cyan]🧪 Tests:[/bold cyan]\n")
+            console.print(df_to_rich_table(tests, show_index=False))
+            console.print(
+                f"\n[dim]📊 Total:[/dim] [bold]{len(tests)}[/bold] "
+                f"[dim]tests[/dim]\n"
+            )
 
     # ========================================================================
     # Public Commands - Coverage Management
