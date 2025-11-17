@@ -40,6 +40,12 @@
 Yagua is a Python package that helps you collect, store, and manage
 test information from pytest-based projects using a SQLite database.
 
+**Key Design Principle**: Yagua is designed to be efficient and
+non-invasive. Once data is collected (tests, coverage metrics), it is
+cached and never recalculated unless explicitly requested using flags
+like `--force` or `-f`. This ensures fast operations and prevents
+unnecessary re-execution of expensive coverage analysis.
+
 ## ✨ Features
 
 - **Test Discovery**: Collect test information from pytest-based projects
