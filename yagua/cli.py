@@ -541,6 +541,8 @@ class CLIManager:
                 if cov_wo is None or force:
                     cov_wo = proj.collect_coverage_without_test(suite, test_id)
 
+                console.print(" " * len(proc_test_msg), end="\r")
+
 
     # ========================================================================
     # Public Commands - Project Information
