@@ -145,7 +145,7 @@ def df_to_rich_table(
     index_name: Optional[str] = None,
     header_style: str = "bold magenta",
     float_fmt: str = "{:.3f}",
-    fillna: str="-",
+    fillna: str = "-",
 ) -> Table:
     """Convert a pandas DataFrame into a Rich Table object.
 
@@ -234,8 +234,16 @@ if __name__ == "__main__":
             "[red]Solo[/red]: A Star Wars Story",
             "Star Wars Ep. VIII: The Last Jedi",
         ],
-        "Production Budget": ["$275,000,000", "$275,000,000", "$262,000,000"],
-        "Box Office": ["$375,126,118", "$393,151,347", "$1,332,539,889"],
+        "Production Budget": [
+            "$275,000,000",
+            "$275,000,000",
+            "$262,000,000",
+        ],
+        "Box Office": [
+            "$375,126,118",
+            "$393,151,347",
+            "$1,332,539,889",
+        ],
     }
     df = pd.DataFrame(sample_data)
 

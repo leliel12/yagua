@@ -130,8 +130,13 @@ class PytestSuite(TestSuiteABC):
             contextlib.redirect_stderr(stderr),
         ):
             status = pytest.main(cmd, plugins=plugins)
-        
-        return " ".join(cmd), status, stdout.getvalue(), stderr.getvalue()
+
+        return (
+            " ".join(cmd),
+            status,
+            stdout.getvalue(),
+            stderr.getvalue(),
+        )
 
     def _parse_test_line(
         self, line: str
@@ -264,7 +269,9 @@ class PytestSuite(TestSuiteABC):
         automatically cleaned up after parsing.
         """
         with tempfile.NamedTemporaryFile(
-            dir=self._temp_dir.name, suffix=".json", prefix="yagua_cov_"
+            dir=self._temp_dir.name,
+            suffix=".json",
+            prefix="yagua_cov_",
         ) as fp:
             cmd = [
                 f"--cov={project_name}",
@@ -331,7 +338,9 @@ class PytestSuite(TestSuiteABC):
         coverage_without (all tests except one) metrics.
         """
         with tempfile.NamedTemporaryFile(
-            dir=self._temp_dir.name, suffix=".json", prefix="yagua_ftcov_"
+            dir=self._temp_dir.name,
+            suffix=".json",
+            prefix="yagua_ftcov_",
         ) as fp:
             cmd = list(tests_ids) + [
                 f"--cov={project_name}",

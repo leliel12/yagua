@@ -174,6 +174,8 @@ class ProjectModel(BaseModel):
 
     name = CharField()
     path = CharField()
+    test_suite_name = CharField()
+    mutation_suite_name = CharField()
     description = CharField(null=True)
     coverage = FloatField(null=True, default=None)
 

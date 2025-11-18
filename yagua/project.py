@@ -39,6 +39,7 @@ import pandas as pd
 from peewee import SqliteDatabase
 
 from .models import BaseModel, ProjectModel, TestModel, HistoryModel
+from .testsuites import PytestSuite
 
 
 # ============================================================================
@@ -55,6 +56,14 @@ MODELS_TO_CREATE = [ProjectModel, TestModel, HistoryModel]
 #: the binding needs to propagate through the inheritance chain.
 ALL_MODELS = [BaseModel] + MODELS_TO_CREATE
 
+
+TEST_SUITES = {
+    "pytest": PytestSuite,
+}
+
+MUTATION_SUITES = {
+    "cosmic-ray": None,
+}
 
 # ============================================================================
 # PROJECT CLASS
@@ -140,10 +149,28 @@ class Project:
 
         path = Path(path).resolve()
 
+        # at this points are contants
+        test_suite_name = "pytest"
+        mutation_suite_name = "cosmic-ray"
+
         project = cls(db_path)
-        project.store_project_info(name, path, description)
+        project.store_project_info(
+            name, path, test_suite_name, mutation_suite_name, description
+        )
 
         return project
+
+    # ========================================================================
+    # Properties
+    # ========================================================================
+
+    @property
+    def test_suite(self):
+        return TEST_SUITES[self.test_suite_name]
+
+    @property
+    def mutation_suite(self):
+        return MUTATION_SUITES[self.mutation_suite_name]
 
     # ========================================================================
     # Private Methods
@@ -191,7 +218,7 @@ class Project:
     # Public Methods - Test Management
     # ========================================================================
 
-    def collect_tests(self, suite) -> tuple[int, int]:
+    def collect_tests(self) -> tuple[int, int]:
         """Collect tests from a test suite and save them to the database.
 
         This method runs the suite's get_tests() method to discover all
@@ -214,6 +241,8 @@ class Project:
         Creates a HistoryModel record with tag='collect_tests' containing
         the command executed and its output for audit purposes.
         """
+
+        suite = self.test_suite
         result = suite.get_tests(self.path)
 
         saved_count = 0
@@ -402,7 +431,7 @@ class Project:
     # Public Methods - Coverage Management
     # ========================================================================
 
-    def collect_coverage(self, suite):
+    def collect_coverage(self):
         """Collect and store coverage information for the project.
 
         This method runs the suite's get_coverage() method to execute tests
@@ -425,6 +454,7 @@ class Project:
         Creates a HistoryModel record with tag='collect_coverage'
         containing the command executed and its output for audit purposes.
         """
+        suite = self.test_suite
         result = suite.get_coverage(self.path, self.name)
 
         with self.transaction():
@@ -447,7 +477,7 @@ class Project:
 
         return result.value
 
-    def collect_coverage_for_test(self, suite, test_id):
+    def collect_coverage_for_test(self, test_id):
         """Collect and store coverage for a single test in isolation.
 
         This method runs a specific test alone to measure its isolated
@@ -470,6 +500,7 @@ class Project:
         Creates a HistoryModel record with tag='collect_coverage_for_test::{test_id}'
         for tracking execution history per test.
         """
+        suite = self.test_suite
         result = suite.get_coverage_for_tests(self.path, self.name, [test_id])
 
         with self.transaction():
@@ -493,7 +524,7 @@ class Project:
 
         return result.value
 
-    def collect_coverage_without_test(self, suite, test_id):
+    def collect_coverage_without_test(self, test_id):
         """Collect and store coverage when excluding a specific test.
 
         This method runs all tests except the specified one to measure
@@ -519,6 +550,7 @@ class Project:
         for tracking execution history. Queries all test IDs except the target
         and runs them together to measure combined coverage.
         """
+        suite = self.test_suite
         with self.transaction():
             query = TestModel.select(TestModel.test_id).where(
                 TestModel.test_id != test_id
@@ -553,7 +585,12 @@ class Project:
     # ========================================================================
 
     def store_project_info(
-        self, name: str, path: str, description: str | None = None
+        self,
+        name: str,
+        path: str,
+        test_suite_name: str,
+        mutation_suite_name: str,
+        description: str | None = None,
     ) -> None:
         """Store or update project information in database.
 
@@ -566,13 +603,25 @@ class Project:
         description : str, optional
             Project description.
         """
+        if test_suite_name not in TEST_SUITES:
+            raise ValueError("[corregi claude]")
+        if mutation_suite_name not in MUTATION_SUITES:
+            raise ValueError("[corregi claude]")
+
         with self.transaction():
             project, created = ProjectModel.get_or_create(
-                id=1, name=name, path=path, description=description
+                id=1,
+                name=name,
+                test_suite_name=test_suite_name,
+                mutation_suite_name=mutation_suite_name,
+                path=path,
+                description=description,
             )
             if not created:
                 project.name = name
                 project.path = path
+                project.test_suite_name = test_suite_name
+                project.mutation_suite_name = mutation_suite_name
                 project.description = description
                 project.save()
 

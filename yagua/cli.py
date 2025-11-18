@@ -18,7 +18,6 @@ from rich.panel import Panel
 from rich.table import Table
 
 from .project import Project
-from .testsuites import PytestSuite
 from .utils.df2rt import df_to_rich_table
 
 
@@ -279,7 +278,9 @@ class CLIManager:
         # Use provided cache path or default to <project_name>.sqlite
         cache = cache or as_path(project_path.name + ".sqlite")
 
-        console.print(f"\n[bold cyan]📦 Creating project cache...[/bold cyan]\n")
+        console.print(
+            f"\n[bold cyan]📦 Creating project cache...[/bold cyan]\n"
+        )
 
         try:
             proj = Project.from_project_info(
@@ -307,7 +308,9 @@ class CLIManager:
         ]
 
         if proj.description:
-            info_lines.append(f"[cyan]🪪 Description:[/cyan] {proj.description}")
+            info_lines.append(
+                f"[cyan]🪪 Description:[/cyan] {proj.description}"
+            )
 
         info_lines.append(f"\n[dim]✨ Cache initialized with 0 tests[/dim]")
 
@@ -355,9 +358,10 @@ class CLIManager:
             saved_count, updated_count = 0, 0
 
             if total_tests == 0 or force:
-                console.print(f"\n[bold cyan]🧪 Collecting tests...[/bold cyan]\n")
-                suite = PytestSuite()
-                saved_count, updated_count = proj.collect_tests(suite)
+                console.print(
+                    f"\n[bold cyan]🧪 Collecting tests...[/bold cyan]\n"
+                )
+                saved_count, updated_count = proj.collect_tests()
                 total_tests = saved_count + updated_count
 
             if total_tests == 0:
@@ -390,7 +394,10 @@ class CLIManager:
         self,
         cache: str = _CACHE_ARGUMENT,
         long: bool = typer.Option(
-            False, "--long", "-l", help="Show all the information of the tests"
+            False,
+            "--long",
+            "-l",
+            help="Show all the information of the tests",
         ),
     ) -> None:
         """List all tests for a project.
@@ -430,7 +437,9 @@ class CLIManager:
                 ]
 
                 # Keep only user-facing columns
-                columns = [col for col in tests.columns if col not in ignore_columns]
+                columns = [
+                    col for col in tests.columns if col not in ignore_columns
+                ]
                 tests = tests[columns]
 
             # Check if any tests were found
@@ -516,19 +525,18 @@ class CLIManager:
                 typer.echo(f"⚠️  No tests found for project '{proj.name}'.")
                 raise typer.Exit(1)
 
-            # Create test suite backend for collecting statistics
-            suite = PytestSuite()
-
             # Phase 1: Calculate coverage for all tests combined
             if proj.coverage is None or force:
-                proj.collect_coverage(suite)
+                proj.collect_coverage()
             console.print(
                 f"\n💯 [bold green]Total coverage:[/bold green] "
                 f"[cyan]{proj.coverage:.2f}%[/cyan]\n"
             )
 
             # Phase 2 & 3: Calculate per-test coverage metrics
-            console.print("[bold blue]🧪 Per-test coverage analysis...[/bold blue]\n")
+            console.print(
+                "[bold blue]🧪 Per-test coverage analysis...[/bold blue]\n"
+            )
 
             # Extract test IDs and existing coverage data from dataframe
             tests_ids = proj.get_tests_dataframe()[
@@ -543,7 +551,8 @@ class CLIManager:
 
                 # Show progress to user
                 proc_test_msg = (
-                    f"  [dim][{idx}/{tests_count}][/dim] " f"Processing {test_id}..."
+                    f"  [dim][{idx}/{tests_count}][/dim] "
+                    f"Processing {test_id}..."
                 )
                 console.print(proc_test_msg, end="\r")
 
@@ -552,14 +561,14 @@ class CLIManager:
                 # This shows what this specific test covers on its own
                 cov_alone = _coerce_na(cov_alone)
                 if cov_alone is None or force:
-                    cov_alone = proj.collect_coverage_for_test(suite, test_id)
+                    cov_alone = proj.collect_coverage_for_test(test_id)
 
                 # Phase 3: Calculate coverage when running all tests except
                 # this one
                 # This helps identify if this test adds unique coverage
                 cov_wo = _coerce_na(cov_wo)
                 if cov_wo is None or force:
-                    cov_wo = proj.collect_coverage_without_test(suite, test_id)
+                    cov_wo = proj.collect_coverage_without_test(test_id)
 
                 # Clear progress message
                 console.print(" " * len(proc_test_msg), end="\r")
@@ -605,7 +614,9 @@ class CLIManager:
             ]
 
             if proj.description:
-                info_lines.append(f"[cyan]🪪 Description:[/cyan] {proj.description}")
+                info_lines.append(
+                    f"[cyan]🪪 Description:[/cyan] {proj.description}"
+                )
 
             if test_count:
                 info_lines.append(f"[cyan]🧪 Tests:[/cyan] {test_count}")
@@ -676,7 +687,9 @@ def _create_app(cli_manager):
             command_help = _make_help(method)
             # Create command with hyphenated name
             # (e.g., collect_tests -> collect-tests)
-            cmd_wrapper = app.command(name=name.replace("_", "-"), help=command_help)
+            cmd_wrapper = app.command(
+                name=name.replace("_", "-"), help=command_help
+            )
             cmd_wrapper(method)
 
     return app

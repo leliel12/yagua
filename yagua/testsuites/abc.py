@@ -230,7 +230,9 @@ class TestSuiteABC(ABC):
     PytestSuite : Concrete implementation for pytest-based projects.
     """
 
-    def pkg_result(self, *, value, command, status_code, stdout, stderr, result):
+    def pkg_result(
+        self, *, value, command, status_code, stdout, stderr, result
+    ):
         """Package test suite execution results into a SuiteRunResult object.
 
         This helper method creates a standardized SuiteRunResult dataclass
