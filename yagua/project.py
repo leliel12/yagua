@@ -473,7 +473,7 @@ class Project:
         result = suite.get_coverage_for_tests(self.path, self.name, [test_id])
 
         with self.transaction():
-            
+
             if not result.error:
                 test = TestModel.get(TestModel.test_id == test_id)
                 test.coverage_alone = result.value
@@ -528,7 +528,7 @@ class Project:
             result = suite.get_coverage_for_tests(
                 self.path, self.name, tids_to_run
             )
-            
+
             if not result.error:
                 test = TestModel.get(TestModel.test_id == test_id)
                 test.coverage_without = result.value
@@ -611,7 +611,8 @@ class Project:
             If the attribute doesn't exist in ProjectModel.
         """
         if a not in dir(self):
-            raise AttributeError(a)
+            cls_name = type(self).__name__
+            raise AttributeError(f"{cls_name!r} object has no attribute {a!r}")
         model = self._get_project_model()
         return getattr(model, a)
 
