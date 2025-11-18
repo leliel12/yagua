@@ -36,6 +36,7 @@ Dependencies
 
 import io
 import contextlib
+import pathlib
 import tempfile
 import json
 
@@ -82,6 +83,7 @@ class PytestSuite(TestSuiteABC):
         automatically cleaned
         up when the object is destroyed.
         """
+        self._verbose = True
         self._temp_dir = tempfile.TemporaryDirectory()
 
     # ========================================================================
@@ -123,7 +125,10 @@ class PytestSuite(TestSuiteABC):
 
         All context changes are automatically reverted when the method returns.
         """
+        full_cmd = " ".join(cmd)
         stdout, stderr = io.StringIO(), io.StringIO()
+        if self._verbose:
+            print(f"[RUN] {project_path} >> {full_cmd!r}")
         with (
             contextlib.chdir(project_path),
             contextlib.redirect_stdout(stdout),
@@ -132,10 +137,10 @@ class PytestSuite(TestSuiteABC):
             status = pytest.main(cmd, plugins=plugins)
 
         return (
-            " ".join(cmd),
+            full_cmd,
             status,
             stdout.getvalue(),
-            stderr.getvalue(),
+            stderr.getvalue()
         )
 
     def _parse_test_line(
@@ -181,6 +186,21 @@ class PytestSuite(TestSuiteABC):
             return (line, parts[0], parts[1], parts[2])
         # Return None for unexpected formats
         return None
+
+    def _clean_tests_ids(self, project_path, tests_ids):
+        cleaned = []
+        with contextlib.chdir(project_path):
+            cwd = pathlib.Path.cwd()
+            for test_id in tests_ids:
+                fname, suite, test_name = self._parse_test_line(test_id)[1:]
+                fpath = pathlib.Path(fname).resolve()
+                fname = fpath.name if (cwd / fpath.name).is_file() else fname
+
+                parts = fname, suite, test_name
+                test_id_cleaned = "::".join(p for p in parts if p is not None)
+
+                cleaned.append(test_id_cleaned)
+        return cleaned
 
     # ========================================================================
     # Public Methods
@@ -342,7 +362,8 @@ class PytestSuite(TestSuiteABC):
             suffix=".json",
             prefix="yagua_ftcov_",
         ) as fp:
-            cmd = list(tests_ids) + [
+            tests_ids = self._clean_tests_ids(project_path, tests_ids)
+            cmd = (tests_ids) + [
                 f"--cov={project_name}",
                 f"--cov-report=json:{fp.name}",
             ]

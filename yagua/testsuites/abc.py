@@ -90,21 +90,12 @@ class SuiteRunResultError(Exception):
     SuiteRunResult : The dataclass that raises this exception.
     """
 
-    def __init__(self, status_code, stderr):
+    def __init__(self, result):
         """Initialize the exception with status code and error output.
 
-        Parameters
-        ----------
-        status_code : int
-            The non-zero exit status code from the failed command.
-        stderr : str
-            The standard error output from the failed command.
         """
-        self.status_code = status_code
-        self.stderr = stderr
-        super().__init__(
-            f"Suite command failed with status code {status_code}:\n{stderr}"
-        )
+        self.result = result
+        super().__init__(f"{result.command} - Exit Code {result.status_code}")
 
 
 # ============================================================================
@@ -207,7 +198,7 @@ class _SuiteRunResult:
         SuiteRunResultError : The exception raised by this method.
         """
         if self.error:
-            raise SuiteRunResultError(self.status_code, self.stderr)
+            raise SuiteRunResultError(self)
 
 
 class TestSuiteABC(ABC):

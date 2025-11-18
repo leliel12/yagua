@@ -166,11 +166,13 @@ class Project:
 
     @property
     def test_suite(self):
-        return TEST_SUITES[self.test_suite_name]
+        suite_cls = TEST_SUITES[self.test_suite_name]
+        return suite_cls()
 
     @property
     def mutation_suite(self):
-        return MUTATION_SUITES[self.mutation_suite_name]
+        suite_cls = MUTATION_SUITES[self.mutation_suite_name]
+        return suite_cls()
 
     # ========================================================================
     # Private Methods
