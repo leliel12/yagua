@@ -327,13 +327,14 @@ class TestModel(BaseModel):
 
         Formula
         -------
-        coverage_overlap = total_coverage - coverage_alone
+        coverage_overlap = coverage_alone - coverage_impact
+                         = coverage_without + coverage_alone - total_coverage
 
         This represents how much of the total coverage is NOT unique
         to this test (i.e., covered by other tests as well).
         """
         try:
-            return self.project.coverage - self.coverage_alone
+            return self.coverage_without + self.coverage_alone - self.project.coverage
         except TypeError:
             return None
 
@@ -372,8 +373,8 @@ class TestModel(BaseModel):
 
         Formula
         -------
-        coverage_redundancy =
-            ((coverage_alone - coverage_impact) / coverage_alone) * 100
+        coverage_redundancy = (coverage_overlap / coverage_alone) * 100
+                = ((coverage_alone - coverage_impact) / coverage_alone) * 100
 
         - 0% = Test is completely unique (no redundancy)
         - 100% = Test is completely redundant (all coverage duplicated)
@@ -387,6 +388,5 @@ class TestModel(BaseModel):
             return None
 
     class Meta:
-        indexes = (
-            (("project", "file", "suite", "test"), True),
-        )  # Unique constraint
+        indexes = ((("project", "file", "suite", "test"), True),)
+        # Unique constraint
