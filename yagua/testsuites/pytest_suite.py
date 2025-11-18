@@ -80,10 +80,17 @@ class PytestSuite(TestSuiteABC):
 
         Creates a temporary directory that will be used to store coverage
         report files during coverage collection. The directory is
-        automatically cleaned
-        up when the object is destroyed.
+        automatically cleaned up when the object is destroyed.
+
+        Attributes
+        ----------
+        _verbose : bool
+            If True, prints pytest command execution information to stdout.
+            Useful for debugging and monitoring test execution progress.
+        _temp_dir : tempfile.TemporaryDirectory
+            Temporary directory for storing coverage JSON report files.
         """
-        self._verbose = True
+        self._verbose = False
         self._temp_dir = tempfile.TemporaryDirectory()
 
     # ========================================================================
@@ -187,20 +194,68 @@ class PytestSuite(TestSuiteABC):
         # Return None for unexpected formats
         return None
 
-    def _clean_tests_ids(self, project_path, tests_ids):
-        cleaned = []
+    def _normalize_test_id_paths(self, project_path, tests_ids):
+        """Normalize test ID file paths for pytest execution.
+
+        This method converts test IDs that may contain absolute or relative
+        file paths into a normalized form that pytest can reliably execute
+        from the project directory. It simplifies absolute paths to relative
+        filenames when the file exists in the current project directory.
+
+        Parameters
+        ----------
+        project_path : str or Path
+            Path to the project directory where pytest will be executed.
+        tests_ids : list[str]
+            List of test IDs in pytest nodeid format (e.g.,
+            'path/to/test_file.py::TestClass::test_method' or
+            '/absolute/path/test_file.py::test_function').
+
+        Returns
+        -------
+        list[str]
+            List of normalized test IDs with simplified file paths where
+            possible, suitable for passing to pytest command line.
+
+        Notes
+        -----
+        The normalization process for each test ID:
+        1. Parse the test ID into components (file, suite, test)
+        2. Convert file path to absolute path
+        3. If the file exists in project root with just its basename,
+           use the basename; otherwise keep the original path
+        4. Reconstruct the test ID from normalized components
+
+        This ensures pytest can find tests whether they were collected
+        with absolute paths, relative paths, or just filenames.
+        """
+        normalized = []
         with contextlib.chdir(project_path):
+            # Get the current working directory (project root)
             cwd = pathlib.Path.cwd()
+
             for test_id in tests_ids:
+                # Parse test ID into components: (test_id, file, suite, test)
+                # We only need file, suite, and test (skip the full test_id)
                 fname, suite, test_name = self._parse_test_line(test_id)[1:]
+
+                # Resolve the file path to absolute form
                 fpath = pathlib.Path(fname).resolve()
+
+                # Check if file exists in project root with just its basename
+                # If yes, use simple filename; otherwise keep original path
+                # This handles cases where tests were collected with absolute paths
+                # but can be run with relative paths from project root
                 fname = fpath.name if (cwd / fpath.name).is_file() else fname
 
+                # Reconstruct test ID from normalized components
+                # Filter out None values (suite can be None for standalone tests)
                 parts = fname, suite, test_name
-                test_id_cleaned = "::".join(p for p in parts if p is not None)
+                test_id_normalized = "::".join(p for p in parts if p is not None)
 
-                cleaned.append(test_id_cleaned)
-        return cleaned
+                normalized.append(test_id_normalized)
+
+        return normalized
 
     # ========================================================================
     # Public Methods
@@ -362,7 +417,7 @@ class PytestSuite(TestSuiteABC):
             suffix=".json",
             prefix="yagua_ftcov_",
         ) as fp:
-            tests_ids = self._clean_tests_ids(project_path, tests_ids)
+            tests_ids = self._normalize_test_id_paths(project_path, tests_ids)
             cmd = (tests_ids) + [
                 f"--cov={project_name}",
                 f"--cov-report=json:{fp.name}",

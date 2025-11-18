@@ -166,11 +166,39 @@ class Project:
 
     @property
     def test_suite(self):
+        """Get test suite handler instance for this project.
+
+        Returns
+        -------
+        TestSuiteABC
+            Instantiated test suite handler (e.g., PytestSuite) based on the
+            project's test_suite_name configuration.
+
+        Notes
+        -----
+        This property returns a new instance each time it's accessed. The
+        suite class is looked up from TEST_SUITES dictionary using the
+        project's test_suite_name field.
+        """
         suite_cls = TEST_SUITES[self.test_suite_name]
         return suite_cls()
 
     @property
     def mutation_suite(self):
+        """Get mutation testing suite handler instance for this project.
+
+        Returns
+        -------
+        MutationSuiteABC or None
+            Instantiated mutation suite handler based on the project's
+            mutation_suite_name configuration, or None if not yet implemented.
+
+        Notes
+        -----
+        This property returns a new instance each time it's accessed. The
+        suite class is looked up from MUTATION_SUITES dictionary using the
+        project's mutation_suite_name field.
+        """
         suite_cls = MUTATION_SUITES[self.mutation_suite_name]
         return suite_cls()
 

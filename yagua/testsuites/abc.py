@@ -72,27 +72,28 @@ class SuiteRunResultError(Exception):
 
     Parameters
     ----------
-    status_code : int
-        The non-zero exit status code from the failed command.
-    stderr : str
-        The standard error output from the failed command, containing
-        error messages and diagnostic information.
+    result : _SuiteRunResult
+        The complete SuiteRunResult object containing all execution
+        information including command, status code, stdout, and stderr.
 
     Attributes
     ----------
-    status_code : int
-        The exit status code that triggered the exception.
-    stderr : str
-        The captured error output.
+    result : _SuiteRunResult
+        The full result object that triggered the exception, providing
+        access to all execution details for debugging.
 
     See Also
     --------
-    SuiteRunResult : The dataclass that raises this exception.
+    _SuiteRunResult : The dataclass that raises this exception.
     """
 
     def __init__(self, result):
-        """Initialize the exception with status code and error output.
+        """Initialize the exception with the complete result object.
 
+        Parameters
+        ----------
+        result : _SuiteRunResult
+            The SuiteRunResult instance containing command execution details.
         """
         self.result = result
         super().__init__(f"{result.command} - Exit Code {result.status_code}")
