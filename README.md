@@ -214,13 +214,13 @@ Yagua automatically derives four additional metrics from the basic measurements:
 
 #### 2. Coverage Overlap
 
-**Formula**: `total_coverage - coverage_alone`
+**Formula**: `coverage_alone - coverage_impact`
 
 **Meaning**: Amount of coverage this test shares with other tests. The portion of total coverage NOT unique to this test.
 
 **Interpretation**:
-- **High Overlap**: Code already well covered by other tests
-- **Low Overlap**: Code exercised by few other tests
+- **High Overlap**: Code mostly already covered by other tests
+- **Low Overlap**: Concerned code exercised almost uniquely by this test
 
 #### 3. Coverage Uniqueness (%)
 
