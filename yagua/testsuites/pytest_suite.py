@@ -143,12 +143,7 @@ class PytestSuite(TestSuiteABC):
         ):
             status = pytest.main(cmd, plugins=plugins)
 
-        return (
-            full_cmd,
-            status,
-            stdout.getvalue(),
-            stderr.getvalue()
-        )
+        return (full_cmd, status, stdout.getvalue(), stderr.getvalue())
 
     def _parse_test_line(
         self, line: str
@@ -251,7 +246,9 @@ class PytestSuite(TestSuiteABC):
                 # Reconstruct test ID from normalized components
                 # Filter out None values (suite can be None for standalone tests)
                 parts = fname, suite, test_name
-                test_id_normalized = "::".join(p for p in parts if p is not None)
+                test_id_normalized = "::".join(
+                    p for p in parts if p is not None
+                )
 
                 normalized.append(test_id_normalized)
 

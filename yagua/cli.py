@@ -6,6 +6,7 @@ collecting and managing test information from pytest-based projects.
 """
 
 import contextlib
+import enum
 import inspect
 import sys
 from pathlib import Path
@@ -18,6 +19,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from .project import Project
+from .models import TestModel
 from .utils.df2rt import df_to_rich_table
 
 
@@ -131,6 +133,16 @@ _CACHE_ARGUMENT = typer.Argument(
     metavar="💾 Project Cache db",
 )
 
+
+#: Claude completa
+_CollectMutationOrder = enum.StrEnum(
+    "_CollectMutationOrder",
+    {
+        k.upper(): k
+        for k, v in vars(TestModel).items()
+        if k.startswith("coverage_")
+    },
+)
 
 # ============================================================================
 # CLI MANAGER CLASS
@@ -473,7 +485,6 @@ class CLIManager:
     # ========================================================================
     # Public Commands - Coverage Management
     # ========================================================================
-
     def collect_coverage(
         self,
         cache: str = _CACHE_ARGUMENT,
@@ -579,6 +590,77 @@ class CLIManager:
             f"[dim]💡 Use[/dim] [cyan]'yagua list-tests {cache.name}'[/cyan][dim] "
             "to view all coverage metrics[/dim]\n"
         )
+
+    def collect_mutations(
+        self,
+        cache: str = _CACHE_ARGUMENT,
+        force: bool = typer.Option(
+            False,
+            "--force",
+            "-f",
+            help="Force recalculation even if mutations exist",
+        ),
+        priority: _CollectMutationOrder = typer.Option(
+            _CollectMutationOrder.COVERAGE_UNIQUENESS,
+            "--priority",
+            "-p",
+            help="The column to determine the order of the test to be evaluated",
+        ),
+        ascending: bool = typer.Option(False, help=""),
+    ) -> None:
+        """Collect and store mutation testing information for the project.
+
+        This command runs mutation testing to assess test suite quality.
+        It generates mutants (code modifications) and checks if the test
+        suite detects them.
+
+        Parameters
+        ----------
+        cache : Path
+            Path to existing SQLite cache file.
+        force : bool, optional
+            Force recalculation of mutations even if they already exist.
+            Default is False.
+
+        Raises
+        ------
+        typer.Exit
+            If cache file does not exist or no tests found.
+
+        Notes
+        -----
+        Mutation testing can be time-consuming for large codebases as it
+        requires running the test suite multiple times for each mutant.
+        """
+        with self._use_project(cache) as proj:
+
+            console.print(
+                f"[bold blue]🧬 Collecting mutations...[/bold blue]\n"
+            )
+
+            # Validate that there are tests to analyze
+            if not proj.count_tests():
+                typer.echo(f"⚠️  No tests found for project '{proj.name}'.")
+                raise typer.Exit(1)
+
+            # Collect mutations
+            # result = proj.collect_mutations(force=force)
+
+            priority_column = priority.value
+            cov_columns = list({"coverage_alone", "coverage_without", priority_column})
+
+            coso_columns = ["test_id", "msr_alone", "msr_wo"]
+
+            tests_ids = proj.get_tests_dataframe()[coso_columns + cov_columns]
+            tests_ids.sort_values(priority_column, ascending=ascending, inplace=True)
+
+            if False and tests_ids[cov_columns].isna().to_numpy().any():
+                typer.echo(f"⚠️  PArece ser que el collect-coverage no se termino de ejecutar")
+                raise typer.Exit(1)
+
+            for # Iterate through each test to calculate coverage metrics
+            for idx, (test_id, msr_alone, msr_wo) in enumerate(tests_ids[coso_columns], 1):
+                pass
 
     # ========================================================================
     # Public Commands - Project Information
