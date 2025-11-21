@@ -119,7 +119,9 @@ class Project:
     # ========================================================================
 
     @classmethod
-    def from_project_info(cls, name, path, description, db_path) -> "Project":
+    def from_project_info(
+        cls, name, path, work_path, description, db_path
+    ) -> "Project":
         """Create new Project with initial project information.
 
         Parameters
@@ -128,6 +130,8 @@ class Project:
             Project name.
         path : str or Path
             Project directory path.
+        work_path : str or Path
+            Working directory for yagua operations (coverage, mutations, etc.).
         description : str, optional
             Project description.
         db_path : str or Path
@@ -148,6 +152,7 @@ class Project:
             raise ValueError(f"File {db_path} already exists")
 
         path = Path(path).resolve()
+        work_path = Path(work_path).resolve()
 
         # at this points are contants
         test_suite_name = "pytest"
@@ -155,7 +160,8 @@ class Project:
 
         project = cls(db_path)
         project.store_project_info(
-            name, path, test_suite_name, mutation_suite_name, description
+            name, path, work_path, test_suite_name, mutation_suite_name,
+            description,
         )
 
         return project
@@ -631,6 +637,7 @@ class Project:
         self,
         name: str,
         path: str,
+        work_path: str,
         test_suite_name: str,
         mutation_suite_name: str,
         description: str | None = None,
@@ -643,6 +650,12 @@ class Project:
             Project name.
         path : str
             Project path.
+        work_path : str
+            Working directory for yagua operations.
+        test_suite_name : str
+            Name of the test suite handler (e.g., 'pytest').
+        mutation_suite_name : str
+            Name of the mutation suite handler (e.g., 'cosmic-ray').
         description : str, optional
             Project description.
         """
@@ -658,11 +671,13 @@ class Project:
                 test_suite_name=test_suite_name,
                 mutation_suite_name=mutation_suite_name,
                 path=path,
+                work_path=work_path,
                 description=description,
             )
             if not created:
                 project.name = name
                 project.path = path
+                project.work_path = work_path
                 project.test_suite_name = test_suite_name
                 project.mutation_suite_name = mutation_suite_name
                 project.description = description

@@ -160,6 +160,10 @@ class ProjectModel(BaseModel):
         Project name or identifier.
     path : CharField
         Filesystem path to the project directory.
+    work_path : CharField
+        Working directory for yagua operations (coverage, mutations, etc.).
+        Created automatically if not provided, defaults to
+        _yagua_wd_<project_name>_ in the current directory.
     description : CharField, optional
         Optional project description.
     coverage : FloatField, optional
@@ -179,6 +183,7 @@ class ProjectModel(BaseModel):
 
     name = CharField()
     path = CharField()
+    work_path = CharField()
     test_suite_name = CharField()
     mutation_suite_name = CharField()
     description = CharField(null=True)

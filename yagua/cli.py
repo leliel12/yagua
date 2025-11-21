@@ -271,6 +271,14 @@ class CLIManager:
             "--description",
             help="Project description",
         ),
+        work_path: str = typer.Option(
+            None,
+            "-w",
+            "--work-path",
+            help="Working directory for yagua operations (defaults to "
+            "_yagua_wd_<project_name>_ in current directory)",
+            parser=as_path,
+        ),
     ) -> None:
         """Create an empty cache file with project metadata.
 
@@ -289,6 +297,10 @@ class CLIManager:
             Project name. If not provided, uses the directory name.
         description : str, optional
             Project description.
+        work_path : Path, optional
+            Working directory for yagua operations (coverage, mutations, etc.).
+            If not provided, defaults to _yagua_wd_<project_name>_ in the
+            current directory.
 
         Raises
         ------
@@ -307,8 +319,12 @@ class CLIManager:
 
         # Use provided name or default to directory name
         project_name = name or project_path.name
+
         # Use provided cache path or default to <project_name>.sqlite
         cache = cache or as_path(project_path.name + ".sqlite")
+
+        # Use provided work path or default to _yagua_wd_<project_name>_
+        work_path = work_path or as_path(f"_yagua_wd_{project_name}_")
 
         console.print(
             f"\n[bold cyan]📦 Creating project cache...[/bold cyan]\n"
@@ -318,6 +334,7 @@ class CLIManager:
             proj = Project.from_project_info(
                 name=project_name,
                 path=project_path,
+                work_path=work_path,
                 description=description,
                 db_path=cache,
             )
@@ -336,6 +353,7 @@ class CLIManager:
             f"[bold green]✅ Project created successfully![/bold green]\n",
             f"[cyan]📝 Name:[/cyan] {proj.name}",
             f"[cyan]📁 Path:[/cyan] {proj.path}",
+            f"[cyan]🗂️  Working:[/cyan] {proj.work_path}",
             f"[cyan]💾 Cache:[/cyan] {cache}",
         ]
 
