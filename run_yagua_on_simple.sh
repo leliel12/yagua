@@ -32,6 +32,6 @@ yagua info "$DB_PATH"
 
 # Remove database
 echo "Removing database..."
-rm "$DB_PATH"
+# rm "$DB_PATH"
 
 echo "Done!"

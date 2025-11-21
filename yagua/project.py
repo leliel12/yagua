@@ -611,6 +611,19 @@ class Project:
         return result.value
 
     # ========================================================================
+    # Public Methods - Mutations Management
+    # ========================================================================
+
+    def collect_mutations(self):
+        pass
+
+    def collect_mutations_for_test(self, test_id):
+        pass
+
+    def collect_mutations_without_test(self, test_id):
+        pass
+
+    # ========================================================================
     # Public Methods - Project Information
     # ========================================================================
 

@@ -644,13 +644,13 @@ class CLIManager:
                 raise typer.Exit(1)
 
             # Collect mutations
-            if proj.posible_muntants is None or force:
+            if proj.msr is None or force:
                 ... # result = proj.collect_mutations(force=force)
 
             priority_column = priority.value
             cov_columns = list({"coverage_alone", "coverage_without", priority_column})
 
-            mutation_columns = ["test_id", "msr_alone", "msr_wo"]
+            mutation_columns = ["test_id", "msr_alone", "msr_without"]
 
             tests_ids = proj.get_tests_dataframe()[mutation_columns + cov_columns]
             tests_ids.sort_values(priority_column, ascending=ascending, inplace=True)
@@ -659,7 +659,7 @@ class CLIManager:
                 typer.echo(f"⚠️  PArece ser que el collect-coverage no se termino de ejecutar")
                 raise typer.Exit(1)
 
-            test_ids = tests_ids[mutation_columns]
+            tests_ids = tests_ids[mutation_columns].to_numpy()
 
             # Iterate through each test to calculate coverage metrics
             for idx, (test_id, msr_alone, msr_wo) in enumerate(tests_ids, 1):

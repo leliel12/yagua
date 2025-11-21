@@ -165,11 +165,14 @@ class ProjectModel(BaseModel):
     coverage : FloatField, optional
         Total project coverage percentage (0-100).
         Updated via collect-coverage command.
+    msr: FloatField, optional
+        Mutant survival ratio
 
     Notes
     -----
     The Check constraint ensures only one row (id=1) can exist per database,
     enforcing the one-project-per-cache-file design.
+
     """
 
     name = CharField()
@@ -177,7 +180,10 @@ class ProjectModel(BaseModel):
     test_suite_name = CharField()
     mutation_suite_name = CharField()
     description = CharField(null=True)
+
     coverage = FloatField(null=True, default=None)
+
+    msr = FloatField(null=True, default=None)
 
     class Meta:
         # Ensure only one project per database
@@ -294,8 +300,14 @@ class TestModel(BaseModel):
     file = CharField()
     suite = CharField(null=True)
     test = CharField()
+
+    # Coverage
     coverage_alone = FloatField(null=True, default=None)
     coverage_without = FloatField(null=True, default=None)
+
+    # Mutations
+    msr_alone = FloatField(null=True, default=None)
+    msr_without = FloatField(null=True, default=None)
 
     @hybrid.hybrid_property
     def coverage_impact(self) -> float | None:
