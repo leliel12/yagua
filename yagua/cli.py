@@ -639,28 +639,41 @@ class CLIManager:
             )
 
             # Validate that there are tests to analyze
-            if not proj.count_tests():
-                typer.echo(f"⚠️  No tests found for project '{proj.name}'.")
+            if not proj.coverage:
+                typer.echo(f"⚠️  You need the coverage to run collect mutations '{proj.name}'.")
                 raise typer.Exit(1)
 
             # Collect mutations
-            # result = proj.collect_mutations(force=force)
+            if proj.posible_muntants is None or force:
+                ... # result = proj.collect_mutations(force=force)
 
             priority_column = priority.value
             cov_columns = list({"coverage_alone", "coverage_without", priority_column})
 
-            coso_columns = ["test_id", "msr_alone", "msr_wo"]
+            mutation_columns = ["test_id", "msr_alone", "msr_wo"]
 
-            tests_ids = proj.get_tests_dataframe()[coso_columns + cov_columns]
+            tests_ids = proj.get_tests_dataframe()[mutation_columns + cov_columns]
             tests_ids.sort_values(priority_column, ascending=ascending, inplace=True)
 
             if False and tests_ids[cov_columns].isna().to_numpy().any():
                 typer.echo(f"⚠️  PArece ser que el collect-coverage no se termino de ejecutar")
                 raise typer.Exit(1)
 
-            for # Iterate through each test to calculate coverage metrics
-            for idx, (test_id, msr_alone, msr_wo) in enumerate(tests_ids[coso_columns], 1):
-                pass
+            test_ids = tests_ids[mutation_columns]
+
+            # Iterate through each test to calculate coverage metrics
+            for idx, (test_id, msr_alone, msr_wo) in enumerate(tests_ids, 1):
+
+                # Phase 2:
+                msr_alone = _coerce_na(msr_alone)
+                if msr_alone is None or force:
+                    msr_alone = proj.collect_mutations_for_test(test_id)
+
+                # Phase 3:
+                msr_wo = _coerce_na(msr_wo)
+                if msr_wo is None or force:
+                    msr_wo = proj.collect_mutations_without_test(test_id)
+
 
     # ========================================================================
     # Public Commands - Project Information
