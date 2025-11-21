@@ -165,8 +165,10 @@ class ProjectModel(BaseModel):
     coverage : FloatField, optional
         Total project coverage percentage (0-100).
         Updated via collect-coverage command.
-    msr: FloatField, optional
-        Mutant survival ratio
+    msr : FloatField, optional
+        Mutation Score Ratio for the entire project (0-100).
+        Represents the percentage of mutants killed by the test suite.
+        Updated via collect-mutations command.
 
     Notes
     -----
@@ -264,6 +266,14 @@ class TestModel(BaseModel):
         Coverage percentage when running all tests except this one (0-100).
         Updated via collect-coverage command, useful for identifying
         test redundancy and dependencies.
+    msr_alone : FloatField, optional
+        Mutation Score Ratio when running only this test in isolation (0-100).
+        Represents the percentage of mutants killed by this test alone.
+        Updated via collect-mutations command with per-test analysis.
+    msr_without : FloatField, optional
+        Mutation Score Ratio when running all tests except this one (0-100).
+        Updated via collect-mutations command, useful for identifying
+        which mutants are uniquely detected by this test.
 
     Calculated Properties
     ---------------------
