@@ -292,7 +292,7 @@ class CLIManager:
             Path to the project directory.
         cache : Path, optional
             Path to SQLite cache file. If not provided, defaults to
-            <project_name>.sqlite in the current directory.
+            <project_name>.db in the current directory.
         name : str, optional
             Project name. If not provided, uses the directory name.
         description : str, optional
@@ -320,8 +320,8 @@ class CLIManager:
         # Use provided name or default to directory name
         project_name = name or project_path.name
 
-        # Use provided cache path or default to <project_name>.sqlite
-        cache = cache or as_path(project_path.name + ".sqlite")
+        # Use provided cache path or default to <project_name>.db
+        cache = cache or as_path(project_path.name + ".db")
 
         # Validate cache file does not exist
         if cache.exists():
