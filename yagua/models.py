@@ -198,54 +198,6 @@ class ProjectModel(BaseModel):
         constraints = [Check("id = 1")]
 
 
-class HistoryModel(BaseModel):
-    """Command history table.
-
-    Records every command executed on a project, maintaining a complete
-    audit log of operations performed on the project cache.
-
-    Attributes
-    ----------
-    project : ForeignKeyField
-        Reference to the ProjectModel (always id=1).
-        Accessible via backref as project.history.
-    tag : CharField
-        Tag identifying the command type with optional test context
-        (e.g., 'collect_tests', 'collect_coverage',
-        'collect_coverage_for_test::{test_id}',
-        'collect_coverage_without_test::{test_id}').
-    command : TextField
-        The full command string that was executed
-        (e.g., 'pytest --collect-only -q').
-    stdout : TextField
-        Standard output from the command execution.
-    stderr : TextField
-        Standard error output from the command execution.
-    result : TextField
-        Additional result data from the command execution.
-        Can store JSON data or other structured information.
-
-    Examples
-    --------
-    >>> HistoryModel.create(
-    ...     project=project_model,
-    ...     tag="collect_tests",
-    ...     command="pytest --collect-only -q",
-    ...     stdout="150 tests collected",
-    ...     stderr="",
-    ...     result="raw output data"
-    ... )
-    """
-
-    project = ForeignKeyField(ProjectModel, backref="history")
-    tag = CharField()
-    command = TextField()
-    status_code = IntegerField()
-    stdout = TextField()
-    stderr = TextField()
-    result = TextField()
-
-
 class TestModel(BaseModel):
     """Test information table.
 
@@ -423,3 +375,51 @@ class TestModel(BaseModel):
     class Meta:
         indexes = ((("project", "file", "suite", "test"), True),)
         # Unique constraint
+
+
+class HistoryModel(BaseModel):
+    """Command history table.
+
+    Records every command executed on a project, maintaining a complete
+    audit log of operations performed on the project cache.
+
+    Attributes
+    ----------
+    project : ForeignKeyField
+        Reference to the ProjectModel (always id=1).
+        Accessible via backref as project.history.
+    tag : CharField
+        Tag identifying the command type with optional test context
+        (e.g., 'collect_tests', 'collect_coverage',
+        'collect_coverage_for_test::{test_id}',
+        'collect_coverage_without_test::{test_id}').
+    command : TextField
+        The full command string that was executed
+        (e.g., 'pytest --collect-only -q').
+    stdout : TextField
+        Standard output from the command execution.
+    stderr : TextField
+        Standard error output from the command execution.
+    result : TextField
+        Additional result data from the command execution.
+        Can store JSON data or other structured information.
+
+    Examples
+    --------
+    >>> HistoryModel.create(
+    ...     project=project_model,
+    ...     tag="collect_tests",
+    ...     command="pytest --collect-only -q",
+    ...     stdout="150 tests collected",
+    ...     stderr="",
+    ...     result="raw output data"
+    ... )
+    """
+
+    project = ForeignKeyField(ProjectModel, backref="history")
+    tag = CharField()
+    command = TextField()
+    status_code = IntegerField()
+    stdout = TextField()
+    stderr = TextField()
+    result = TextField()

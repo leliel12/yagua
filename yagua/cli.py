@@ -5,6 +5,10 @@ This module provides the command-line interface for yagua, a tool for
 collecting and managing test information from pytest-based projects.
 """
 
+# =============================================================================
+# IMPORTS
+# =============================================================================
+
 import contextlib
 import enum
 import inspect
@@ -16,7 +20,6 @@ import typer
 
 from rich.console import Console
 from rich.panel import Panel
-from rich.table import Table
 
 from .project import Project
 from .models import TestModel
@@ -92,14 +95,15 @@ def _coerce_na(value):
     """
     Coerces input values that are None or NaN (Not a Number) to None.
 
-    This function is useful in data cleaning pipelines where you need a consistent
-    representation for missing data points before further processing or storage
-    (e.g., storing in a database that uses NULL).
+    This function is useful in data cleaning pipelines where you need a
+    consistent representation for missing data points before further processing
+    or storage (e.g., storing in a database that uses NULL).
 
     Parameters
     ----------
     value : Any
-        The input value to check. Can be of various types (float, int, str, None, etc.).
+        The input value to check. Can be of various types
+        (float, int, str, None, etc.).
 
     Returns
     -------
@@ -735,13 +739,11 @@ class CLIManager:
             # Phase 1: Calculate mutation score for all tests combined
             if proj.msr is None or force:
                 proj.collect_mutations()
-                proj.msr = .2
+                proj.msr = 0.2
             console.print(
                 f"\n🧬 [bold green]Total mutation score:[/bold green] "
                 f"[cyan]{proj.msr:.2f}%[/cyan]\n"
             )
-
-
 
             # Prepare dataframe with mutation and coverage columns
             priority_column = priority.value
@@ -750,7 +752,9 @@ class CLIManager:
             )
             mutation_columns = ["test_id", "msr_alone", "msr_without"]
 
-            tests_df = proj.get_tests_dataframe()[mutation_columns + cov_columns]
+            tests_df = proj.get_tests_dataframe()[
+                mutation_columns + cov_columns
+            ]
             tests_df.sort_values(
                 priority_column, ascending=ascending, inplace=True
             )
@@ -807,13 +811,11 @@ class CLIManager:
                 # Clear progress message
                 console.print(" " * len(proc_test_msg), end="\r")
 
-
         console.print(
             "[bold green]✅ Mutation collection complete![/bold green]\n\n"
             f"[dim]💡 Use[/dim] [cyan]'yagua list-tests {cache.name}'[/cyan]"
             "[dim] to view all mutation metrics[/dim]\n"
         )
-
 
     # ========================================================================
     # Public Commands - Project Information

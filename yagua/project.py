@@ -160,7 +160,11 @@ class Project:
 
         project = cls(db_path)
         project.store_project_info(
-            name, path, work_path, test_suite_name, mutation_suite_name,
+            name,
+            path,
+            work_path,
+            test_suite_name,
+            mutation_suite_name,
             description,
         )
 
