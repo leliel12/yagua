@@ -323,8 +323,30 @@ class CLIManager:
         # Use provided cache path or default to <project_name>.sqlite
         cache = cache or as_path(project_path.name + ".sqlite")
 
+        # Validate cache file does not exist
+        if cache.exists():
+            console.print(
+                Panel(
+                    f"[red]Cache file already exists:[/red]\n{cache}",
+                    title="❌ Error",
+                    border_style="red",
+                )
+            )
+            raise typer.Exit(code=1)
+
         # Use provided work path or default to _yagua_wd_<project_name>_
         work_path = work_path or as_path(f"_yagua_wd_{project_name}_")
+
+        # Validate work path does not exist
+        if work_path.exists():
+            console.print(
+                Panel(
+                    f"[red]Working directory already exists:[/red]\n{work_path}",
+                    title="❌ Error",
+                    border_style="red",
+                )
+            )
+            raise typer.Exit(code=1)
 
         console.print(
             f"\n[bold cyan]📦 Creating project cache...[/bold cyan]\n"
