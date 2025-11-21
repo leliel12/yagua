@@ -117,24 +117,44 @@ def _coerce_na(value):
     return value
 
 
-#: Reusable Typer argument definition for cache file path.
-#:
-#: This constant provides a consistent argument definition across all
-#: CLI commands that require a cache file path. It ensures that:
-#: - The argument is required (...)
-#: - The path string is converted to a resolved Path object (parser=as_path)
-#: - The help text and metavar are consistent across all commands
-#:
-#: Type: typer.Argument
-_CACHE_ARGUMENT = typer.Argument(
-    ...,
-    help="Path to SQLite database file",
-    parser=as_path,
-    metavar="💾 Project Cache db",
-)
+def _make_cache_argument(**kwargs):
+    """Create a reusable Typer argument for cache file path.
+
+    This factory function creates consistent cache file argument definitions
+    across all CLI commands. It sets sensible defaults while allowing
+    customization via keyword arguments.
+
+    Parameters
+    ----------
+    **kwargs
+        Keyword arguments passed to typer.Argument. Defaults are set for:
+        - default: ... (required argument)
+        - help: "Path to SQLite database file"
+        - parser: as_path (converts to resolved Path)
+        - metavar: "💾 Project Cache db"
+
+    Returns
+    -------
+    typer.Argument
+        Configured Typer argument for cache file path.
+    """
+    kwargs.setdefault("default", ...)
+    kwargs.setdefault("help", "Path to SQLite database file")
+    kwargs.setdefault("parser", as_path)
+    kwargs.setdefault("metavar", "💾 Project Cache db")
+    return typer.Argument(**kwargs)
 
 
-#: Claude completa
+#: Enum for selecting test ordering column in collect-mutations command.
+#:
+#: This enum is dynamically generated from TestModel's coverage-related
+#: fields and hybrid properties. It allows users to specify which coverage
+#: metric should be used to prioritize test evaluation order during
+#: mutation analysis.
+#:
+#: Members are created from all TestModel attributes starting with
+#: "coverage_" (e.g., COVERAGE_ALONE, COVERAGE_WITHOUT, COVERAGE_IMPACT,
+#: COVERAGE_UNIQUENESS, COVERAGE_REDUNDANCY, COVERAGE_OVERLAP).
 _CollectMutationOrder = enum.StrEnum(
     "_CollectMutationOrder",
     {
@@ -238,7 +258,7 @@ class CLIManager:
             help="Path to the project directory",
             parser=as_path,
         ),
-        cache: str = _CACHE_ARGUMENT,
+        cache: str = _make_cache_argument(default=None),
         name: str = typer.Option(
             None,
             "-n",
@@ -340,7 +360,7 @@ class CLIManager:
 
     def collect_tests(
         self,
-        cache: str = _CACHE_ARGUMENT,
+        cache: str = _make_cache_argument(),
         force: bool = typer.Option(
             False,
             "--force",
@@ -404,7 +424,7 @@ class CLIManager:
 
     def list_tests(
         self,
-        cache: str = _CACHE_ARGUMENT,
+        cache: str = _make_cache_argument(),
         long: bool = typer.Option(
             False,
             "--long",
@@ -487,7 +507,7 @@ class CLIManager:
     # ========================================================================
     def collect_coverage(
         self,
-        cache: str = _CACHE_ARGUMENT,
+        cache: str = _make_cache_argument(),
         force: bool = typer.Option(
             False,
             "--force",
@@ -593,7 +613,7 @@ class CLIManager:
 
     def collect_mutations(
         self,
-        cache: str = _CACHE_ARGUMENT,
+        cache: str = _make_cache_argument(),
         force: bool = typer.Option(
             False,
             "--force",
@@ -761,7 +781,7 @@ class CLIManager:
 
     def info(
         self,
-        cache: str = _CACHE_ARGUMENT,
+        cache: str = _make_cache_argument(),
     ) -> None:
         """Show project information from cache.
 
