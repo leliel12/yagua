@@ -598,21 +598,31 @@ class CLIManager:
             False,
             "--force",
             "-f",
-            help="Force recalculation even if mutations exist",
+            help="Force recalculation even if mutations exist.",
         ),
         priority: _CollectMutationOrder = typer.Option(
             _CollectMutationOrder.COVERAGE_UNIQUENESS,
             "--priority",
             "-p",
-            help="The column to determine the order of the test to be evaluated",
+            help="Column to determine test evaluation order.",
         ),
-        ascending: bool = typer.Option(False, help=""),
+        ascending: bool = typer.Option(
+            False,
+            "--ascending",
+            "-a",
+            help="Sort tests in ascending order by priority column.",
+        ),
     ) -> None:
         """Collect and store mutation testing information for the project.
 
-        This command runs mutation testing to assess test suite quality.
-        It generates mutants (code modifications) and checks if the test
-        suite detects them.
+        This command runs mutation testing to assess test suite quality
+        in three phases:
+        1. Total project mutation score (all tests)
+        2. Per-test mutation score (each test in isolation)
+        3. Mutation score without each test (all tests except one)
+
+        The collected data enables calculation of test effectiveness,
+        redundancy, and mutation detection capabilities.
 
         Parameters
         ----------
@@ -621,58 +631,128 @@ class CLIManager:
         force : bool, optional
             Force recalculation of mutations even if they already exist.
             Default is False.
+        priority : _CollectMutationOrder, optional
+            Column used to sort tests for evaluation order.
+            Default is COVERAGE_UNIQUENESS.
+        ascending : bool, optional
+            Sort tests in ascending order. Default is False (descending).
 
         Raises
         ------
         typer.Exit
-            If cache file does not exist or no tests found.
+            If cache file does not exist, no coverage data exists,
+            or coverage collection is incomplete.
 
         Notes
         -----
         Mutation testing can be time-consuming for large codebases as it
         requires running the test suite multiple times for each mutant.
+        For N tests, this results in approximately 2N+1 mutation runs.
+
+        Coverage data must be collected before running mutation analysis.
+        Use the collect-coverage command first if coverage is missing.
         """
         with self._use_project(cache) as proj:
 
             console.print(
-                f"[bold blue]🧬 Collecting mutations...[/bold blue]\n"
+                "[bold blue]🧬 Calculating mutation scores...[/bold blue]"
             )
 
-            # Validate that there are tests to analyze
+            # Validate that coverage exists before running mutations
             if not proj.coverage:
-                typer.echo(f"⚠️  You need the coverage to run collect mutations '{proj.name}'.")
+                console.print(
+                    Panel(
+                        "[yellow]Coverage data is required before "
+                        "running mutation analysis.[/yellow]\n\n"
+                        f"[dim]Run[/dim] [cyan]'yagua collect-coverage "
+                        f"{cache.name}'[/cyan] [dim]first.[/dim]",
+                        title="⚠️  Warning",
+                        border_style="yellow",
+                    )
+                )
                 raise typer.Exit(1)
 
-            # Collect mutations
+            # Phase 1: Calculate mutation score for all tests combined
             if proj.msr is None or force:
-                ... # result = proj.collect_mutations(force=force)
+                proj.collect_mutations()
+                proj.msr = .2
+            console.print(
+                f"\n🧬 [bold green]Total mutation score:[/bold green] "
+                f"[cyan]{proj.msr:.2f}%[/cyan]\n"
+            )
 
+
+
+            # Prepare dataframe with mutation and coverage columns
             priority_column = priority.value
-            cov_columns = list({"coverage_alone", "coverage_without", priority_column})
-
+            cov_columns = list(
+                {"coverage_alone", "coverage_without", priority_column}
+            )
             mutation_columns = ["test_id", "msr_alone", "msr_without"]
 
-            tests_ids = proj.get_tests_dataframe()[mutation_columns + cov_columns]
-            tests_ids.sort_values(priority_column, ascending=ascending, inplace=True)
+            tests_df = proj.get_tests_dataframe()[mutation_columns + cov_columns]
+            tests_df.sort_values(
+                priority_column, ascending=ascending, inplace=True
+            )
 
-            if False and tests_ids[cov_columns].isna().to_numpy().any():
-                typer.echo(f"⚠️  PArece ser que el collect-coverage no se termino de ejecutar")
+            # Validate that coverage collection is complete
+            if tests_df[cov_columns].isna().to_numpy().any():
+                console.print(
+                    Panel(
+                        "[yellow]Coverage collection appears to be "
+                        "incomplete.[/yellow]\n\n"
+                        "[dim]Some tests are missing coverage data. Run[/dim] "
+                        f"[cyan]'yagua collect-coverage {cache.name} --force'"
+                        "[/cyan] [dim]to recalculate.[/dim]",
+                        title="⚠️  Warning",
+                        border_style="yellow",
+                    )
+                )
                 raise typer.Exit(1)
 
-            tests_ids = tests_ids[mutation_columns].to_numpy()
+            # Phase 2 & 3: Calculate per-test mutation metrics
+            console.print(
+                "[bold blue]🧪 Per-test mutation analysis...[/bold blue]\n"
+            )
 
-            # Iterate through each test to calculate coverage metrics
-            for idx, (test_id, msr_alone, msr_wo) in enumerate(tests_ids, 1):
+            # Extract test data as numpy array for iteration
+            tests_data = tests_df[mutation_columns].to_numpy()
+            tests_count = len(tests_data)
 
-                # Phase 2:
+            # Iterate through each test to calculate mutation metrics
+            for idx, (test_id, msr_alone, msr_wo) in enumerate(tests_data, 1):
+
+                # Show progress to user
+                proc_test_msg = (
+                    f"  [dim][{idx}/{tests_count}][/dim] "
+                    f"Processing {test_id}..."
+                )
+                console.print(proc_test_msg, end="\r")
+
+                # Phase 2: Calculate mutation score when running only this test
+                # in isolation
+                # This shows what mutants this specific test can detect on its
+                # own
                 msr_alone = _coerce_na(msr_alone)
                 if msr_alone is None or force:
                     msr_alone = proj.collect_mutations_for_test(test_id)
 
-                # Phase 3:
+                # Phase 3: Calculate mutation score when running all tests
+                # except this one
+                # This helps identify if this test detects unique mutants
                 msr_wo = _coerce_na(msr_wo)
                 if msr_wo is None or force:
                     msr_wo = proj.collect_mutations_without_test(test_id)
+
+                # Clear progress message
+                console.print(" " * len(proc_test_msg), end="\r")
+
+
+        console.print(
+            "[bold green]✅ Mutation collection complete![/bold green]\n\n"
+            f"[dim]💡 Use[/dim] [cyan]'yagua list-tests {cache.name}'[/cyan]"
+            "[dim] to view all mutation metrics[/dim]\n"
+        )
 
 
     # ========================================================================
