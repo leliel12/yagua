@@ -155,7 +155,8 @@ class _SuiteRunResult:
     See Also
     --------
     TestSuiteABC : Abstract base class that uses this dataclass.
-    PytestSuite : Concrete implementation that returns SuiteRunResult instances.
+    PytestSuite : Concrete implementation that returns SuiteRunResult
+    instances.
 
     """
 

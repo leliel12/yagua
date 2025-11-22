@@ -274,7 +274,7 @@ class Project:
                 try:
                     yield txn
                     txn.commit()
-                except:
+                except Exception:
                     txn.rollback()
 
     # ========================================================================
@@ -447,7 +447,8 @@ class Project:
 
         This method retrieves a test from the database and returns it as
         a pandas Series with all fields and calculated properties. It supports
-        lookup by both the database integer ID and the string test_id (pytest nodeid).
+        lookup by both the database integer ID and the string test_id
+        (pytest nodeid).
 
         Parameters
         ----------
@@ -544,7 +545,8 @@ class Project:
         """Collect and store coverage for a single test in isolation.
 
         This method runs a specific test alone to measure its isolated
-        coverage contribution. The result is stored in TestModel.coverage_alone.
+        coverage contribution. The result is stored in
+        TestModel.coverage_alone.
 
         Parameters
         ----------
@@ -560,8 +562,10 @@ class Project:
 
         Notes
         -----
-        Creates a HistoryModel record with tag='collect_coverage_for_test::{test_id}'
-        for tracking execution history per test.
+        Creates a HistoryModel record with
+        tag='collect_coverage_for_test::{test_id}' for tracking execution
+        history per test.
+
         """
         suite = self.test_suite
         result = suite.get_coverage_for_tests(self.path, self.name, [test_id])
@@ -609,7 +613,8 @@ class Project:
 
         Notes
         -----
-        Creates a HistoryModel record with tag='collect_coverage_without_test::{test_id}'
+        Creates a HistoryModel record with
+        tag='collect_coverage_without_test::{test_id}'
         for tracking execution history. Queries all test IDs except the target
         and runs them together to measure combined coverage.
         """
@@ -727,7 +732,8 @@ class Project:
         """Provide dynamic access to project model attributes.
 
         This magic method allows accessing ProjectModel fields directly
-        through the Project instance (e.g., proj.name, proj.path, proj.coverage).
+        through the Project instance
+        (e.g., proj.name, proj.path, proj.coverage).
 
         Parameters
         ----------

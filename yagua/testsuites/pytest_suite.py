@@ -242,12 +242,13 @@ class PytestSuite(TestSuiteABC):
 
                 # Check if file exists in project root with just its basename
                 # If yes, use simple filename; otherwise keep original path
-                # This handles cases where tests were collected with absolute paths
-                # but can be run with relative paths from project root
+                # This handles cases where tests were collected with absolute
+                # paths but can be run with relative paths from project root
                 fname = fpath.name if (cwd / fpath.name).is_file() else fname
 
                 # Reconstruct test ID from normalized components
-                # Filter out None values (suite can be None for standalone tests)
+                # Filter out None values
+                # (suite can be None for standalone tests)
                 parts = fname, suite, test_name
                 test_id_normalized = "::".join(
                     p for p in parts if p is not None
