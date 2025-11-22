@@ -223,6 +223,14 @@ class TestSuiteABC(ABC):
     """
 
     def __init__(self, temp_path):
+        """Initialize test suite handler with temporary directory.
+
+        Parameters
+        ----------
+        temp_path : str or Path
+            Path to temporary directory for storing intermediate files
+            (e.g., coverage reports, temporary data).
+        """
         pass
 
     def pkg_result(

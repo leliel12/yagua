@@ -82,13 +82,11 @@ class PytestSuite(TestSuiteABC):
         report files during coverage collection. The directory is
         automatically cleaned up when the object is destroyed.
 
-        Attributes
+        Parameters
         ----------
-        _verbose : bool
-            If True, prints pytest command execution information to stdout.
-            Useful for debugging and monitoring test execution progress.
-        _temp_dir : tempfile.TemporaryDirectory
-            Temporary directory for storing coverage JSON report files.
+        temp_path : str or Path
+            Path to the parent directory where the temporary directory for
+            coverage files will be created.
         """
         self._verbose = False
         self._temp_dir = tempfile.TemporaryDirectory(

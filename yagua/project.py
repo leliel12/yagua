@@ -176,6 +176,17 @@ class Project:
 
     @property
     def temp_path(self):
+        """Get temporary directory path for intermediate files.
+
+        Returns a path to a 'tmp' subdirectory within the project's work_path.
+        The directory is created if it doesn't exist.
+
+        Returns
+        -------
+        Path
+            Path to temporary directory for storing intermediate files
+            (e.g., coverage reports, test artifacts).
+        """
         path = Path(self.work_path) / "tmp"
         path.mkdir(exist_ok=True)
         return path
