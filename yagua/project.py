@@ -40,6 +40,7 @@ from peewee import SqliteDatabase
 
 from .models import BaseModel, ProjectModel, TestModel, HistoryModel
 from .testsuites import PytestSuite
+from .mutationsuites import CosmicRaySuite
 
 
 # ============================================================================
@@ -56,13 +57,18 @@ MODELS_TO_CREATE = [ProjectModel, TestModel, HistoryModel]
 #: the binding needs to propagate through the inheritance chain.
 ALL_MODELS = [BaseModel] + MODELS_TO_CREATE
 
-
+#: Available test suite handlers mapped by name.
+#: Use these names in Project.from_project_info() to specify which
+#: test framework the project uses.
 TEST_SUITES = {
     "pytest": PytestSuite,
 }
 
+#: Available mutation suite handlers mapped by name.
+#: Use these names in Project.from_project_info() to specify which
+#: mutation testing framework the project uses.
 MUTATION_SUITES = {
-    "cosmic-ray": None,
+    "cosmic-ray": CosmicRaySuite,
 }
 
 # ============================================================================
@@ -216,9 +222,9 @@ class Project:
 
         Returns
         -------
-        MutationSuiteABC or None
+        MutationSuiteABC
             Instantiated mutation suite handler based on the project's
-            mutation_suite_name configuration, or None if not yet implemented.
+            mutation_suite_name configuration.
 
         Notes
         -----
@@ -227,7 +233,7 @@ class Project:
         project's mutation_suite_name field.
         """
         suite_cls = MUTATION_SUITES[self.mutation_suite_name]
-        return suite_cls()
+        return suite_cls(self.temp_path)
 
     # ========================================================================
     # Private Methods
