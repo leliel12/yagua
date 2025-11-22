@@ -222,6 +222,9 @@ class TestSuiteABC(ABC):
     PytestSuite : Concrete implementation for pytest-based projects.
     """
 
+    def __init__(self, temp_path):
+        pass
+
     def pkg_result(
         self, *, value, command, status_code, stdout, stderr, result
     ):

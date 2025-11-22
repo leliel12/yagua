@@ -75,7 +75,7 @@ class PytestSuite(TestSuiteABC):
     # Constructor
     # ========================================================================
 
-    def __init__(self):
+    def __init__(self, temp_path):
         """Initialize PytestSuite with temporary directory for coverage files.
 
         Creates a temporary directory that will be used to store coverage
@@ -91,7 +91,12 @@ class PytestSuite(TestSuiteABC):
             Temporary directory for storing coverage JSON report files.
         """
         self._verbose = False
-        self._temp_dir = tempfile.TemporaryDirectory()
+        self._temp_dir = tempfile.TemporaryDirectory(
+            suffix="_tmp",
+            prefix="yagua_pytest_",
+            dir=temp_path,
+            delete=False,
+        )
 
     # ========================================================================
     # Private Methods

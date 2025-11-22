@@ -175,6 +175,12 @@ class Project:
     # ========================================================================
 
     @property
+    def temp_path(self):
+        path = Path(self.work_path) / "tmp"
+        path.mkdir(exist_ok=True)
+        return path
+
+    @property
     def test_suite(self):
         """Get test suite handler instance for this project.
 
@@ -191,7 +197,7 @@ class Project:
         project's test_suite_name field.
         """
         suite_cls = TEST_SUITES[self.test_suite_name]
-        return suite_cls()
+        return suite_cls(self.temp_path)
 
     @property
     def mutation_suite(self):

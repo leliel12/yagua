@@ -196,6 +196,7 @@ class ProjectModel(BaseModel):
         # Ensure only one project per database
         # The id must always be 1
         constraints = [Check("id = 1")]
+        table_name = "yagua_project"
 
 
 class TestModel(BaseModel):
@@ -373,8 +374,8 @@ class TestModel(BaseModel):
             return None
 
     class Meta:
+        table_name = "yagua_tests"
         indexes = ((("project", "file", "suite", "test"), True),)
-        # Unique constraint
 
 
 class HistoryModel(BaseModel):
@@ -423,3 +424,6 @@ class HistoryModel(BaseModel):
     stdout = TextField()
     stderr = TextField()
     result = TextField()
+
+    class Meta:
+        table_name = "yagua_histories"

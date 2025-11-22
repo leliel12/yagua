@@ -3,6 +3,7 @@
 set -e
 
 DB_PATH="simple_proj/simple.db"
+WORK_PATH="simple_proj/_work_path_"
 
 # Remove database if it exists
 if [ -f "$DB_PATH" ]; then
@@ -10,9 +11,18 @@ if [ -f "$DB_PATH" ]; then
     rm "$DB_PATH"
 fi
 
+# Remove work path if it exists
+if [ -d "$WORK_PATH" ]; then
+    echo "Removing existing work path..."
+    rm -rf "$WORK_PATH"
+fi
+
 # Create project
 echo "Creating project..."
-yagua create-project simple_proj "$DB_PATH" --name "simple" --description "A simple project with basic arithmetic operations"
+yagua create-project simple_proj "$DB_PATH" \
+    --name "simple" \
+    --description "A simple project with basic arithmetic operations" \
+    --work-path "$WORK_PATH"
 
 # Collect tests
 echo "Collecting tests..."
@@ -29,9 +39,5 @@ yagua list-tests "$DB_PATH" --long
 # Show info
 echo "Showing project info..."
 yagua info "$DB_PATH"
-
-# Remove database
-echo "Removing database..."
-# rm "$DB_PATH"
 
 echo "Done!"

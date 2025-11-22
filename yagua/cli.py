@@ -12,6 +12,7 @@ collecting and managing test information from pytest-based projects.
 import contextlib
 import enum
 import inspect
+import os
 import sys
 from pathlib import Path
 
@@ -364,6 +365,7 @@ class CLIManager:
                 description=description,
                 db_path=cache,
             )
+            os.makedirs(work_path)
         except Exception as err:
             console.print(
                 Panel(
