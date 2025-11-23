@@ -37,6 +37,7 @@ yagua info project.db
 ## Code Style
 
 - pep-8
-- Run 'black -l 79'
+- Code formater: 'black -l 79'
+- Max 79 columns per line.
 - NumPy-style docstrings (NO Examples section)
 - Module organization: docstring → imports → constants → private helpers → classes → public functions
