@@ -64,25 +64,17 @@ class CosmicRaySuite(MutationSuiteABC):
     # Constructor
     # ========================================================================
 
-    def __init__(self, temp_path):
-        """Initialize CosmicRaySuite with temporary directory.
-
-        Creates a temporary directory that will be used to store mutation
-        databases and configuration files during mutation testing.
+    def __init__(self, work_path):
+        """Initialize CosmicRaySuite with working directory.
 
         Parameters
         ----------
-        temp_path : str or Path
-            Path to the parent directory where the temporary directory for
-            mutation files will be created.
+        work_path : str or Path
+            Path to the working directory where intermediate files
+            (e.g., mutation databases, configuration files) will be stored.
         """
         self._verbose = False
-        self._temp_dir = tempfile.TemporaryDirectory(
-            suffix="_tmp",
-            prefix="yagua_cosmicray_",
-            dir=temp_path,
-            delete=False,
-        )
+        self._work_path = work_path
 
     # ========================================================================
     # Private Methods

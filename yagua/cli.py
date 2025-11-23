@@ -354,7 +354,7 @@ class CLIManager:
             raise typer.Exit(code=1)
 
         console.print(
-            f"\n[bold cyan]📦 Creating project cache...[/bold cyan]\n"
+            "\n[bold cyan]📦 Creating project cache...[/bold cyan]\n"
         )
 
         try:
@@ -437,7 +437,7 @@ class CLIManager:
 
             if total_tests == 0 or force:
                 console.print(
-                    f"\n[bold cyan]🧪 Collecting tests...[/bold cyan]\n"
+                    "\n[bold cyan]🧪 Collecting tests...[/bold cyan]\n"
                 )
                 saved_count, updated_count = proj.collect_tests()
                 total_tests = saved_count + updated_count
@@ -456,7 +456,7 @@ class CLIManager:
 
             # Build success message
             info_lines = [
-                f"[bold green]✅ Tests collected successfully![/bold green]\n",
+                "[bold green]✅ Tests collected successfully![/bold green]\n",
                 f"[cyan]📊 Total tests:[/cyan] {total_tests}",
             ]
 
@@ -541,7 +541,7 @@ class CLIManager:
                     f"[cyan]{proj.coverage:.2f}%[/cyan]\n"
                 )
 
-            console.print(f"\n[bold cyan]🧪 Tests:[/bold cyan]\n")
+            console.print("\n[bold cyan]🧪 Tests:[/bold cyan]\n")
             console.print(tests_table)
             console.print(
                 f"\n[dim]📊 Total:[/dim] [bold]{len(tests)}[/bold] "
@@ -595,7 +595,7 @@ class CLIManager:
         """
         with self._use_project(cache) as proj:
 
-            console.print(f"[bold blue]📊 Calculating coverage...[/bold blue]")
+            console.print("[bold blue]📊 Calculating coverage...[/bold blue]")
 
             # Validate that there are tests to analyze
             if not proj.count_tests():
@@ -606,7 +606,7 @@ class CLIManager:
             if proj.coverage is None or force:
                 proj.collect_coverage()
             console.print(
-                f"\n💯 [bold green]Total coverage:[/bold green] "
+                "\n💯 [bold green]Total coverage:[/bold green] "
                 f"[cyan]{proj.coverage:.2f}%[/cyan]\n"
             )
 

@@ -223,13 +223,13 @@ class TestSuiteABC(ABC):
     PytestSuite : Concrete implementation for pytest-based projects.
     """
 
-    def __init__(self, temp_path):
-        """Initialize test suite handler with temporary directory.
+    def __init__(self, work_path):
+        """Initialize test suite handler with working directory.
 
         Parameters
         ----------
-        temp_path : str or Path
-            Path to temporary directory for storing intermediate files
+        work_path : str or Path
+            Path to working directory for storing intermediate files
             (e.g., coverage reports, temporary data).
         """
         pass

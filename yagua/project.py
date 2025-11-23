@@ -181,23 +181,6 @@ class Project:
     # ========================================================================
 
     @property
-    def temp_path(self):
-        """Get temporary directory path for intermediate files.
-
-        Returns a path to a 'tmp' subdirectory within the project's work_path.
-        The directory is created if it doesn't exist.
-
-        Returns
-        -------
-        Path
-            Path to temporary directory for storing intermediate files
-            (e.g., coverage reports, test artifacts).
-        """
-        path = Path(self.work_path) / "tmp"
-        path.mkdir(exist_ok=True)
-        return path
-
-    @property
     def test_suite(self):
         """Get test suite handler instance for this project.
 
@@ -214,7 +197,7 @@ class Project:
         project's test_suite_name field.
         """
         suite_cls = TEST_SUITES[self.test_suite_name]
-        return suite_cls(self.temp_path)
+        return suite_cls(self.work_path)
 
     @property
     def mutation_suite(self):
@@ -233,7 +216,7 @@ class Project:
         project's mutation_suite_name field.
         """
         suite_cls = MUTATION_SUITES[self.mutation_suite_name]
-        return suite_cls(self.temp_path)
+        return suite_cls(self.work_path)
 
     # ========================================================================
     # Private Methods

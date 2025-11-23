@@ -39,6 +39,7 @@ import contextlib
 import pathlib
 import tempfile
 import json
+import os
 
 import pytest
 
@@ -75,30 +76,29 @@ class PytestSuite(TestSuiteABC):
     # Constructor
     # ========================================================================
 
-    def __init__(self, temp_path):
-        """Initialize PytestSuite with temporary directory for coverage files.
-
-        Creates a temporary directory that will be used to store coverage
-        report files during coverage collection. The directory is
-        automatically cleaned up when the object is destroyed.
+    def __init__(self, work_path):
+        """Initialize PytestSuite with working directory for coverage files.
 
         Parameters
         ----------
-        temp_path : str or Path
-            Path to the parent directory where the temporary directory for
-            coverage files will be created.
+        work_path : str or Path
+            Path to the working directory where intermediate files
+            (e.g., coverage reports) will be stored.
         """
         self._verbose = False
         self._temp_dir = tempfile.TemporaryDirectory(
-            suffix="_tmp",
-            prefix="yagua_pytest_",
-            dir=temp_path,
+            dir=self._base_temp_dir(work_path),
             delete=False,
         )
 
     # ========================================================================
     # Private Methods
     # ========================================================================
+
+    def _base_temp_dir(self, work_path):
+        base_temp_dir = os.path.join(work_path, "yagua_pytest_temp")
+        os.makedirs(base_temp_dir, exist_ok=True)
+        return base_temp_dir
 
     def _run(self, cmd, project_path, plugins=None):
         """Run pytest command using pytest.main() API.

@@ -214,14 +214,14 @@ class MutationSuiteABC(ABC):
     CosmicRaySuite : Concrete implementation for cosmic-ray mutation testing.
     """
 
-    def __init__(self, temp_path):
-        """Initialize mutation suite handler with temporary directory.
+    def __init__(self, work_path):
+        """Initialize mutation suite handler with working directory.
 
         Parameters
         ----------
-        temp_path : str or Path
-            Path to temporary directory for storing intermediate files
-            (e.g., mutation databases, temporary data).
+        work_path : str or Path
+            Path to working directory for storing intermediate files
+            (e.g., mutation databases, configuration files).
         """
         pass
 
