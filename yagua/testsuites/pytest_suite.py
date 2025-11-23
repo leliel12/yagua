@@ -96,6 +96,18 @@ class PytestSuite(TestSuiteABC):
     # ========================================================================
 
     def _base_temp_dir(self, work_path):
+        """Create and return base temporary directory for pytest files.
+
+        Parameters
+        ----------
+        work_path : str or Path
+            Path to the working directory.
+
+        Returns
+        -------
+        str
+            Path to the base temporary directory for pytest files.
+        """
         base_temp_dir = os.path.join(work_path, "yagua_pytest_temp")
         os.makedirs(base_temp_dir, exist_ok=True)
         return base_temp_dir
