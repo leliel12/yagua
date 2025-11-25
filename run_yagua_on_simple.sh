@@ -34,7 +34,7 @@ yagua collect-coverage "$DB_PATH"
 
 # Collect mutations
 echo "Collecting mutations..."
-# yagua collect-mutations "$DB_PATH"
+yagua collect-mutations "$DB_PATH"
 
 # List tests
 echo "Listing tests..."

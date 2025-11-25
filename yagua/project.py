@@ -421,7 +421,9 @@ class Project:
         """
         with self.transaction():
             project = self._get_project_model()
-            return TestModel.select().where(TestModel.project == project).count()
+            return (
+                TestModel.select().where(TestModel.project == project).count()
+            )
 
     def get_test(self, test_id: str | int) -> pd.Series:
         """Get a specific test by its test_id or database ID.
@@ -606,7 +608,9 @@ class Project:
             )
             tids_to_run = [test.test_id for test in query]
 
-            result = suite.get_coverage_for_tests(self.path, self.name, tids_to_run)
+            result = suite.get_coverage_for_tests(
+                self.path, self.name, tids_to_run
+            )
 
             if not result.error:
                 test = TestModel.get(TestModel.test_id == test_id)
@@ -748,7 +752,9 @@ class Project:
             List of available attributes including both Project instance
             attributes and ProjectModel fields (excluding 'id').
         """
-        fields = [f for f in ProjectModel._meta.sorted_field_names if f != "id"]
+        fields = [
+            f for f in ProjectModel._meta.sorted_field_names if f != "id"
+        ]
         return super().__dir__() + fields
 
     def __repr__(self):

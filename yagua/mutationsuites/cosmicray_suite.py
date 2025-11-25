@@ -97,15 +97,11 @@ class CosmicRaySuite(MutationSuiteABC):
 
         # TODO: Implement actual cosmic-ray execution
         with (
-     contextlib.chdir(project_path),
+            contextlib.chdir(project_path),
             contextlib.redirect_stdout(stdout),
             contextlib.redirect_stderr(stderr),
         ):
             coso = func(*args, **kwargs)
-
-
-
-
 
         status = 0  # Placeholder
 
@@ -157,8 +153,10 @@ class CosmicRaySuite(MutationSuiteABC):
         self._write_conf(project_name, [], config_file)
 
         self._run(
-            project_path, func=cray_cli.init.callback, args=(config_file, session_file, False))
-
+            project_path,
+            func=cray_cli.init.callback,
+            args=(config_file, session_file, False),
+        )
 
     def get_mutations_for_tests(self, project_path, project_name, tests_ids):
         """Run mutation testing with specific tests and return score.

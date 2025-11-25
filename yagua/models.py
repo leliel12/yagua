@@ -316,7 +316,11 @@ class TestModel(BaseModel):
         to this test (i.e., covered by other tests as well).
         """
         try:
-            return self.coverage_without + self.coverage_alone - self.project.coverage
+            return (
+                self.coverage_without
+                + self.coverage_alone
+                - self.project.coverage
+            )
         except TypeError:
             return None
 

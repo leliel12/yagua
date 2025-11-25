@@ -54,3 +54,8 @@ Issues = "https://github.com/yourusername/yagua/issues"
 include = ["yagua"]
 namespaces = false
 
+[tool.black]
+line-length = 79
+target-version = ["py311"]
+
+

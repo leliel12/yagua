@@ -162,7 +162,11 @@ def _make_cache_argument(**kwargs):
 #: COVERAGE_UNIQUENESS, COVERAGE_REDUNDANCY, COVERAGE_OVERLAP).
 _CollectMutationOrder = enum.StrEnum(
     "_CollectMutationOrder",
-    {k.upper(): k for k, v in vars(TestModel).items() if k.startswith("coverage_")},
+    {
+        k.upper(): k
+        for k, v in vars(TestModel).items()
+        if k.startswith("coverage_")
+    },
 )
 
 # ============================================================================
@@ -380,7 +384,9 @@ class CLIManager:
         ]
 
         if proj.description:
-            info_lines.append(f"[cyan]🪪 Description:[/cyan] {proj.description}")
+            info_lines.append(
+                f"[cyan]🪪 Description:[/cyan] {proj.description}"
+            )
 
         info_lines.append(f"\n[dim]✨ Cache initialized with 0 tests[/dim]")
 
@@ -428,7 +434,9 @@ class CLIManager:
             saved_count, updated_count = 0, 0
 
             if total_tests == 0 or force:
-                console.print("\n[bold cyan]🧪 Collecting tests...[/bold cyan]\n")
+                console.print(
+                    "\n[bold cyan]🧪 Collecting tests...[/bold cyan]\n"
+                )
                 saved_count, updated_count = proj.collect_tests()
                 total_tests = saved_count + updated_count
 
@@ -505,7 +513,9 @@ class CLIManager:
                 ]
 
                 # Keep only user-facing columns
-                columns = [col for col in tests.columns if col not in ignore_columns]
+                columns = [
+                    col for col in tests.columns if col not in ignore_columns
+                ]
                 tests = tests[columns]
 
             # Check if any tests were found
@@ -599,7 +609,9 @@ class CLIManager:
             )
 
             # Phase 2 & 3: Calculate per-test coverage metrics
-            console.print("[bold blue]🧪 Per-test coverage analysis...[/bold blue]\n")
+            console.print(
+                "[bold blue]🧪 Per-test coverage analysis...[/bold blue]\n"
+            )
 
             # Extract test IDs and existing coverage data from dataframe
             tests_ids = proj.get_tests_dataframe()[
@@ -614,7 +626,8 @@ class CLIManager:
 
                 # Show progress to user
                 proc_test_msg = (
-                    f"  [dim][{idx}/{tests_count}][/dim] " f"Processing {test_id}..."
+                    f"  [dim][{idx}/{tests_count}][/dim] "
+                    f"Processing {test_id}..."
                 )
                 console.print(proc_test_msg, end="\r")
 
@@ -705,7 +718,9 @@ class CLIManager:
         """
         with self._use_project(cache) as proj:
 
-            console.print("[bold blue]🧬 Calculating mutation scores...[/bold blue]")
+            console.print(
+                "[bold blue]🧬 Calculating mutation scores...[/bold blue]"
+            )
 
             # Validate that coverage exists before running mutations
             if not proj.coverage:
@@ -732,11 +747,17 @@ class CLIManager:
 
             # Prepare dataframe with mutation and coverage columns
             priority_column = priority.value
-            cov_columns = list({"coverage_alone", "coverage_without", priority_column})
+            cov_columns = list(
+                {"coverage_alone", "coverage_without", priority_column}
+            )
             mutation_columns = ["test_id", "msr_alone", "msr_without"]
 
-            tests_df = proj.get_tests_dataframe()[mutation_columns + cov_columns]
-            tests_df.sort_values(priority_column, ascending=ascending, inplace=True)
+            tests_df = proj.get_tests_dataframe()[
+                mutation_columns + cov_columns
+            ]
+            tests_df.sort_values(
+                priority_column, ascending=ascending, inplace=True
+            )
 
             # Validate that coverage collection is complete
             if tests_df[cov_columns].isna().to_numpy().any():
@@ -754,7 +775,9 @@ class CLIManager:
                 raise typer.Exit(1)
 
             # Phase 2 & 3: Calculate per-test mutation metrics
-            console.print("[bold blue]🧪 Per-test mutation analysis...[/bold blue]\n")
+            console.print(
+                "[bold blue]🧪 Per-test mutation analysis...[/bold blue]\n"
+            )
 
             # Extract test data as numpy array for iteration
             tests_data = tests_df[mutation_columns].to_numpy()
@@ -765,7 +788,8 @@ class CLIManager:
 
                 # Show progress to user
                 proc_test_msg = (
-                    f"  [dim][{idx}/{tests_count}][/dim] " f"Processing {test_id}..."
+                    f"  [dim][{idx}/{tests_count}][/dim] "
+                    f"Processing {test_id}..."
                 )
                 console.print(proc_test_msg, end="\r")
 
@@ -827,7 +851,9 @@ class CLIManager:
             ]
 
             if proj.description:
-                info_lines.append(f"[cyan]🪪 Description:[/cyan] {proj.description}")
+                info_lines.append(
+                    f"[cyan]🪪 Description:[/cyan] {proj.description}"
+                )
 
             if test_count:
                 info_lines.append(f"[cyan]🧪 Tests:[/cyan] {test_count}")
@@ -898,7 +924,9 @@ def _create_app(cli_manager):
             command_help = _make_help(method)
             # Create command with hyphenated name
             # (e.g., collect_tests -> collect-tests)
-            cmd_wrapper = app.command(name=name.replace("_", "-"), help=command_help)
+            cmd_wrapper = app.command(
+                name=name.replace("_", "-"), help=command_help
+            )
             cmd_wrapper(method)
 
     return app
