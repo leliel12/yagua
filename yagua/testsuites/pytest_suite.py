@@ -160,9 +160,7 @@ class PytestSuite(TestSuiteABC):
 
         return (full_cmd, status, stdout.getvalue(), stderr.getvalue())
 
-    def _parse_test_line(
-        self, line: str
-    ) -> tuple[str, str, str | None, str] | None:
+    def _parse_test_line(self, line: str) -> tuple[str, str, str | None, str] | None:
         """Parse a pytest test line into components.
 
         This method parses pytest nodeid strings into their component parts,
@@ -262,9 +260,7 @@ class PytestSuite(TestSuiteABC):
                 # Filter out None values
                 # (suite can be None for standalone tests)
                 parts = fname, suite, test_name
-                test_id_normalized = "::".join(
-                    p for p in parts if p is not None
-                )
+                test_id_normalized = "::".join(p for p in parts if p is not None)
 
                 normalized.append(test_id_normalized)
 

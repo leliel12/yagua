@@ -234,9 +234,7 @@ class TestSuiteABC(ABC):
         """
         pass
 
-    def pkg_result(
-        self, *, value, command, status_code, stdout, stderr, result
-    ):
+    def pkg_result(self, *, value, command, status_code, stdout, stderr, result):
         """Package test suite execution results into a SuiteRunResult object.
 
         This helper method creates a standardized SuiteRunResult dataclass

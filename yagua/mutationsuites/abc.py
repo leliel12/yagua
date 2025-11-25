@@ -225,9 +225,7 @@ class MutationSuiteABC(ABC):
         """
         pass
 
-    def pkg_result(
-        self, *, value, command, status_code, stdout, stderr, result
-    ):
+    def pkg_result(self, *, value, command, status_code, stdout, stderr, result):
         """Package mutation suite execution results into a SuiteRunResult.
 
         This helper method creates a standardized SuiteRunResult dataclass

@@ -28,7 +28,12 @@ Dependencies
 
 import io
 import contextlib
+import os
+import pathlib
 import tempfile
+
+from cosmic_ray import config as cray_config
+from cosmic_ray import cli as cray_cli
 
 from .abc import MutationSuiteABC
 
@@ -74,63 +79,50 @@ class CosmicRaySuite(MutationSuiteABC):
             (e.g., mutation databases, configuration files) will be stored.
         """
         self._verbose = False
-        self._work_path = work_path
+        self._work_path = pathlib.Path(work_path) / "yagua_cray"
+        self._work_path.mkdir(parents=True, exist_ok=True)
 
     # ========================================================================
     # Private Methods
     # ========================================================================
 
-    def _run(self, cmd, project_path):
-        """Run cosmic-ray command.
+    def _run(self, project_path, func, args=None, kwargs=None):
 
-        This internal method executes cosmic-ray programmatically, redirecting
-        output to string buffers and changing to the project directory.
-
-        Parameters
-        ----------
-        cmd : list[str]
-            Command arguments to pass to cosmic-ray
-            (e.g., ['run', 'config.toml']).
-        project_path : str or Path
-            Working directory for cosmic-ray execution.
-
-        Returns
-        -------
-        command : str
-            Space-joined command string for audit logging.
-        status_code : int
-            Exit status code from command execution.
-        stdout : str
-            Captured standard output from execution.
-        stderr : str
-            Captured standard error from execution.
-
-        Notes
-        -----
-        This method uses context managers to:
-        1. Change to the project directory (contextlib.chdir)
-        2. Redirect stdout to a StringIO buffer
-        3. Redirect stderr to a StringIO buffer
-
-        All context changes are automatically reverted when the method returns.
-        """
-        full_cmd = " ".join(["cosmic-ray"] + cmd)
+        args = args or ()
+        kwargs = kwargs or {}
         stdout, stderr = io.StringIO(), io.StringIO()
 
         if self._verbose:
             print(f"[RUN] {project_path} >> {full_cmd!r}")
 
         # TODO: Implement actual cosmic-ray execution
-        # with (
-        #     contextlib.chdir(project_path),
-        #     contextlib.redirect_stdout(stdout),
-        #     contextlib.redirect_stderr(stderr),
-        # ):
-        #     status = cosmic_ray_main(cmd)
+        with (
+     contextlib.chdir(project_path),
+            contextlib.redirect_stdout(stdout),
+            contextlib.redirect_stderr(stderr),
+        ):
+            coso = func(*args, **kwargs)
+
+
+
+
 
         status = 0  # Placeholder
 
         return (full_cmd, status, stdout.getvalue(), stderr.getvalue())
+
+    def _write_conf(self, project_name, test_ids, config_file):
+        test_command = "pytest " + " ".join(test_ids)
+        config = {
+            "module-path": project_name + ".py",
+            "timeout": 50.0,
+            "excluded-modules": [],
+            "test-command": "pytest",
+            "distributor": {"name": "local"},
+        }
+        config_str = cray_config.serialize_config(config)
+        with open(config_file, "w") as fp:
+            fp.write(config_str)
 
     # ========================================================================
     # Public Methods
@@ -160,23 +152,13 @@ class CosmicRaySuite(MutationSuiteABC):
             - stderr: str - Standard error from cosmic-ray
             - result: str - Additional mutation data
         """
-        # TODO: Implement cosmic-ray mutation testing
-        command, status, stdout, stderr = self._run(
-            ["run", "config.toml"],
-            project_path,
-        )
+        config_file = self._work_path / "global_run.toml"
+        session_file = self._work_path / "global_run.sqlite"
+        self._write_conf(project_name, [], config_file)
 
-        # Placeholder mutation score
-        msr = None
+        self._run(
+            project_path, func=cray_cli.init.callback, args=(config_file, session_file, False))
 
-        return self.pkg_result(
-            value=msr,
-            command=command,
-            status_code=status,
-            stdout=stdout,
-            stderr=stderr,
-            result="",
-        )
 
     def get_mutations_for_tests(self, project_path, project_name, tests_ids):
         """Run mutation testing with specific tests and return score.
