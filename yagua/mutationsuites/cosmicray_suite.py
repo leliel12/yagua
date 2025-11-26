@@ -31,6 +31,8 @@ import contextlib
 import os
 import pathlib
 import tempfile
+from unittest import mock
+import json
 
 from cosmic_ray import config as cray_config
 from cosmic_ray import cli as cray_cli
@@ -41,6 +43,17 @@ from .abc import MutationSuiteABC
 # ============================================================================
 # COSMIC RAY SUITE
 # ============================================================================
+
+
+class ExitCalled(Exception):
+    pass
+
+
+class _ExitCapture:
+
+    def __call__(self, value):
+        self.value = value
+        raise ExitCalled()
 
 
 class CosmicRaySuite(MutationSuiteABC):
@@ -86,34 +99,57 @@ class CosmicRaySuite(MutationSuiteABC):
     # Private Methods
     # ========================================================================
 
+    def _render_full_cmd(self, func, args, kwargs):
+        func = func.__name__
+        args = ", ".join(map(repr, args))
+        kwargs = ", ".join(f"{k}={v!r}" for k, v in kwargs.items())
+        kwargs = f", {kwargs}" if kwargs else ""
+        return f"{func}({args}, {kwargs})"
+
     def _run(self, project_path, func, args=None, kwargs=None):
 
         args = args or ()
         kwargs = kwargs or {}
         stdout, stderr = io.StringIO(), io.StringIO()
+        full_cmd = self._render_full_cmd(func, args, kwargs)
 
         if self._verbose:
             print(f"[RUN] {project_path} >> {full_cmd!r}")
 
-        # TODO: Implement actual cosmic-ray execution
-        with (
-            contextlib.chdir(project_path),
-            contextlib.redirect_stdout(stdout),
-            contextlib.redirect_stderr(stderr),
-        ):
-            coso = func(*args, **kwargs)
-
-        status = 0  # Placeholder
+        try:
+            with (
+                contextlib.chdir(project_path),
+                contextlib.redirect_stdout(stdout),
+                contextlib.redirect_stderr(stderr),
+            ):
+                func(*args, **kwargs)
+        except SystemExit as exit:
+            status = exit.code
 
         return (full_cmd, status, stdout.getvalue(), stderr.getvalue())
 
-    def _write_conf(self, project_name, test_ids, config_file):
+    def _resolve_module_path(self, project_name, project_path):
+        # lets try if this is a package
+        full_path = pathlib.Path(project_path) / project_name
+        if full_path.is_dir():
+            return project_name
+
+        # try as a module
+        full_path = full_path.with_suffix(".py")
+        if full_path.is_file():
+            return full_path.name
+
+        # fail
+        raise ValueError(f"{project_name!r} can't be configure for cosmic-ray")
+
+    def _write_conf(self, project_name, project_path, test_ids, config_file):
         test_command = "pytest " + " ".join(test_ids)
+        module_path = self._resolve_module_path(project_name, project_path)
         config = {
-            "module-path": project_name + ".py",
+            "module-path": module_path,
             "timeout": 50.0,
             "excluded-modules": [],
-            "test-command": "pytest",
+            "test-command": test_command,
             "distributor": {"name": "local"},
         }
         config_str = cray_config.serialize_config(config)
@@ -150,13 +186,17 @@ class CosmicRaySuite(MutationSuiteABC):
         """
         config_file = self._work_path / "global_run.toml"
         session_file = self._work_path / "global_run.sqlite"
-        self._write_conf(project_name, [], config_file)
+        self._write_conf(project_name, project_path, [], config_file)
 
-        self._run(
+        run_outputs = []
+
+        outputs = self._run(
             project_path,
             func=cray_cli.init.callback,
             args=(config_file, session_file, False),
         )
+
+        run_outputs.append(outputs)
 
     def get_mutations_for_tests(self, project_path, project_name, tests_ids):
         """Run mutation testing with specific tests and return score.
