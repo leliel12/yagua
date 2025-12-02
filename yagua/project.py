@@ -474,6 +474,17 @@ class Project:
 
             return series
 
+    def _write_history(self, project, tag, result):
+        return HistoryModel.create(
+            project=project,
+            tag=tag,
+            command=result.command,
+            status_code=result.status_code,
+            stdout=result.stdout,
+            stderr=result.stderr,
+            result=result.result,
+        )
+
     # ========================================================================
     # Public Methods - Coverage Management
     # ========================================================================
@@ -510,14 +521,8 @@ class Project:
                 project.coverage = result.value
                 project.save()
 
-            HistoryModel.create(
-                project=project,
-                tag="collect_coverage",
-                command=result.command,
-                status_code=result.status_code,
-                stdout=result.stdout,
-                stderr=result.stderr,
-                result=result.result,
+            self._write_history(
+                project=project, tag="collect_coverage", result=result
             )
 
         result.raise_if_error()
@@ -560,14 +565,10 @@ class Project:
                 test.coverage_alone = result.value
                 test.save()
 
-            HistoryModel.create(
+            self._write_history(
                 project=test.project,
                 tag=f"collect_coverage_for_test::{test_id}",
-                command=result.command,
-                status_code=result.status_code,
-                stdout=result.stdout,
-                stderr=result.stderr,
-                result=result.result,
+                result=result,
             )
 
         result.raise_if_error()
@@ -617,14 +618,10 @@ class Project:
                 test.coverage_without = result.value
                 test.save()
 
-            HistoryModel.create(
+            self._write_history(
                 project=test.project,
                 tag=f"collect_coverage_without_test::{test_id}",
-                status_code=result.status_code,
-                command=result.command,
-                stdout=result.stdout,
-                stderr=result.stderr,
-                result=result.result,
+                result=result,
             )
 
         result.raise_if_error()
@@ -638,6 +635,20 @@ class Project:
     def collect_mutations(self):
         suite = self.mutation_suite
         result = suite.get_mutations(self.path, self.name)
+
+        with self.transaction():
+            if not result.error:
+                project = self._get_project_model()
+                project.mutants_number = result.value
+                project.save()
+
+            self._write_history(
+                project=project, tag="collect_mutations", result=result
+            )
+
+        result.raise_if_error()
+
+        return result.value
 
     def collect_mutations_for_test(self, test_id):
         pass

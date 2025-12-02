@@ -158,6 +158,9 @@ class PytestSuite(TestSuiteABC):
         ):
             status = pytest.main(cmd, plugins=plugins)
 
+        stdout.flush()
+        stderr.flush()
+
         return (full_cmd, status, stdout.getvalue(), stderr.getvalue())
 
     def _parse_test_line(

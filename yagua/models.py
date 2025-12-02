@@ -190,6 +190,7 @@ class ProjectModel(BaseModel):
 
     coverage = FloatField(null=True, default=None)
 
+    mutants_number = IntegerField(null=True, default=None)
     msr = FloatField(null=True, default=None)
 
     class Meta:

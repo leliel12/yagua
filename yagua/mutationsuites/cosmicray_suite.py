@@ -31,9 +31,11 @@ import contextlib
 import os
 import pathlib
 import tempfile
+import xml.etree.ElementTree as ET
 
 from cosmic_ray import config as cray_config
 from cosmic_ray import cli as cray_cli
+from cosmic_ray.tools import xml as cr_xml
 
 from .abc import MutationSuiteABC
 
@@ -43,15 +45,22 @@ from .abc import MutationSuiteABC
 # ============================================================================
 
 
+class BytesAndStringIO(io.StringIO):
+
+    @property
+    def buffer(self):
+        return self
+
+    def write(self, s, /):
+        rv = len(s)
+        if isinstance(s, bytes):
+            s = s.decode("utf-8")
+        super().write(s)
+        return rv
+
+
 class ExitCalled(Exception):
     pass
-
-
-class _ExitCapture:
-
-    def __call__(self, value):
-        self.value = value
-        raise ExitCalled()
 
 
 class CosmicRaySuite(MutationSuiteABC):
@@ -105,11 +114,12 @@ class CosmicRaySuite(MutationSuiteABC):
         return f"{func}({args}, {kwargs})"
 
     def _run(self, project_path, func, args=None, kwargs=None):
-
         args = args or ()
         kwargs = kwargs or {}
-        stdout, stderr = io.StringIO(), io.StringIO()
+        stdout, stderr = BytesAndStringIO(), BytesAndStringIO()
         full_cmd = self._render_full_cmd(func, args, kwargs)
+
+        status = 0
 
         if self._verbose:
             print(f"[RUN] {project_path} >> {full_cmd!r}")
@@ -123,6 +133,9 @@ class CosmicRaySuite(MutationSuiteABC):
                 func(*args, **kwargs)
         except SystemExit as exit:
             status = exit.code
+
+        stdout.flush()
+        stderr.flush()
 
         return (full_cmd, status, stdout.getvalue(), stderr.getvalue())
 
@@ -186,15 +199,34 @@ class CosmicRaySuite(MutationSuiteABC):
         session_file = self._work_path / "global_run.sqlite"
         self._write_conf(project_name, project_path, [], config_file)
 
-        run_outputs = []
+        # INIT THE MUTATION SUITE =============================================
 
-        outputs = self._run(
+        init_cmd, init_status, init_stdout, init_stderr = self._run(
             project_path,
             func=cray_cli.init.callback,
             args=(config_file, session_file, False),
         )
 
-        run_outputs.append(outputs)
+        # COLLECT THE NUMBER OF MUTATIONS =====================================
+
+        xml_cmd, xml_status, xml_stdout, xml_stderr = self._run(
+            project_path,
+            func=cr_xml.report_xml.callback,
+            args=(session_file,),
+        )
+
+        mutations = int(ET.fromstring(xml_stdout).get("tests"))
+
+        # THE RETURN
+
+        return self.pkg_result(
+            value=mutations,
+            command="\n\n".join([init_cmd, xml_cmd]),
+            status_code=init_status + xml_status,
+            stdout="\n\n".join([init_stdout, xml_stdout]),
+            stderr="\n\n".join([init_stderr, xml_stderr]),
+            result=xml_stdout,
+        )
 
     def get_mutations_for_tests(self, project_path, project_name, tests_ids):
         """Run mutation testing with specific tests and return score.
