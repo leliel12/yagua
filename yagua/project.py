@@ -623,6 +623,8 @@ class Project:
                 result=result,
             )
 
+        
+
         result.raise_if_error()
 
         return result.value
@@ -631,7 +633,7 @@ class Project:
     # Public Methods - Mutations Management
     # ========================================================================
 
-    def collect_mutations(self):
+    def collect_mutants(self):
         suite = self.mutation_suite
         result = suite.get_mutations(self.path, self.name)
 

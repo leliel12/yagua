@@ -739,8 +739,14 @@ class CLIManager:
                 raise typer.Exit(1)
 
             # Phase 1: Calculate mutation score for all tests combined
+            if proj.mutants_number is None or force:
+                proj.collect_mutants()
+            console.print(
+                f"\n☢️ [bold green]Mutants Number:[/bold green] "
+                f"[cyan]{proj.mutants_number}%[/cyan]"
+            )
+
             if proj.msr is None or force:
-                proj.collect_mutations()
                 proj.msr = 0.2
             console.print(
                 f"\n🧬 [bold green]Total mutation score:[/bold green] "
@@ -868,7 +874,7 @@ class CLIManager:
 
             if proj.mutants_number:
                 info_lines.append(
-                    f"[cyan]🧬 Mutants:[/cyan] {proj.mutants_number}"
+                    f"[cyan]☢️ Mutants:[/cyan] {proj.mutants_number}"
                 )
 
             console.print(
