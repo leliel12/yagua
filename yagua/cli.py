@@ -740,16 +740,16 @@ class CLIManager:
 
             # Phase 1: Calculate mutation score for all tests combined
             if proj.mutants_number is None or force:
-                proj.collect_mutants()
+                proj.collect_mutants(force=force)
             console.print(
                 f"\n🧬 [bold green]Mutants Number:[/bold green] "
                 f"[cyan]{proj.mutants_number}[/cyan]"
             )
 
             if proj.msr is None or force:
-                proj.msr = 0.2
+                proj.test_mutations(force)
             console.print(
-                f"\n🎯 [bold green]Total mutation score:[/bold green] "
+                f"\n🎯 [bold green]Project survival rate:[/bold green] "
                 f"[cyan]{proj.msr:.2f}%[/cyan]\n"
             )
 

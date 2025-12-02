@@ -623,8 +623,6 @@ class Project:
                 result=result,
             )
 
-        
-
         result.raise_if_error()
 
         return result.value
@@ -633,9 +631,26 @@ class Project:
     # Public Methods - Mutations Management
     # ========================================================================
 
-    def collect_mutants(self):
+    def collect_mutants(self, force=False):
+        """Collect and store the number of mutants for the project.
+
+        This method runs the mutation suite's get_mutants() method to
+        initialize the mutation session and count the total number of
+        mutants that will be generated. The result is stored in
+        ProjectModel.mutants_number.
+
+        Returns
+        -------
+        int
+            Number of mutants generated for the project.
+
+        Notes
+        -----
+        Creates a HistoryModel record with tag='collect_mutants'
+        containing the command executed and its output for audit purposes.
+        """
         suite = self.mutation_suite
-        result = suite.get_mutations(self.path, self.name)
+        result = suite.get_mutants(self.path, self.name, force=force)
 
         with self.transaction():
             if not result.error:
@@ -644,7 +659,25 @@ class Project:
                 project.save()
 
             self._write_history(
-                project=project, tag="collect_mutations", result=result
+                project=project, tag="collect_mutants", result=result
+            )
+
+        result.raise_if_error()
+
+        return result.value
+    
+    def test_mutations(self, force):
+        suite = self.mutation_suite
+        result = suite.test_mutations(self.path, self.name, force)
+
+        with self.transaction():
+            if not result.error:
+                project = self._get_project_model()
+                project.msr = result.value
+                project.save()
+
+            self._write_history(
+                project=project, tag="test_mutations", result=result
             )
 
         result.raise_if_error()

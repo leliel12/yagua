@@ -16,12 +16,12 @@ MutationSuiteABC : ABC
 
 Interface Contract
 ------------------
-All mutation suite handlers must implement three abstract methods that return
+All mutation suite handlers must implement two abstract methods that return
 SuiteRunResult instances or compatible tuple structures:
 
-1. get_mutations(project_path, project_name) -> SuiteRunResult
-   - Runs mutation testing for all tests
-   - Returns result with mutation_score as value
+1. get_mutants(project_path, project_name) -> SuiteRunResult
+   - Runs mutation initialization to count mutants
+   - Returns result with mutants_number as value
 
 2. get_mutations_for_tests(project_path, project_name, test_ids)
    -> SuiteRunResult
@@ -31,7 +31,7 @@ SuiteRunResult instances or compatible tuple structures:
 Return Value Format
 -------------------
 Methods can return either SuiteRunResult instances or 6-tuple structures:
-- value: Primary result (mutation score percentage)
+- value: Primary result (mutants count or mutation score percentage)
 - command: Command string that was executed
 - status_code: Exit status (0 = success, non-zero = error)
 - stdout: Standard output from command
@@ -203,7 +203,7 @@ class MutationSuiteABC(ABC):
     testing from different mutation testing frameworks.
 
     All concrete implementations must provide two methods:
-    - get_mutations(): For total mutation score calculation
+    - get_mutants(): For counting total mutants generated
     - get_mutations_for_tests(): For selective mutation score calculation
 
     The consistent return format across all methods enables yagua to
@@ -278,8 +278,8 @@ class MutationSuiteABC(ABC):
     # ========================================================================
 
     @abstractmethod
-    def get_mutations(self, project_path, project_name) -> _SuiteRunResult:
-        """Run mutation testing and return the mutation score.
+    def get_mutants(self, project_path, project_name) -> _SuiteRunResult:
+        """Run mutation analysis and return the number of mutants.
 
         Parameters
         ----------
@@ -290,11 +290,11 @@ class MutationSuiteABC(ABC):
 
         Returns
         -------
-        mutation_score : float | None
-            Mutation score percentage (0-100) or None if score could not
+        mutants_number : int | None
+            Number of mutants generated or None if count could not
             be determined.
         command : str
-            The command that was executed to run mutations.
+            The command that was executed to initialize mutations.
         stdout : str
             Standard output from the command execution.
         stderr : str
@@ -305,53 +305,14 @@ class MutationSuiteABC(ABC):
         Notes
         -----
         The return tuple provides complete information about the mutation
-        testing process, allowing the caller to log the command executed
+        initialization process, allowing the caller to log the command executed
         and store execution details (stdout, stderr, and additional data)
         for audit purposes.
         """
         pass
 
     @abstractmethod
-    def get_mutations_for_tests(
+    def test_mutations(
         self, project_path, project_name, test_ids
     ) -> _SuiteRunResult:
-        """Run mutation testing with specific test(s) and return score.
-
-        Parameters
-        ----------
-        project_path : str or Path
-            Path to the project directory to run mutation testing on.
-        project_name : str
-            Name of the project/package to mutate.
-        test_ids : list[str]
-            List of unique identifiers for tests to run against mutations
-            (e.g., pytest node IDs). Can be a single-item list for isolated
-            test mutation score, or multiple items for combined score of
-            specific tests.
-
-        Returns
-        -------
-        mutation_score : float | None
-            Mutation score percentage (0-100) for the specified test(s),
-            or None if score could not be determined.
-        command : str
-            The command that was executed to run mutations.
-        stdout : str
-            Standard output from the command execution.
-        stderr : str
-            Standard error output from the command execution.
-        data : object
-            Additional mutation data (e.g., detailed mutation results).
-
-        Notes
-        -----
-        This method provides flexible mutation testing:
-        - Single test ([test_id]): Measures isolated test mutation score
-        - Multiple tests ([test_id1, test_id2, ...]): Measures combined
-          mutation score
-        - All except one (query result): Enables msr_without calculation
-
-        This flexibility allows for both msr_alone (single test) and
-        msr_without (all tests except one) metrics.
-        """
         pass
