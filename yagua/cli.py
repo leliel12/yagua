@@ -353,7 +353,9 @@ class CLIManager:
             )
             raise typer.Exit(code=1)
 
-        console.print("\n[bold cyan]📦 Creating project cache...[/bold cyan]\n")
+        console.print(
+            "\n[bold cyan]📦 Creating project cache...[/bold cyan]\n"
+        )
 
         try:
             proj = Project.from_project_info(

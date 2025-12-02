@@ -46,12 +46,44 @@ from .abc import MutationSuiteABC
 
 
 class BytesAndStringIO(io.StringIO):
+    """StringIO that accepts both bytes and strings for writing.
+
+    This class extends io.StringIO to handle both bytes and string inputs,
+    automatically decoding bytes to UTF-8 strings. It also provides a
+    buffer property that returns self, making it compatible with APIs
+    that expect a file-like object with a buffer attribute.
+
+    Notes
+    -----
+    This is useful for redirecting stdout/stderr when working with
+    libraries that may write either bytes or strings to output streams.
+    """
 
     @property
     def buffer(self):
+        """Return self as the buffer.
+
+        Returns
+        -------
+        BytesAndStringIO
+            Returns the instance itself to satisfy buffer attribute access.
+        """
         return self
 
     def write(self, s, /):
+        """Write string or bytes to the stream.
+
+        Parameters
+        ----------
+        s : str or bytes
+            String or bytes to write. Bytes are automatically decoded
+            to UTF-8 before writing.
+
+        Returns
+        -------
+        int
+            Number of bytes written (before decoding if bytes input).
+        """
         rv = len(s)
         if isinstance(s, bytes):
             s = s.decode("utf-8")
@@ -60,6 +92,13 @@ class BytesAndStringIO(io.StringIO):
 
 
 class ExitCalled(Exception):
+    """Exception raised when SystemExit is caught during command execution.
+
+    This exception is used internally to handle cases where cosmic-ray
+    commands call sys.exit(), converting them into catchable exceptions
+    that can be processed for exit code extraction.
+    """
+
     pass
 
 
@@ -107,6 +146,23 @@ class CosmicRaySuite(MutationSuiteABC):
     # ========================================================================
 
     def _render_full_cmd(self, func, args, kwargs):
+        """Render a function call as a string for logging.
+
+        Parameters
+        ----------
+        func : callable
+            Function whose call will be rendered.
+        args : tuple
+            Positional arguments to the function.
+        kwargs : dict
+            Keyword arguments to the function.
+
+        Returns
+        -------
+        str
+            String representation of the function call
+            (e.g., "func_name(arg1, arg2, key=value)").
+        """
         func = func.__name__
         args = ", ".join(map(repr, args))
         kwargs = ", ".join(f"{k}={v!r}" for k, v in kwargs.items())
@@ -114,6 +170,46 @@ class CosmicRaySuite(MutationSuiteABC):
         return f"{func}({args}, {kwargs})"
 
     def _run(self, project_path, func, args=None, kwargs=None):
+        """Run a cosmic-ray function with captured output.
+
+        This internal method executes cosmic-ray functions programmatically,
+        redirecting output to string buffers and changing to the project
+        directory.
+
+        Parameters
+        ----------
+        project_path : str or Path
+            Working directory for cosmic-ray execution.
+        func : callable
+            Cosmic-ray function to execute (e.g., cray_cli.init.callback).
+        args : tuple, optional
+            Positional arguments to pass to func. Default is None (empty
+            tuple).
+        kwargs : dict, optional
+            Keyword arguments to pass to func. Default is None (empty dict).
+
+        Returns
+        -------
+        command : str
+            String representation of the function call for audit logging.
+        status : int
+            Exit status code (0 = success, non-zero from SystemExit).
+        stdout : str
+            Captured standard output from function execution.
+        stderr : str
+            Captured standard error from function execution.
+
+        Notes
+        -----
+        This method uses context managers to:
+        1. Change to the project directory (contextlib.chdir)
+        2. Redirect stdout to a BytesAndStringIO buffer
+        3. Redirect stderr to a BytesAndStringIO buffer
+        4. Catch SystemExit and extract the exit code
+
+        All context changes are automatically reverted when the method
+        returns.
+        """
         args = args or ()
         kwargs = kwargs or {}
         stdout, stderr = BytesAndStringIO(), BytesAndStringIO()
@@ -140,6 +236,32 @@ class CosmicRaySuite(MutationSuiteABC):
         return (full_cmd, status, stdout.getvalue(), stderr.getvalue())
 
     def _resolve_module_path(self, project_name, project_path):
+        """Resolve project name to a valid module path for cosmic-ray.
+
+        This method attempts to find the module or package to mutate by
+        checking if the project name corresponds to either a directory
+        (package) or a Python file (module) within the project path.
+
+        Parameters
+        ----------
+        project_name : str
+            Name of the project/package to resolve.
+        project_path : str or Path
+            Path to the project directory.
+
+        Returns
+        -------
+        str
+            Resolved module path suitable for cosmic-ray configuration.
+            Returns project_name if it's a package directory, or the
+            filename if it's a module file.
+
+        Raises
+        ------
+        ValueError
+            If project_name doesn't correspond to either a package directory
+            or a module file within project_path.
+        """
         # lets try if this is a package
         full_path = pathlib.Path(project_path) / project_name
         if full_path.is_dir():
@@ -154,6 +276,30 @@ class CosmicRaySuite(MutationSuiteABC):
         raise ValueError(f"{project_name!r} can't be configure for cosmic-ray")
 
     def _write_conf(self, project_name, project_path, test_ids, config_file):
+        """Write cosmic-ray configuration file for mutation testing.
+
+        This method creates a TOML configuration file for cosmic-ray with
+        the specified module path, test command, and other settings.
+
+        Parameters
+        ----------
+        project_name : str
+            Name of the project/package to mutate.
+        project_path : str or Path
+            Path to the project directory.
+        test_ids : list[str]
+            List of test IDs to run. If empty, all tests will be run.
+        config_file : str or Path
+            Path where the configuration file should be written.
+
+        Notes
+        -----
+        The configuration includes:
+        - module-path: Resolved path to the module/package to mutate
+        - timeout: 50 seconds per mutation
+        - test-command: pytest command with specified test IDs
+        - distributor: local execution (no distributed testing)
+        """
         test_command = "pytest " + " ".join(test_ids)
         module_path = self._resolve_module_path(project_name, project_path)
         config = {
