@@ -19,14 +19,13 @@ Interface Contract
 All mutation suite handlers must implement two abstract methods that return
 SuiteRunResult instances or compatible tuple structures:
 
-1. get_mutants(project_path, project_name) -> SuiteRunResult
+1. get_mutants(project_path, project_name, force) -> SuiteRunResult
    - Runs mutation initialization to count mutants
    - Returns result with mutants_number as value
 
-2. get_mutations_for_tests(project_path, project_name, test_ids)
-   -> SuiteRunResult
-   - Runs mutation testing for specific test(s)
-   - Returns result with mutation_score as value
+2. test_mutations(project_path, project_name, force) -> SuiteRunResult
+   - Executes all mutations against all tests
+   - Returns result with survival_rate as value
 
 Return Value Format
 -------------------
@@ -204,7 +203,7 @@ class MutationSuiteABC(ABC):
 
     All concrete implementations must provide two methods:
     - get_mutants(): For counting total mutants generated
-    - get_mutations_for_tests(): For selective mutation score calculation
+    - test_mutations(): For executing mutations and calculating survival rate
 
     The consistent return format across all methods enables yagua to
     store comprehensive audit logs of all operations in HistoryModel.
@@ -313,6 +312,37 @@ class MutationSuiteABC(ABC):
 
     @abstractmethod
     def test_mutations(
-        self, project_path, project_name, test_ids
+        self, project_path, project_name, force
     ) -> _SuiteRunResult:
+        """Execute mutation testing and return the survival rate.
+
+        Parameters
+        ----------
+        project_path : str or Path
+            Path to the project directory to run mutation testing on.
+        project_name : str
+            Name of the project/package to mutate.
+        force : bool
+            Force re-execution of mutations even if already run.
+
+        Returns
+        -------
+        survival_rate : float | None
+            Mutation survival rate percentage (0-100) or None if score
+            could not be determined.
+        command : str
+            The command that was executed to run mutations.
+        stdout : str
+            Standard output from the command execution.
+        stderr : str
+            Standard error output from the command execution.
+        data : object
+            Additional mutation data (e.g., detailed mutation results).
+
+        Notes
+        -----
+        This method executes all mutations against all tests and calculates
+        the survival rate (percentage of mutants that survived). The
+        mutation score can be calculated as (1 - survival_rate/100).
+        """
         pass

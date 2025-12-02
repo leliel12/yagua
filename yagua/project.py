@@ -665,8 +665,31 @@ class Project:
         result.raise_if_error()
 
         return result.value
-    
-    def test_mutations(self, force):
+
+    def test_mutations(self, force=False):
+        """Execute mutation testing and calculate survival rate.
+
+        This method runs all mutation tests against the test suite and
+        calculates the mutation survival rate (percentage of mutants that
+        survived). The result is stored in ProjectModel.msr.
+
+        Parameters
+        ----------
+        force : bool, optional
+            Force re-execution of mutations even if already run.
+            Default is False.
+
+        Returns
+        -------
+        float
+            Mutation survival rate percentage (0-100).
+
+        Notes
+        -----
+        Creates a HistoryModel record with tag='test_mutations'
+        containing the command executed and its output for audit purposes.
+        The mutation score is calculated as (1 - survival_rate).
+        """
         suite = self.mutation_suite
         result = suite.test_mutations(self.path, self.name, force)
 

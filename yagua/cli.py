@@ -679,27 +679,33 @@ class CLIManager:
             help="Sort tests in ascending order by priority column.",
         ),
     ) -> None:
-        """Collect and store mutation testing information for the project.
+        """Collect and analyze mutation testing data for the project.
 
-        This command runs mutation testing to assess test suite quality
-        in three phases:
-        1. Total project mutation score (all tests)
-        2. Per-test mutation score (each test in isolation)
-        3. Mutation score without each test (all tests except one)
+        This command performs mutation testing analysis in two phases:
 
-        The collected data enables calculation of test effectiveness,
-        redundancy, and mutation detection capabilities.
+        Phase 1 - Mutation Initialization:
+        - Initializes the mutation testing session
+        - Counts the total number of mutants generated
+        - Stores mutants_number in the project database
+
+        Phase 2 - Mutation Execution:
+        - Executes all mutations against the test suite
+        - Calculates the mutation survival rate (% of mutants that survived)
+        - Stores the survival rate (msr) in the project database
+
+        The mutation score is calculated as (1 - survival_rate/100), where
+        a lower survival rate indicates a more effective test suite.
 
         Parameters
         ----------
         cache : Path
             Path to existing SQLite cache file.
         force : bool, optional
-            Force recalculation of mutations even if they already exist.
-            Default is False.
+            Force re-initialization and re-execution of mutations even if
+            they already exist. Default is False.
         priority : _CollectMutationOrder, optional
-            Column used to sort tests for evaluation order.
-            Default is COVERAGE_UNIQUENESS.
+            Column used to sort tests for evaluation order (for future
+            per-test mutation analysis). Default is COVERAGE_UNIQUENESS.
         ascending : bool, optional
             Sort tests in ascending order. Default is False (descending).
 
@@ -711,9 +717,8 @@ class CLIManager:
 
         Notes
         -----
-        Mutation testing can be time-consuming for large codebases as it
-        requires running the test suite multiple times for each mutant.
-        For N tests, this results in approximately 2N+1 mutation runs.
+        Mutation testing can be very time-consuming for large codebases as it
+        requires running the entire test suite against each generated mutant.
 
         Coverage data must be collected before running mutation analysis.
         Use the collect-coverage command first if coverage is missing.
@@ -721,7 +726,7 @@ class CLIManager:
         with self._use_project(cache) as proj:
 
             console.print(
-                "[bold blue]🧬 Calculating mutation scores...[/bold blue]"
+                "[bold blue]🧬 Running mutation analysis...[/bold blue]"
             )
 
             # Validate that coverage exists before running mutations
@@ -738,18 +743,19 @@ class CLIManager:
                 )
                 raise typer.Exit(1)
 
-            # Phase 1: Calculate mutation score for all tests combined
+            # Phase 1: Initialize mutations and count mutants
             if proj.mutants_number is None or force:
                 proj.collect_mutants(force=force)
             console.print(
-                f"\n🧬 [bold green]Mutants Number:[/bold green] "
+                f"\n🧬 [bold green]Mutants Generated:[/bold green] "
                 f"[cyan]{proj.mutants_number}[/cyan]"
             )
 
+            # Phase 2: Execute mutations and calculate survival rate
             if proj.msr is None or force:
                 proj.test_mutations(force)
             console.print(
-                f"\n🎯 [bold green]Project survival rate:[/bold green] "
+                f"\n🎯 [bold green]Survival Rate:[/bold green] "
                 f"[cyan]{proj.msr:.2f}%[/cyan]\n"
             )
 
