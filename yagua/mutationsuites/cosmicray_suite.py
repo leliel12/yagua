@@ -31,8 +31,6 @@ import contextlib
 import os
 import pathlib
 import tempfile
-from unittest import mock
-import json
 
 from cosmic_ray import config as cray_config
 from cosmic_ray import cli as cray_cli
