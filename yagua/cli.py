@@ -864,6 +864,11 @@ class CLIManager:
                     f"[bold green]{proj.coverage:.2f}%[/bold green]"
                 )
 
+            if proj.mutants_number:
+                info_lines.append(
+                    f"[cyan]🧬 Mutants:[/cyan] {proj.mutants_number}"
+                )
+
             console.print(
                 Panel(
                     "\n".join(info_lines),
