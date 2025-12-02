@@ -34,12 +34,12 @@ Dependencies
 - coverage: Underlying coverage measurement library
 """
 
-import io
 import contextlib
-import pathlib
-import tempfile
+import io
 import json
 import os
+import pathlib
+import tempfile
 
 import pytest
 

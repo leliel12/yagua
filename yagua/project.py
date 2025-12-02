@@ -31,16 +31,15 @@ Key Patterns
 """
 
 import contextlib
-from pathlib import Path
 import types
+from pathlib import Path
 
 import pandas as pd
-
 from peewee import SqliteDatabase
 
-from .models import BaseModel, ProjectModel, TestModel, HistoryModel
-from .testsuites import PytestSuite
+from .models import BaseModel, HistoryModel, ProjectModel, TestModel
 from .mutationsuites import CosmicRaySuite
+from .testsuites import PytestSuite
 
 
 # ============================================================================

@@ -26,15 +26,15 @@ Dependencies
 - cosmic-ray: Mutation testing framework for Python
 """
 
-import io
 import contextlib
+import io
 import os
 import pathlib
 import tempfile
 import xml.etree.ElementTree as ET
 
-from cosmic_ray import config as cray_config
 from cosmic_ray import cli as cray_cli
+from cosmic_ray import config as cray_config
 from cosmic_ray.tools import xml as cr_xml
 
 from .abc import MutationSuiteABC

@@ -41,3 +41,8 @@ yagua info project.db
 - Max 79 columns per line.
 - NumPy-style docstrings (NO Examples section)
 - Module organization: docstring → imports → constants → private helpers → classes → public functions
+- Import order (PEP 8):
+  1. Standard library imports (alphabetically)
+  2. Third-party library imports (alphabetically)
+  3. Local/application imports (alphabetically)
+  4. Each group separated by a blank line
