@@ -742,14 +742,14 @@ class CLIManager:
             if proj.mutants_number is None or force:
                 proj.collect_mutants()
             console.print(
-                f"\n☢️ [bold green]Mutants Number:[/bold green] "
-                f"[cyan]{proj.mutants_number}%[/cyan]"
+                f"\n🧬 [bold green]Mutants Number:[/bold green] "
+                f"[cyan]{proj.mutants_number}[/cyan]"
             )
 
             if proj.msr is None or force:
                 proj.msr = 0.2
             console.print(
-                f"\n🧬 [bold green]Total mutation score:[/bold green] "
+                f"\n🎯 [bold green]Total mutation score:[/bold green] "
                 f"[cyan]{proj.msr:.2f}%[/cyan]\n"
             )
 
@@ -874,7 +874,7 @@ class CLIManager:
 
             if proj.mutants_number:
                 info_lines.append(
-                    f"[cyan]☢️ Mutants:[/cyan] {proj.mutants_number}"
+                    f"[cyan]🧬 Mutants:[/cyan] {proj.mutants_number}"
                 )
 
             console.print(
