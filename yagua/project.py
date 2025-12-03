@@ -666,7 +666,7 @@ class Project:
 
         return result.value
 
-    def get_survival_rate(self, force=False):
+    def collect_survival_rate(self, force=False):
         """Execute mutation testing and calculate survival rate.
 
         This method runs all mutation tests against the test suite and

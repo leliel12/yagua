@@ -28,9 +28,7 @@ Dependencies
 
 import contextlib
 import io
-import os
 import pathlib
-import tempfile
 import xml.etree.ElementTree as ET
 
 from cosmic_ray import cli as cray_cli

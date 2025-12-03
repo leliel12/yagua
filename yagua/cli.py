@@ -346,14 +346,16 @@ class CLIManager:
         if work_path.exists():
             console.print(
                 Panel(
-                    f"[red]Working directory already exists:[/red]\n{work_path}",
+                    f"[red]Working directory already exists:[/red]\n{work_path}",  # noqa
                     title="❌ Error",
                     border_style="red",
                 )
             )
             raise typer.Exit(code=1)
 
-        console.print("\n[bold cyan]📦 Creating project cache...[/bold cyan]\n")
+        console.print(
+            "\n[bold cyan]📦 Creating project cache...[/bold cyan]\n"
+        )  # noqa
 
         try:
             proj = Project.from_project_info(
@@ -651,7 +653,8 @@ class CLIManager:
         console.print(
             "[bold green]✅ Coverage collection complete!"
             "[/bold green]\n\n"
-            f"[dim]💡 Use[/dim] [cyan]'yagua list-tests {cache.name}'[/cyan][dim] "
+            "[dim]💡 Use[/dim] "
+            f"[cyan]'yagua list-tests {cache.name}'[/cyan][dim] "
             "to view all coverage metrics[/dim]\n"
         )
 
@@ -751,7 +754,8 @@ class CLIManager:
 
             # Phase 2: Execute mutations and calculate survival rate
             if proj.msr is None or force:
-                proj.get_survival_rate(force)
+                print("calculate survival rate")
+                proj.collect_survival_rate(force)
             console.print(
                 f"\n🎯 [bold green]Survival Rate:[/bold green] "
                 f"[cyan]{proj.msr:.2f}%[/cyan]\n"
