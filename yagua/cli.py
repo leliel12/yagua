@@ -817,14 +817,18 @@ class CLIManager:
                 # own
                 msr_alone = _coerce_na(msr_alone)
                 if msr_alone is None or force:
-                    msr_alone = proj.collect_mutations_for_test(test_id)
+                    msr_alone = proj.collect_survival_rate_for_test(
+                        test_id, force=force
+                    )
 
                 # Phase 3: Calculate mutation score when running all tests
                 # except this one
                 # This helps identify if this test detects unique mutants
                 msr_wo = _coerce_na(msr_wo)
                 if msr_wo is None or force:
-                    msr_wo = proj.collect_mutations_without_test(test_id)
+                    msr_wo = proj.collect_survival_rate_without_test(
+                        test_id, force=force
+                    )
 
                 # Clear progress message
                 console.print(" " * len(proc_test_msg), end="\r")

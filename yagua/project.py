@@ -701,18 +701,60 @@ class Project:
                 project.save()
 
             self._write_history(
-                project=project, tag="get_survival_rate", result=result
+                project=project, tag="collect_survival_rate", result=result
             )
 
         result.raise_if_error()
 
         return result.value
 
-    def collect_mutations_for_test(self, test_id):
-        pass
+    def collect_survival_rate_for_test(self, test_id, force):
+        suite = self.mutation_suite
+        result = suite.get_survival_rate_for_tests(
+            self.path, self.name, [test_id], force
+        )
 
-    def collect_mutations_without_test(self, test_id):
-        pass
+        with self.transaction():
+
+            if not result.error:
+                test = TestModel.get(TestModel.test_id == test_id)
+                test.msr_alone = result.value
+                test.save()
+
+            self._write_history(
+                project=test.project,
+                tag=f"collect_survival_rate_for_tests::{test_id}",
+                result=result,
+            )
+
+        result.raise_if_error()
+
+    def collect_survival_rate_without_test(self, test_id, force):
+        suite = self.mutation_suite
+        with self.transaction():
+            query = TestModel.select(TestModel.test_id).where(
+                TestModel.test_id != test_id
+            )
+            tids_to_run = [test.test_id for test in query]
+
+            result = suite.get_survival_rate_for_tests(
+                self.path, self.name, tids_to_run, force
+            )
+
+            if not result.error:
+                test = TestModel.get(TestModel.test_id == test_id)
+                test.msr_without = result.value
+                test.save()
+
+            self._write_history(
+                project=test.project,
+                tag=f"collect_survival_rate_without_tests::{test_id}",
+                result=result,
+            )
+
+        result.raise_if_error()
+
+        return result.value
 
     # ========================================================================
     # Public Methods - Project Information

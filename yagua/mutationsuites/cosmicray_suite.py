@@ -27,6 +27,7 @@ Dependencies
 """
 
 import contextlib
+import hashlib
 import io
 import pathlib
 import xml.etree.ElementTree as ET
@@ -277,7 +278,9 @@ class CosmicRaySuite(MutationSuiteABC):
         # fail
         raise ValueError(f"{project_name!r} can't be configure for cosmic-ray")
 
-    def _write_conf(self, project_name, project_path, test_ids, config_file):
+    def _write_conf(
+        self, project_name, project_path, test_command, config_file
+    ):
         """Write cosmic-ray configuration file for mutation testing.
 
         This method creates a TOML configuration file for cosmic-ray with
@@ -302,7 +305,6 @@ class CosmicRaySuite(MutationSuiteABC):
         - test-command: pytest command with specified test IDs
         - distributor: local execution (no distributed testing)
         """
-        test_command = "pytest " + " ".join(test_ids)
         module_path = self._resolve_module_path(project_name, project_path)
         config = {
             "module-path": module_path,
@@ -315,12 +317,16 @@ class CosmicRaySuite(MutationSuiteABC):
         with open(config_file, "w") as fp:
             fp.write(config_str)
 
-    def _init_suite(self, *, project_path, project_name, tag, force):
+    def _init_suite(
+        self, *, project_path, project_name, tag, test_command, force
+    ):
         config_file = self._work_path / f"{tag}.toml"
         session_file = self._work_path / f"{tag}.sqlite"
 
         if force or not config_file.exists():
-            self._write_conf(project_name, project_path, [], config_file)
+            self._write_conf(
+                project_name, project_path, test_command, config_file
+            )
 
         if force or not session_file.exists():
             cmd, status, stdout, stderr = self._run(
@@ -368,6 +374,7 @@ class CosmicRaySuite(MutationSuiteABC):
             project_path=project_path,
             project_name=project_name,
             tag="get_mutants",
+            test_command="pytest",
             force=force,
         )
         init_cmd, init_status, init_stdout, init_stderr = init_output
@@ -433,6 +440,7 @@ class CosmicRaySuite(MutationSuiteABC):
             project_path=project_path,
             project_name=project_name,
             tag="get_survival_rate",
+            test_command="pytest",
             force=force,
         )
         init_cmd, init_status, init_stdout, init_stderr = init_output
@@ -461,6 +469,58 @@ class CosmicRaySuite(MutationSuiteABC):
         survival_rate = float(sr_stdout)
 
         # THE RETURN ==========================================================
+
+        return self.pkg_result(
+            value=survival_rate,
+            command="\n\n".join([init_cmd, exec_cmd, sr_cmd]),
+            status_code=init_status + exec_status + sr_status,
+            stdout="\n\n".join([init_stdout, exec_stdout, sr_stdout]),
+            stderr="\n\n".join([init_stderr, exec_stderr, sr_stderr]),
+            result=sr_stdout,
+        )
+
+    def hash_tests_ids(self, tests_ids):
+        all_ids = "".join(sorted(tests_ids))
+        md5 = hashlib.md5(all_ids.encode("utf8"))
+        return md5
+
+    def get_survival_rate_for_tests(
+        self, project_path, project_name, tests_ids, force
+    ):
+        # INIT SUITE ==========================================================
+        tests_hash = self.hash_tests_ids(tests_ids)
+
+        config_file, session_file, init_output = self._init_suite(
+            project_path=project_path,
+            project_name=project_name,
+            tag=f"get_survival_rate_for_tests_{tests_hash.hexdigest()}",
+            test_command="pytest " + " ".join(tests_ids),
+            force=force,
+        )
+        init_cmd, init_status, init_stdout, init_stderr = init_output
+
+        # RUN TESTS ===========================================================
+
+        exec_cmd, exec_status, exec_stdout, exec_stderr = self._run(
+            project_path,
+            func=cray_cli.handle_exec.callback,
+            args=(config_file, session_file),
+        )
+
+        # GET SURVIVAL RATE ===================================================
+
+        sr_cmd, sr_status, sr_stdout, sr_stderr = self._run(
+            project_path,
+            func=cr_rate.format_survival_rate.callback,
+            kwargs={
+                "estimate": False,  # this is not used
+                "confidence": 95.0,  # this is not used (estimate False)
+                "fail_over": None,  # this is not used
+                "session_file": session_file,
+            },
+        )
+
+        survival_rate = float(sr_stdout)
 
         return self.pkg_result(
             value=survival_rate,
