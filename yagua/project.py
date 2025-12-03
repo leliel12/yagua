@@ -80,15 +80,21 @@ class Project:
     This class manages the database connection and provides methods to
     interact with projects, tests, and execution history. The database
     instance is created per-project and models are dynamically bound to it.
-    Each cache file represents a single project.
+    Each work directory represents a single project.
 
     Parameters
     ----------
-    db_path : str or Path
-        Path to the SQLite database cache file.
+    work_dir : str or Path
+        Path to the project's work directory. The database file (yagua.db)
+        will be located inside this directory along with all temporary files.
 
     Attributes
     ----------
+    work_dir : Path
+        Work directory for this project containing the database and
+        temporary files.
+    db_path : Path
+        Path to the SQLite database file (work_dir/yagua.db).
     db : SqliteDatabase
         Database instance for this project. Models (ProjectModel, TestModel,
         HistoryModel) are bound to this instance via transaction contexts.
@@ -97,22 +103,28 @@ class Project:
     -----
     All database operations use the transaction() context manager which handles
     model binding and automatic transaction management (commit/rollback).
+
+    The work directory structure:
+    work_dir/
+    ├── yagua.db           # Main database file
+    └── [temp files]       # Framework-specific temporary files
     """
 
     # ========================================================================
     # Constructor
     # ========================================================================
 
-    def __init__(self, db_path):
-        """Initialize Project with database path.
+    def __init__(self, work_dir):
+        """Initialize Project with work directory.
 
         Parameters
         ----------
-        db_path : str or Path
-            Path to SQLite database file.
+        work_dir : str or Path
+            Path to work directory containing yagua.db and temporary files.
         """
-        self.db_path = db_path
-        self.db = SqliteDatabase(str(db_path))
+        self.work_dir = Path(work_dir).resolve()
+        self.db_path = self.work_dir / "yagua.db"
+        self.db = SqliteDatabase(str(self.db_path))
         self.db.connect()
 
         with self.transaction():
@@ -124,22 +136,24 @@ class Project:
 
     @classmethod
     def from_project_info(
-        cls, name, path, work_path, description, db_path
+        cls, name, path, work_dir, description=None
     ) -> "Project":
         """Create new Project with initial project information.
+
+        This method creates a new work directory and initializes a project
+        database inside it with the provided metadata.
 
         Parameters
         ----------
         name : str
             Project name.
         path : str or Path
-            Project directory path.
-        work_path : str or Path
-            Working directory for yagua operations (coverage, mutations, etc.).
+            Path to the project directory being analyzed.
+        work_dir : str or Path
+            Work directory path where yagua.db and temporary files will
+            be stored (must not exist).
         description : str, optional
-            Project description.
-        db_path : str or Path
-            Path to SQLite database file (must not exist).
+            Project description. Default is None.
 
         Returns
         -------
@@ -149,24 +163,35 @@ class Project:
         Raises
         ------
         ValueError
-            If database file already exists.
+            If work directory already exists.
+
+        Notes
+        -----
+        The work directory will be created by this method and will contain:
+        - yagua.db: SQLite database with project metadata and test data
+        - Temporary files from test/mutation frameworks
         """
-        db_path = Path(db_path).resolve()
-        if db_path.exists():
-            raise ValueError(f"File {db_path} already exists")
+        work_dir = Path(work_dir).resolve()
+        if work_dir.exists():
+            raise ValueError(
+                f"Work directory {work_dir} already exists. "
+                "Please choose a different directory or remove the existing one."
+            )
 
         path = Path(path).resolve()
-        work_path = Path(work_path).resolve()
 
-        # at this points are contants
+        # Create work directory
+        work_dir.mkdir(parents=True, exist_ok=False)
+
+        # Test and mutation suite names are constants for now
         test_suite_name = "pytest"
         mutation_suite_name = "cosmic-ray"
 
-        project = cls(db_path)
+        project = cls(work_dir)
         project.store_project_info(
             name,
             path,
-            work_path,
+            work_dir,
             test_suite_name,
             mutation_suite_name,
             description,
@@ -934,6 +959,6 @@ class Project:
         Returns
         -------
         str
-            String in format "Project(db_path=<path>)".
+            String in format "Project(work_dir=<path>)".
         """
-        return f"Project(db_path={self.db_path})"
+        return f"Project(work_dir={self.work_dir})"

@@ -122,31 +122,37 @@ def _coerce_na(value):
     return value
 
 
-def _make_cache_argument(**kwargs):
-    """Create a reusable Typer argument for cache file path.
+def _make_work_dir_argument(**kwargs):
+    """Create a reusable Typer argument for work directory path.
 
-    This factory function creates consistent cache file argument definitions
-    across all CLI commands. It sets sensible defaults while allowing
-    customization via keyword arguments.
+    This factory function creates consistent work directory argument
+    definitions across all CLI commands. It sets sensible defaults while
+    allowing customization via keyword arguments.
 
     Parameters
     ----------
     **kwargs
         Keyword arguments passed to typer.Argument. Defaults are set for:
         - default: ... (required argument)
-        - help: "Path to SQLite database file"
+        - help: "Path to work directory containing yagua.db"
         - parser: as_path (converts to resolved Path)
-        - metavar: "💾 Project Cache db"
+        - metavar: "📁 Work Directory"
 
     Returns
     -------
     typer.Argument
-        Configured Typer argument for cache file path.
+        Configured Typer argument for work directory path.
+
+    Notes
+    -----
+    The work directory contains:
+    - yagua.db: SQLite database with project data
+    - Temporary files from test/mutation frameworks
     """
     kwargs.setdefault("default", ...)
-    kwargs.setdefault("help", "Path to SQLite database file")
+    kwargs.setdefault("help", "Path to work directory containing yagua.db")
     kwargs.setdefault("parser", as_path)
-    kwargs.setdefault("metavar", "💾 Project Cache db")
+    kwargs.setdefault("metavar", "📁 Work Directory")
     return typer.Argument(**kwargs)
 
 
@@ -206,43 +212,43 @@ class CLIManager:
     # ========================================================================
 
     @contextlib.contextmanager
-    def _use_project(self, cache):
-        """Context manager to validate cache and provide Project instance.
+    def _use_project(self, work_dir):
+        """Context manager to validate work directory and provide Project instance.
 
-        This method validates that the cache file exists, creates a Project
+        This method validates that the work directory exists, creates a Project
         instance, displays project information to the user, and ensures the
         database connection is properly closed when done.
 
         Parameters
         ----------
-        cache : Path
-            Path to cache file to validate and open.
+        work_dir : Path
+            Path to work directory containing yagua.db.
 
         Yields
         ------
         Project
-            Project instance connected to the cache database.
+            Project instance connected to the yagua database.
 
         Raises
         ------
         typer.Exit
-            If cache file does not exist (exits with code 1).
+            If work directory does not exist (exits with code 1).
 
         Notes
         -----
         This is the recommended way to access projects in CLI commands as it
         handles validation, error reporting, and cleanup automatically.
         """
-        if not cache.exists():
+        if not work_dir.exists():
             console.print(
                 Panel(
-                    f"[red]Cache file does not exist:[/red]\n{cache}",
+                    f"[red]Work directory does not exist:[/red]\n{work_dir}",
                     title="❌ Error",
                     border_style="red",
                 )
             )
             raise typer.Exit(code=1)
-        proj = Project(db_path=cache)
+        proj = Project(work_dir=work_dir)
         try:
             console.print(
                 f"[dim]🔍 Using project:[/dim] [cyan]{proj.name}[/cyan] "
@@ -263,7 +269,7 @@ class CLIManager:
             help="Path to the project directory",
             parser=as_path,
         ),
-        cache: str = _make_cache_argument(default=None),
+        work_dir: str = _make_work_dir_argument(default=None),
         name: str = typer.Option(
             None,
             "-n",
@@ -276,41 +282,31 @@ class CLIManager:
             "--description",
             help="Project description",
         ),
-        work_path: str = typer.Option(
-            None,
-            "-w",
-            "--work-path",
-            help="Working directory for yagua operations (defaults to "
-            "_yagua_wd_<project_name>_ in current directory)",
-            parser=as_path,
-        ),
     ) -> None:
-        """Create an empty cache file with project metadata.
+        """Create a new yagua project with database and work directory.
 
-        This command initializes a new SQLite cache database with project
-        metadata but no tests. Use this to create a project cache before
-        running the collect command.
+        This command initializes a new yagua project by creating a work
+        directory containing the SQLite database (yagua.db) and all
+        project metadata. The database is automatically created inside
+        the work directory.
 
         Parameters
         ----------
         project_path : Path
-            Path to the project directory.
-        cache : Path, optional
-            Path to SQLite cache file. If not provided, defaults to
-            <project_name>.db in the current directory.
+            Path to the project directory to analyze.
+        work_dir : Path, optional
+            Path to work directory where yagua.db and temporary files will
+            be stored. If not provided, defaults to _yagua_wd_<project_name>_
+            in the current directory.
         name : str, optional
             Project name. If not provided, uses the directory name.
         description : str, optional
             Project description.
-        work_path : Path, optional
-            Working directory for yagua operations (coverage, mutations, etc.).
-            If not provided, defaults to _yagua_wd_<project_name>_ in the
-            current directory.
 
         Raises
         ------
         typer.Exit
-            If project path does not exist or cache file already exists.
+            If project path does not exist or work directory already exists.
         """
         if not project_path.exists():
             console.print(
@@ -325,47 +321,29 @@ class CLIManager:
         # Use provided name or default to directory name
         project_name = name or project_path.name
 
-        # Use provided cache path or default to <project_name>.db
-        cache = cache or as_path(project_path.name + ".db")
+        # Use provided work_dir or default to _yagua_wd_<project_name>_
+        work_dir = work_dir or as_path(f"_yagua_wd_{project_name}_")
 
-        # Validate cache file does not exist
-        if cache.exists():
+        # Validate work directory does not exist
+        if work_dir.exists():
             console.print(
                 Panel(
-                    f"[red]Cache file already exists:[/red]\n{cache}",
+                    f"[red]Work directory already exists:[/red]\n{work_dir}",
                     title="❌ Error",
                     border_style="red",
                 )
             )
             raise typer.Exit(code=1)
 
-        # Use provided work path or default to _yagua_wd_<project_name>_
-        work_path = work_path or as_path(f"_yagua_wd_{project_name}_")
-
-        # Validate work path does not exist
-        if work_path.exists():
-            console.print(
-                Panel(
-                    f"[red]Working directory already exists:[/red]\n{work_path}",  # noqa
-                    title="❌ Error",
-                    border_style="red",
-                )
-            )
-            raise typer.Exit(code=1)
-
-        console.print(
-            "\n[bold cyan]📦 Creating project cache...[/bold cyan]\n"
-        )  # noqa
+        console.print("\n[bold cyan]📦 Creating yagua project...[/bold cyan]\n")
 
         try:
             proj = Project.from_project_info(
                 name=project_name,
                 path=project_path,
-                work_path=work_path,
+                work_dir=work_dir,
                 description=description,
-                db_path=cache,
             )
-            os.makedirs(work_path)
         except Exception as err:
             console.print(
                 Panel(f"[red]{err}[/red]", title="❌ Error", border_style="red")
@@ -377,8 +355,8 @@ class CLIManager:
             f"[bold green]✅ Project created successfully![/bold green]\n",
             f"[cyan]📝 Name:[/cyan] {proj.name}",
             f"[cyan]📁 Path:[/cyan] {proj.path}",
-            f"[cyan]🗂️  Working:[/cyan] {proj.work_path}",
-            f"[cyan]💾 Cache:[/cyan] {cache}",
+            f"[cyan]🗂️  Work Dir:[/cyan] {proj.work_dir}",
+            f"[cyan]💾 Database:[/cyan] {proj.db_path}",
         ]
 
         if proj.description:
@@ -402,7 +380,7 @@ class CLIManager:
 
     def collect_tests(
         self,
-        cache: str = _make_cache_argument(),
+        work_dir: str = _make_work_dir_argument(),
         force: bool = typer.Option(
             False,
             "--force",
@@ -413,20 +391,22 @@ class CLIManager:
         """Collect tests from a project using pytest.
 
         This command runs pytest --collect-only to discover all tests
-        in the project and stores them in the cache database. The cache
-        file must already exist (use create-project first).
+        in the project and stores them in the yagua database. The work
+        directory must already exist (use create-project first).
 
         Parameters
         ----------
-        cache : Path
-            Path to existing SQLite cache file.
+        work_dir : Path
+            Path to existing work directory containing yagua.db.
+        force : bool
+            Force recollection of tests even if already collected.
 
         Raises
         ------
         typer.Exit
-            If cache file does not exist or no tests are collected.
+            If work directory does not exist or no tests are collected.
         """
-        with self._use_project(cache) as proj:
+        with self._use_project(work_dir) as proj:
 
             total_tests = proj.count_tests()
             saved_count, updated_count = 0, 0
@@ -466,7 +446,7 @@ class CLIManager:
 
     def list_tests(
         self,
-        cache: str = _make_cache_argument(),
+        work_dir: str = _make_work_dir_argument(),
         long: bool = typer.Option(
             False,
             "--long",
@@ -484,8 +464,8 @@ class CLIManager:
 
         Parameters
         ----------
-        cache : Path
-            Path to existing SQLite cache file.
+        work_dir : Path
+            Path to existing work directory containing yagua.db.
         long : bool, optional
             Show all test information including timestamps, IDs, and
             internal fields. Default is False.
@@ -493,9 +473,9 @@ class CLIManager:
         Raises
         ------
         typer.Exit
-            If cache file does not exist.
+            If work directory does not exist.
         """
-        with self._use_project(cache) as proj:
+        with self._use_project(work_dir) as proj:
 
             tests = proj.get_tests_dataframe()
 
@@ -549,7 +529,7 @@ class CLIManager:
     # ========================================================================
     def collect_coverage(
         self,
-        cache: str = _make_cache_argument(),
+        work_dir: str = _make_work_dir_argument(),
         force: bool = typer.Option(
             False,
             "--force",
@@ -569,8 +549,8 @@ class CLIManager:
 
         Parameters
         ----------
-        cache : Path
-            Path to existing SQLite cache file.
+        work_dir : Path
+            Path to existing work directory containing yagua.db.
         force : bool, optional
             Force recalculation of coverage even if it already exists.
             Default is False.
@@ -578,7 +558,7 @@ class CLIManager:
         Raises
         ------
         typer.Exit
-            If cache file does not exist or no tests found.
+            If work directory does not exist or no tests found.
 
         Notes
         -----
@@ -589,7 +569,7 @@ class CLIManager:
         After collecting coverage, the command automatically displays a summary
         of all tests with their coverage metrics using the list-tests command.
         """
-        with self._use_project(cache) as proj:
+        with self._use_project(work_dir) as proj:
 
             console.print("[bold blue]📊 Calculating coverage...[/bold blue]")
 
@@ -650,13 +630,13 @@ class CLIManager:
             "[bold green]✅ Coverage collection complete!"
             "[/bold green]\n\n"
             "[dim]💡 Use[/dim] "
-            f"[cyan]'yagua list-tests {cache.name}'[/cyan][dim] "
+            f"[cyan]'yagua list-tests {work_dir}'[/cyan][dim] "
             "to view all coverage metrics[/dim]\n"
         )
 
     def collect_mutations(
         self,
-        cache: str = _make_cache_argument(),
+        work_dir: str = _make_work_dir_argument(),
         force: bool = typer.Option(
             False,
             "--force",
@@ -695,8 +675,8 @@ class CLIManager:
 
         Parameters
         ----------
-        cache : Path
-            Path to existing SQLite cache file.
+        work_dir : Path
+            Path to existing work directory containing yagua.db.
         force : bool, optional
             Force re-initialization and re-execution of mutations even if
             they already exist. Default is False.
@@ -709,7 +689,7 @@ class CLIManager:
         Raises
         ------
         typer.Exit
-            If cache file does not exist, no coverage data exists,
+            If work directory does not exist, no coverage data exists,
             or coverage collection is incomplete.
 
         Notes
@@ -720,7 +700,7 @@ class CLIManager:
         Coverage data must be collected before running mutation analysis.
         Use the collect-coverage command first if coverage is missing.
         """
-        with self._use_project(cache) as proj:
+        with self._use_project(work_dir) as proj:
 
             console.print(
                 "[bold blue]🧬 Running mutation analysis...[/bold blue]"
@@ -733,7 +713,7 @@ class CLIManager:
                         "[yellow]Coverage data is required before "
                         "running mutation analysis.[/yellow]\n\n"
                         f"[dim]Run[/dim] [cyan]'yagua collect-coverage "
-                        f"{cache.name}'[/cyan] [dim]first.[/dim]",
+                        f"{work_dir}'[/cyan] [dim]first.[/dim]",
                         title="⚠️  Warning",
                         border_style="yellow",
                     )
@@ -780,7 +760,7 @@ class CLIManager:
                         "[yellow]Coverage collection appears to be "
                         "incomplete.[/yellow]\n\n"
                         "[dim]Some tests are missing coverage data. Run[/dim] "
-                        f"[cyan]'yagua collect-coverage {cache.name} --force'"
+                        f"[cyan]'yagua collect-coverage {work_dir} --force'"
                         "[/cyan] [dim]to recalculate.[/dim]",
                         title="⚠️  Warning",
                         border_style="yellow",
@@ -831,7 +811,7 @@ class CLIManager:
 
         console.print(
             "[bold green]✅ Mutation collection complete![/bold green]\n\n"
-            f"[dim]💡 Use[/dim] [cyan]'yagua list-tests {cache.name}'[/cyan]"
+            f"[dim]💡 Use[/dim] [cyan]'yagua list-tests {work_dir}'[/cyan]"
             "[dim] to view all mutation metrics[/dim]\n"
         )
 
@@ -841,31 +821,32 @@ class CLIManager:
 
     def info(
         self,
-        cache: str = _make_cache_argument(),
+        work_dir: str = _make_work_dir_argument(),
     ) -> None:
-        """Show project information from cache.
+        """Show project information from database.
 
         This command displays information about the project stored in the
-        cache database, including its name, path, description, and test count.
+        yagua database, including its name, path, description, and test count.
 
         Parameters
         ----------
-        cache : Path
-            Path to existing SQLite cache file.
+        work_dir : Path
+            Path to existing work directory containing yagua.db.
 
         Raises
         ------
         typer.Exit
-            If cache file does not exist.
+            If work directory does not exist.
         """
-        with self._use_project(cache) as proj:
+        with self._use_project(work_dir) as proj:
             test_count = proj.count_tests()
 
             # Build info lines
             info_lines = [
                 f"[cyan]📝 Name:[/cyan] {proj.name}",
                 f"[cyan]📁 Path:[/cyan] {proj.path}",
-                f"[cyan]💾 Cache:[/cyan] {cache}",
+                f"[cyan]🗂️  Work Dir:[/cyan] {proj.work_dir}",
+                f"[cyan]💾 Database:[/cyan] {proj.db_path}",
             ]
 
             if proj.description:

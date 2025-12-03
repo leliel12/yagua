@@ -35,14 +35,14 @@
 
 ## 📖 About
 
-Yagua is a Python package for collecting, storing, and analyzing test information from pytest-based projects. It uses SQLite to cache test metadata and coverage metrics, enabling efficient analysis without repeated execution of expensive coverage measurements.
+Yagua is a Python package for collecting, storing, and analyzing test information from pytest-based projects. It uses a dedicated work directory containing an SQLite database (yagua.db) to store test metadata and coverage metrics, enabling efficient analysis without repeated execution of expensive coverage measurements.
 
 **Key Design Principle**: Yagua operates on a **caching-first** model. Once data is collected (tests, coverage metrics), it is cached and never recalculated unless explicitly requested using flags like `--force` or `-f`. This ensures fast operations and prevents unnecessary re-execution of expensive coverage analysis.
 
 ## ✨ Features
 
 - **Test Discovery**: Automatic collection of test information from pytest projects
-- **SQLite Storage**: One cache file per project containing all test metadata
+- **SQLite Storage**: Dedicated work directory with yagua.db containing all test metadata
 - **Coverage Analysis**: Project-level and per-test coverage tracking with advanced metrics
 - **Dual Interface**: Both CLI and programmatic Python API
 - **Execution History**: Complete audit trail of all operations with command tracking
@@ -68,20 +68,20 @@ After installation, the `yagua` command will be available globally.
 ## 🚀 Quick Start
 
 ```bash
-# Create a new project cache
-yagua create-project /path/to/project
+# Create a new yagua project (creates work directory with yagua.db)
+yagua create-project /path/to/project _yagua_work_
 
 # Collect tests from the project
-yagua collect-tests project.sqlite
+yagua collect-tests _yagua_work_
 
 # Show project information
-yagua info project.sqlite
+yagua info _yagua_work_
 
 # List all tests with coverage metrics
-yagua list-tests project.sqlite
+yagua list-tests _yagua_work_
 
 # Collect comprehensive coverage data
-yagua collect-coverage project.sqlite
+yagua collect-coverage _yagua_work_
 ```
 
 ---
@@ -96,46 +96,46 @@ yagua collect-coverage project.sqlite
 # Show all available commands
 yagua --help
 
-# Create new project cache with custom name
-yagua create-project /path/to/project my_cache.sqlite \
+# Create new project with custom work directory
+yagua create-project /path/to/project my_work_dir \
   --name "My Project" \
   --description "Project description"
 
 # Display project information
-yagua info project.sqlite
+yagua info my_work_dir
 ```
 
 #### Test Collection
 
 ```bash
 # Collect tests (cached after first run)
-yagua collect-tests project.sqlite
+yagua collect-tests my_work_dir
 
 # Force recollection of tests
-yagua collect-tests project.sqlite --force
-yagua collect-tests project.sqlite -f  # Short form
+yagua collect-tests my_work_dir --force
+yagua collect-tests my_work_dir -f  # Short form
 ```
 
 #### Test Listing
 
 ```bash
 # List tests (compact view)
-yagua list-tests project.sqlite
+yagua list-tests my_work_dir
 
 # Show all columns including IDs and timestamps
-yagua list-tests project.sqlite --long
-yagua list-tests project.sqlite -l  # Short form
+yagua list-tests my_work_dir --long
+yagua list-tests my_work_dir -l  # Short form
 ```
 
 #### Coverage Collection
 
 ```bash
 # Collect project + per-test coverage (cached)
-yagua collect-coverage project.sqlite
+yagua collect-coverage my_work_dir
 
 # Force recalculation of all coverage metrics
-yagua collect-coverage project.sqlite --force
-yagua collect-coverage project.sqlite -f  # Short form
+yagua collect-coverage my_work_dir --force
+yagua collect-coverage my_work_dir -f  # Short form
 ```
 
 **Note**: Coverage collection can be time-consuming for large test suites as it runs each test individually and then all tests except each one. For N tests, this results in approximately 2N+1 test runs.
@@ -145,34 +145,35 @@ yagua collect-coverage project.sqlite -f  # Short form
 Yagua provides a complete Python API for integration into scripts and tools:
 
 ```python
-from yagua import Project, PytestSuite
+from yagua import Project
 
-# Create new project
+# Create new project (creates work_dir with yagua.db inside)
 proj = Project.from_project_info(
     name="my_project",
     path="/path/to/project",
-    description="Optional description",
-    db_path="qa.sqlite"
+    work_dir="my_work_dir",
+    description="Optional description"
 )
 
 # Open existing project
-proj = Project(db_path="qa.sqlite")
+proj = Project(work_dir="my_work_dir")
 
 # Collect tests
-suite = PytestSuite()
-saved_count, updated_count = proj.collect_tests(suite)
+saved_count, updated_count = proj.collect_tests()
 
 # Get tests as DataFrame
 tests_df = proj.get_tests_dataframe()
 
 # Collect coverage
-total_coverage = proj.collect_coverage(suite)
-test_coverage_alone = proj.collect_coverage_for_test(suite, "test_id")
-coverage_without = proj.collect_coverage_without_test(suite, "test_id")
+total_coverage = proj.collect_coverage()
+test_coverage_alone = proj.collect_coverage_for_test("test_id")
+coverage_without = proj.collect_coverage_without_test("test_id")
 
 # Access project properties
 print(f"Name: {proj.name}")
 print(f"Path: {proj.path}")
+print(f"Work Dir: {proj.work_dir}")
+print(f"Database: {proj.db_path}")
 print(f"Coverage: {proj.coverage}")
 
 # Close when done
@@ -246,7 +247,7 @@ Yagua automatically derives four additional metrics from the basic measurements:
 
 ### Interpreting Results
 
-The calculated metrics are available via the Python API using `proj.get_test(test_id)` which returns a pandas Series with all metrics, or displayed in the CLI using `yagua list-tests project.sqlite`:
+The calculated metrics are available via the Python API using `proj.get_test(test_id)` which returns a pandas Series with all metrics, or displayed in the CLI using `yagua list-tests my_work_dir`:
 
 ![Test listing with coverage metrics](res/list_tests.png)
 

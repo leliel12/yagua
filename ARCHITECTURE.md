@@ -36,9 +36,10 @@ Yagua follows a layered architecture with clear separation of concerns:
 
 **Key Classes**:
 - `CLIManager`: Contains all CLI commands as public methods
-  - `create_project()`: Initialize new project cache
+  - `create_project()`: Initialize new project work directory with yagua.db
   - `collect_tests()`: Collect tests from a project (with --force option)
   - `collect_coverage()`: Run coverage analysis for project and individual tests (with --force option)
+  - `collect_mutations()`: Run mutation testing analysis (with --force option)
   - `info()`: Display project information
   - `list_tests()`: Show all tests (with --long option for full details)
 
@@ -60,15 +61,15 @@ Yagua follows a layered architecture with clear separation of concerns:
 
 **Constructors**:
 ```python
-# Open existing cache
-Project(db_path="/path/to/cache.sqlite")
+# Open existing project
+Project(work_dir="/path/to/work_dir")
 
-# Create new cache with metadata
+# Create new project with metadata (creates work_dir/yagua.db)
 Project.from_project_info(
     name="project_name",
     path="/path/to/project",
-    description="description",
-    db_path="/path/to/cache.sqlite"
+    work_dir="/path/to/work_dir",
+    description="description"
 )
 ```
 
@@ -170,13 +171,14 @@ New test frameworks can be added by implementing TestSuiteABC (e.g., `UnittestSu
 ### Test Collection Flow
 
 ```
-1. User: yagua collect-tests project.sqlite
+1. User: yagua collect-tests my_work_dir
          ↓
 2. CLI: CLIManager.collect_tests()
-   - Validates cache exists
+   - Validates work directory exists
    - Creates Project instance
          ↓
-3. Project: collect_tests(suite)
+3. Project: collect_tests()
+   - Uses internal test suite handler
    - Calls suite.get_tests(project_path)
          ↓
 4. PytestSuite: get_tests()
@@ -188,7 +190,7 @@ New test frameworks can be added by implementing TestSuiteABC (e.g., `UnittestSu
    - For each test: add_test(...)
    - Creates/updates TestModel records
          ↓
-6. Database: Tests persisted to SQLite
+6. Database: Tests persisted to work_dir/yagua.db
          ↓
 7. CLI: Displays summary to user
 ```
@@ -196,11 +198,12 @@ New test frameworks can be added by implementing TestSuiteABC (e.g., `UnittestSu
 ### Coverage Collection Flow
 
 ```
-1. User: yagua collect-coverage project.sqlite
+1. User: yagua collect-coverage my_work_dir
          ↓
 2. CLI: CLIManager.collect_coverage()
          ↓
-3. Project: collect_coverage(suite)
+3. Project: collect_coverage()
+   - Uses internal test suite handler
    - Calls suite.get_coverage(path, name)
          ↓
 4. PytestSuite: get_coverage()
@@ -212,19 +215,19 @@ New test frameworks can be added by implementing TestSuiteABC (e.g., `UnittestSu
    - Stores execution history in HistoryModel
          ↓
 6. For each test (coverage_alone):
-   Project: collect_coverage_for_test(suite, test_id)
+   Project: collect_coverage_for_test(test_id)
    - Calls suite.get_coverage_for_tests(path, name, [test_id])
    - Updates TestModel.coverage_alone
    - Stores execution history in HistoryModel with tag 'collect_coverage_for_test::{test_id}'
          ↓
 7. For each test (coverage_without):
-   Project: collect_coverage_without_test(suite, test_id)
+   Project: collect_coverage_without_test(test_id)
    - Queries all test IDs except the target test
    - Calls suite.get_coverage_for_tests(path, name, all_other_test_ids)
    - Updates TestModel.coverage_without
    - Stores execution history in HistoryModel with tag 'collect_coverage_without_test::{test_id}'
          ↓
-8. Database: All coverage data persisted (project, alone, without)
+8. Database: All coverage data persisted in work_dir/yagua.db (project, alone, without)
          ↓
 9. CLI: Displays coverage summary with hierarchical output per test [X/N]
 ```
@@ -238,8 +241,8 @@ New test frameworks can be added by implementing TestSuiteABC (e.g., `UnittestSu
 - **Models**: Data structure and persistence
 
 ### 2. Dependency Injection
-- CLI injects suite handlers into Project
-- Project doesn't know about concrete suite implementations
+- Project manages internal suite handlers
+- Suite handlers abstracted behind interfaces (TestSuiteABC, MutationSuiteABC)
 
 ### 3. Abstract Factory
 - TestSuiteABC defines interface
@@ -260,9 +263,10 @@ New test frameworks can be added by implementing TestSuiteABC (e.g., `UnittestSu
 
 ## Database Architecture
 
-### One Cache Per Project
-- Each SQLite file contains exactly one project
+### One Work Directory Per Project
+- Each work directory contains yagua.db with exactly one project
 - ProjectModel always has id=1 (singleton)
+- All temporary files stored in the same work directory
 - Simplifies queries and data management
 - No need for complex project filtering
 
@@ -307,7 +311,8 @@ __all__ = ["TestSuiteABC", "PytestSuite", "UnittestSuite"]
 3. Use in CLI or programmatically:
 ```python
 suite = UnittestSuite()
-project.collect_tests(suite)
+project._init_suite(test_suite=suite)
+project.collect_tests()
 ```
 
 ### Adding New CLI Commands
@@ -316,11 +321,10 @@ Add method to CLIManager:
 ```python
 def my_command(
     self,
-    cache: str = typer.Argument(..., parser=as_path),
+    work_dir: str = _make_work_dir_argument(),
 ) -> None:
     """Command description for help."""
-    self._validate_cache_exists(cache)
-    with Project(db_path=cache) as proj:
+    with self._use_project(work_dir) as proj:
         # Implementation
         pass
 ```

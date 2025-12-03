@@ -20,18 +20,19 @@ yagua/
 
 ## Key Patterns
 
-- **One Cache File Per Project**: Each SQLite file contains one project
+- **One Work Directory Per Project**: Each work directory contains yagua.db with one project
 - **Dynamic Model Binding**: Models bound to database at runtime in `Project.__init__()`
 - **CLI Auto-Registration**: Methods in `CLIManager` auto-register as commands
 
 ## Commands
 
 ```bash
-yagua create-project /path/to/project my_cache.db --name "Project" --work-path /path/to/work
-yagua collect-tests project.db
-yagua collect-coverage project.db
-yagua list-tests project.db --long
-yagua info project.db
+yagua create-project /path/to/project my_work_dir --name "Project"
+yagua collect-tests my_work_dir
+yagua collect-coverage my_work_dir
+yagua collect-mutations my_work_dir
+yagua list-tests my_work_dir --long
+yagua info my_work_dir
 ```
 
 ## Code Style
