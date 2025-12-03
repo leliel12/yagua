@@ -14,26 +14,6 @@ PytestSuite : class
     Test suite handler for pytest-based projects.
 TestSuiteABC : class
     Abstract base class for implementing test suite handlers.
-
-Examples
---------
-Using the CLI:
-    $ yagua create-project /path/to/project
-    $ yagua collect-tests project.sqlite
-    $ yagua collect-coverage project.sqlite
-    $ yagua list-tests project.sqlite
-
-Using the API:
-    >>> from yagua import Project, PytestSuite
-    >>> proj = Project.from_project_info(
-    ...     name="my_project",
-    ...     path="/path/to/project",
-    ...     description="My test project",
-    ...     db_path="qa.sqlite"
-    ... )
-    >>> suite = PytestSuite()
-    >>> saved, updated = proj.collect_tests(suite)
-    >>> coverage = proj.collect_coverage(suite)
 """
 
 from .cli import main
@@ -63,12 +43,5 @@ def read_db(path):
     --------
     Project : Main project management class.
     Project.from_project_info : Create a new project with metadata.
-
-    Examples
-    --------
-    >>> from yagua import read_db
-    >>> proj = read_db("project.sqlite")
-    >>> print(proj.name)
-    my_project
     """
     return Project(path)

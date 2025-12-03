@@ -744,9 +744,15 @@ class Project:
             Project description.
         """
         if test_suite_name not in TEST_SUITES:
-            raise ValueError("[corregi claude]")
+            raise ValueError(
+                f"Invalid test suite: {test_suite_name}. "
+                f"Available: {', '.join(TEST_SUITES.keys())}"
+            )
         if mutation_suite_name not in MUTATION_SUITES:
-            raise ValueError("[corregi claude]")
+            raise ValueError(
+                f"Invalid mutation suite: {mutation_suite_name}. "
+                f"Available: {', '.join(MUTATION_SUITES.keys())}"
+            )
 
         with self.transaction():
             project, created = ProjectModel.get_or_create(

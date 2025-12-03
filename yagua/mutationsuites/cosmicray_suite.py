@@ -408,6 +408,7 @@ class CosmicRaySuite(MutationSuiteABC):
         init_cmd, init_status, init_stdout, init_stderr = init_output
 
         # RUN TESTS ===========================================================
+
         exec_cmd, exec_status, exec_stdout, exec_stderr = self._run(
             project_path,
             func=cray_cli.handle_exec.callback,
