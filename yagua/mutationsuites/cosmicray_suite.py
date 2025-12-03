@@ -317,7 +317,7 @@ class CosmicRaySuite(MutationSuiteABC):
         with open(config_file, "w") as fp:
             fp.write(config_str)
 
-    def _init_suite(self, project_path, project_name, tag, force):
+    def _init_suite(self, *, project_path, project_name, tag, force):
         config_file = self._work_path / f"{tag}.toml"
         session_file = self._work_path / f"{tag}.sqlite"
 
@@ -367,7 +367,10 @@ class CosmicRaySuite(MutationSuiteABC):
         # INIT SUITE ==========================================================
 
         _, session_file, init_output = self._init_suite(
-            project_path, project_name, "get_mutants", force
+            project_path=project_path,
+            project_name=project_name,
+            tag="get_mutants",
+            force=force,
         )
         init_cmd, init_status, init_stdout, init_stderr = init_output
 
@@ -397,7 +400,10 @@ class CosmicRaySuite(MutationSuiteABC):
         # INIT SUITE ==========================================================
 
         config_file, session_file, init_output = self._init_suite(
-            project_path, project_name, "get_mutants", force
+            project_path=project_path,
+            project_name=project_name,
+            tag="test_mutaions",
+            force=force,
         )
         init_cmd, init_status, init_stdout, init_stderr = init_output
 
