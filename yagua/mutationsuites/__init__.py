@@ -20,9 +20,10 @@ The mutation suite handler pattern separates mutation framework-specific logic
 from the core Project management. This allows yagua to support multiple
 mutation testing frameworks while keeping the Project API consistent.
 
-Each handler implements two core methods:
+Each handler implements three core methods:
 - get_mutants(): Initialize mutation session and count total mutants
 - get_survival_rate(): Run mutation testing and calculate survival rate
+- get_survival_rate_for_tests(): Run mutation testing with specific tests
 
 Extending Support
 -----------------

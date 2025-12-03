@@ -701,14 +701,39 @@ class Project:
                 project.save()
 
             self._write_history(
-                project=project, tag="collect_survival_rate", result=result
+                project=project, tag="get_survival_rate", result=result
             )
 
         result.raise_if_error()
 
         return result.value
 
-    def collect_survival_rate_for_test(self, test_id, force):
+    def collect_survival_rate_for_test(self, test_id, force=False):
+        """Collect and store survival rate for a single test in isolation.
+
+        This method runs a specific test alone to measure its isolated
+        mutation detection capability. The result is stored in
+        TestModel.msr_alone.
+
+        Parameters
+        ----------
+        test_id : str
+            Unique test identifier (e.g., pytest node ID).
+        force : bool, optional
+            Force re-execution of mutations even if already run.
+            Default is False.
+
+        Returns
+        -------
+        float
+            Mutation survival rate percentage (0-100) for this test alone.
+
+        Notes
+        -----
+        Creates a HistoryModel record with
+        tag='collect_survival_rate_for_test::{test_id}' for tracking
+        execution history per test.
+        """
         suite = self.mutation_suite
         result = suite.get_survival_rate_for_tests(
             self.path, self.name, [test_id], force
@@ -723,13 +748,43 @@ class Project:
 
             self._write_history(
                 project=test.project,
-                tag=f"collect_survival_rate_for_tests::{test_id}",
+                tag=f"collect_survival_rate_for_test::{test_id}",
                 result=result,
             )
 
         result.raise_if_error()
 
-    def collect_survival_rate_without_test(self, test_id, force):
+        return result.value
+
+    def collect_survival_rate_without_test(self, test_id, force=False):
+        """Collect and store survival rate when excluding a specific test.
+
+        This method runs all tests except the specified one to measure
+        mutation detection capability without that test's contribution.
+        Useful for identifying test redundancy and unique mutation
+        detection. The result is stored in TestModel.msr_without.
+
+        Parameters
+        ----------
+        test_id : str
+            Unique test identifier to exclude (e.g., pytest node ID).
+        force : bool, optional
+            Force re-execution of mutations even if already run.
+            Default is False.
+
+        Returns
+        -------
+        float
+            Mutation survival rate percentage (0-100) when running all
+            tests except this one.
+
+        Notes
+        -----
+        Creates a HistoryModel record with
+        tag='collect_survival_rate_without_test::{test_id}' for tracking
+        execution history. Queries all test IDs except the target and runs
+        them together to measure combined mutation detection capability.
+        """
         suite = self.mutation_suite
         with self.transaction():
             query = TestModel.select(TestModel.test_id).where(
@@ -748,7 +803,7 @@ class Project:
 
             self._write_history(
                 project=test.project,
-                tag=f"collect_survival_rate_without_tests::{test_id}",
+                tag=f"collect_survival_rate_without_test::{test_id}",
                 result=result,
             )
 

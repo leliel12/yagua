@@ -16,7 +16,7 @@ MutationSuiteABC : ABC
 
 Interface Contract
 ------------------
-All mutation suite handlers must implement two abstract methods that return
+All mutation suite handlers must implement three abstract methods that return
 SuiteRunResult instances or compatible tuple structures:
 
 1. get_mutants(project_path, project_name, force) -> SuiteRunResult
@@ -26,6 +26,11 @@ SuiteRunResult instances or compatible tuple structures:
 2. get_survival_rate(project_path, project_name, force) -> SuiteRunResult
    - Executes all mutations against all tests
    - Returns result with survival_rate as value
+
+3. get_survival_rate_for_tests(project_path, project_name, test_ids, force)
+   -> SuiteRunResult
+   - Executes all mutations against specific tests
+   - Returns result with survival_rate for those tests
 
 Return Value Format
 -------------------
@@ -201,9 +206,10 @@ class MutationSuiteABC(ABC):
     must follow. Subclasses should implement methods for running mutation
     testing from different mutation testing frameworks.
 
-    All concrete implementations must provide two methods:
+    All concrete implementations must provide three methods:
     - get_mutants(): For counting total mutants generated
     - get_survival_rate(): For executing mutations and calculating survival rate
+    - get_survival_rate_for_tests(): For executing mutations with specific tests
 
     The consistent return format across all methods enables yagua to
     store comprehensive audit logs of all operations in HistoryModel.
@@ -347,5 +353,52 @@ class MutationSuiteABC(ABC):
         (were not killed by the test suite). A lower survival rate indicates
         a more effective test suite. The mutation score can be calculated as:
         mutation_score = 100 - survival_rate
+        """
+        pass
+
+    @abstractmethod
+    def get_survival_rate_for_tests(
+        self, project_path, project_name, test_ids, force
+    ) -> _SuiteRunResult:
+        """Run specific test(s) with mutations and return survival rate.
+
+        This method runs specified tests against all mutations to measure
+        their combined mutation detection capability. Can be used for
+        isolated test analysis or combined test analysis.
+
+        Parameters
+        ----------
+        project_path : str or Path
+            Path to the project directory to run mutation testing on.
+        project_name : str
+            Name of the project/package to mutate.
+        test_ids : list[str]
+            List of unique identifiers for tests to run (e.g., pytest node
+            IDs). Can be a single-item list for isolated test analysis, or
+            multiple items for combined analysis of specific tests.
+        force : bool
+            Force re-execution of mutations even if already run.
+
+        Returns
+        -------
+        SuiteRunResult
+            Result containing:
+            - value: float | None - Mutation survival rate percentage (0-100)
+            - command: str - The command that was executed to run mutations
+            - status_code: int - Exit status from mutation execution
+            - stdout: str - Standard output from the command execution
+            - stderr: str - Standard error output from the command execution
+            - result: object - Additional mutation data (e.g., detailed results)
+
+        Notes
+        -----
+        This method provides flexible mutation testing:
+        - Single test ([test_id]): Measures isolated mutation detection
+        - Multiple tests ([test_id1, test_id2, ...]): Measures combined
+          capability
+        - All except one (query result): Enables msr_without calculation
+
+        This flexibility allows for both msr_alone (single test) and
+        msr_without (all tests except one) metrics.
         """
         pass

@@ -479,6 +479,95 @@ class CosmicRaySuite(MutationSuiteABC):
             result=sr_stdout,
         )
 
+    def get_survival_rate_for_tests(
+        self, project_path, project_name, test_ids, force
+    ):
+        """Run specific test(s) with mutations and return survival rate.
+
+        This method runs specified tests against all mutations using
+        cosmic-ray to measure their combined mutation detection capability.
+
+        Parameters
+        ----------
+        project_path : str or Path
+            Path to the project directory to run mutation testing on.
+        project_name : str
+            Name of the project/package to mutate.
+        test_ids : list[str]
+            List of unique identifiers for tests to run (e.g., pytest node
+            IDs). Can be a single-item list for isolated test analysis, or
+            multiple items for combined analysis.
+        force : bool
+            Force re-execution of mutations even if already run.
+
+        Returns
+        -------
+        SuiteRunResult
+            Result containing:
+            - value: float - Mutation survival rate percentage (0-100)
+            - command: str - The cosmic-ray commands executed
+            - status_code: int - Combined exit status from all commands
+            - stdout: str - Combined standard output
+            - stderr: str - Combined standard error
+            - result: str - Survival rate output from cosmic-ray
+
+        Notes
+        -----
+        This method performs three steps:
+        1. Initialize mutation session (if needed or forced)
+        2. Execute mutations against specified tests only
+        3. Calculate and return the survival rate
+
+        The test_ids are used to filter which tests run against the mutations,
+        enabling per-test or subset mutation analysis.
+        """
+
+        # INIT SUITE ==========================================================
+
+        config_file, session_file, init_output = self._init_suite(
+            project_path=project_path,
+            project_name=project_name,
+            tag="get_survival_rate_for_tests",
+            force=force,
+        )
+        init_cmd, init_status, init_stdout, init_stderr = init_output
+
+        # RUN TESTS ===========================================================
+
+        # TODO: Implement filtering to run only specific tests
+        # For now, this runs all tests like get_survival_rate
+        exec_cmd, exec_status, exec_stdout, exec_stderr = self._run(
+            project_path,
+            func=cray_cli.handle_exec.callback,
+            args=(config_file, session_file),
+        )
+
+        # GET SURVIVAL RATE ===================================================
+
+        sr_cmd, sr_status, sr_stdout, sr_stderr = self._run(
+            project_path,
+            func=cr_rate.format_survival_rate.callback,
+            kwargs={
+                "estimate": False,
+                "confidence": 95.0,
+                "fail_over": None,
+                "session_file": session_file,
+            },
+        )
+
+        survival_rate = float(sr_stdout)
+
+        # THE RETURN ==========================================================
+
+        return self.pkg_result(
+            value=survival_rate,
+            command="\n\n".join([init_cmd, exec_cmd, sr_cmd]),
+            status_code=init_status + exec_status + sr_status,
+            stdout="\n\n".join([init_stdout, exec_stdout, sr_stdout]),
+            stderr="\n\n".join([init_stderr, exec_stderr, sr_stderr]),
+            result=sr_stdout,
+        )
+
     def hash_tests_ids(self, tests_ids):
         all_ids = "".join(sorted(tests_ids))
         md5 = hashlib.md5(all_ids.encode("utf8"))
