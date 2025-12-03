@@ -23,7 +23,7 @@ SuiteRunResult instances or compatible tuple structures:
    - Runs mutation initialization to count mutants
    - Returns result with mutants_number as value
 
-2. test_mutations(project_path, project_name, force) -> SuiteRunResult
+2. get_survival_rate(project_path, project_name, force) -> SuiteRunResult
    - Executes all mutations against all tests
    - Returns result with survival_rate as value
 
@@ -203,7 +203,7 @@ class MutationSuiteABC(ABC):
 
     All concrete implementations must provide two methods:
     - get_mutants(): For counting total mutants generated
-    - test_mutations(): For executing mutations and calculating survival rate
+    - get_survival_rate(): For executing mutations and calculating survival rate
 
     The consistent return format across all methods enables yagua to
     store comprehensive audit logs of all operations in HistoryModel.
@@ -311,10 +311,15 @@ class MutationSuiteABC(ABC):
         pass
 
     @abstractmethod
-    def test_mutations(
+    def get_survival_rate(
         self, project_path, project_name, force
     ) -> _SuiteRunResult:
         """Execute mutation testing and return the survival rate.
+
+        This method runs all mutation tests against the test suite and
+        calculates the mutation survival rate, which represents the
+        percentage of mutants that were not detected (survived) by the
+        test suite.
 
         Parameters
         ----------
@@ -327,22 +332,20 @@ class MutationSuiteABC(ABC):
 
         Returns
         -------
-        survival_rate : float | None
-            Mutation survival rate percentage (0-100) or None if score
-            could not be determined.
-        command : str
-            The command that was executed to run mutations.
-        stdout : str
-            Standard output from the command execution.
-        stderr : str
-            Standard error output from the command execution.
-        data : object
-            Additional mutation data (e.g., detailed mutation results).
+        SuiteRunResult
+            Result containing:
+            - value: float | None - Mutation survival rate percentage (0-100)
+            - command: str - The command that was executed to run mutations
+            - status_code: int - Exit status from mutation execution
+            - stdout: str - Standard output from the command execution
+            - stderr: str - Standard error output from the command execution
+            - result: object - Additional mutation data (e.g., detailed results)
 
         Notes
         -----
-        This method executes all mutations against all tests and calculates
-        the survival rate (percentage of mutants that survived). The
-        mutation score can be calculated as (1 - survival_rate/100).
+        The survival rate represents the percentage of mutants that survived
+        (were not killed by the test suite). A lower survival rate indicates
+        a more effective test suite. The mutation score can be calculated as:
+        mutation_score = 100 - survival_rate
         """
         pass

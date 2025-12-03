@@ -751,7 +751,7 @@ class CLIManager:
 
             # Phase 2: Execute mutations and calculate survival rate
             if proj.msr is None or force:
-                proj.test_mutations(force)
+                proj.get_survival_rate(force)
             console.print(
                 f"\n🎯 [bold green]Survival Rate:[/bold green] "
                 f"[cyan]{proj.msr:.2f}%[/cyan]\n"

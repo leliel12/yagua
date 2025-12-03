@@ -666,7 +666,7 @@ class Project:
 
         return result.value
 
-    def test_mutations(self, force=False):
+    def get_survival_rate(self, force=False):
         """Execute mutation testing and calculate survival rate.
 
         This method runs all mutation tests against the test suite and
@@ -686,12 +686,13 @@ class Project:
 
         Notes
         -----
-        Creates a HistoryModel record with tag='test_mutations'
+        Creates a HistoryModel record with tag='get_survival_rate'
         containing the command executed and its output for audit purposes.
-        The mutation score is calculated as (1 - survival_rate).
+        A lower survival rate indicates a more effective test suite.
+        The mutation score can be calculated as: 100 - survival_rate
         """
         suite = self.mutation_suite
-        result = suite.test_mutations(self.path, self.name, force)
+        result = suite.get_survival_rate(self.path, self.name, force)
 
         with self.transaction():
             if not result.error:
@@ -700,7 +701,7 @@ class Project:
                 project.save()
 
             self._write_history(
-                project=project, tag="test_mutations", result=result
+                project=project, tag="get_survival_rate", result=result
             )
 
         result.raise_if_error()

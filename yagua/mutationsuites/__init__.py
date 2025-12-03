@@ -21,8 +21,8 @@ from the core Project management. This allows yagua to support multiple
 mutation testing frameworks while keeping the Project API consistent.
 
 Each handler implements two core methods:
-- get_mutations(): Run mutation testing for all tests
-- get_mutations_for_tests(): Run mutation testing for specific tests
+- get_mutants(): Initialize mutation session and count total mutants
+- get_survival_rate(): Run mutation testing and calculate survival rate
 
 Extending Support
 -----------------

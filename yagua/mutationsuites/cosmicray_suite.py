@@ -395,14 +395,46 @@ class CosmicRaySuite(MutationSuiteABC):
             result=xml_stdout,
         )
 
-    def test_mutations(self, project_path, project_name, force):
+    def get_survival_rate(self, project_path, project_name, force):
+        """Execute mutation testing and return the survival rate.
+
+        This method runs all mutation tests against the test suite using
+        cosmic-ray and calculates the mutation survival rate.
+
+        Parameters
+        ----------
+        project_path : str or Path
+            Path to the project directory to run mutation testing on.
+        project_name : str
+            Name of the project/package to mutate.
+        force : bool
+            Force re-execution of mutations even if already run.
+
+        Returns
+        -------
+        SuiteRunResult
+            Result containing:
+            - value: float - Mutation survival rate percentage (0-100)
+            - command: str - The cosmic-ray commands executed
+            - status_code: int - Combined exit status from all commands
+            - stdout: str - Combined standard output
+            - stderr: str - Combined standard error
+            - result: str - Survival rate output from cosmic-ray
+
+        Notes
+        -----
+        This method performs three steps:
+        1. Initialize mutation session (if needed or forced)
+        2. Execute all mutations against the test suite
+        3. Calculate and return the survival rate
+        """
 
         # INIT SUITE ==========================================================
 
         config_file, session_file, init_output = self._init_suite(
             project_path=project_path,
             project_name=project_name,
-            tag="test_mutaions",
+            tag="get_survival_rate",
             force=force,
         )
         init_cmd, init_status, init_stdout, init_stderr = init_output
@@ -415,7 +447,7 @@ class CosmicRaySuite(MutationSuiteABC):
             args=(config_file, session_file),
         )
 
-        # GET MSR =============================================================
+        # GET SURVIVAL RATE ===================================================
 
         sr_cmd, sr_status, sr_stdout, sr_stderr = self._run(
             project_path,
