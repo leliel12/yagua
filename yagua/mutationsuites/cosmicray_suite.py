@@ -142,7 +142,7 @@ class CosmicRaySuite(MutationSuiteABC):
         self._work_path.mkdir(parents=True, exist_ok=True)
 
     # ========================================================================
-    # Private Methods
+    # PRIVATE - RUN
     # ========================================================================
 
     def _render_full_cmd(self, func, args, kwargs):
@@ -235,6 +235,10 @@ class CosmicRaySuite(MutationSuiteABC):
 
         return (full_cmd, status, stdout.getvalue(), stderr.getvalue())
 
+    # =========================================================================
+    # PRIVATE INIT SUITE
+    # =========================================================================
+
     def _resolve_module_path(self, project_name, project_path):
         """Resolve project name to a valid module path for cosmic-ray.
 
@@ -313,6 +317,24 @@ class CosmicRaySuite(MutationSuiteABC):
         with open(config_file, "w") as fp:
             fp.write(config_str)
 
+    def _init_suite(self, project_path, project_name, tag, force):
+        config_file = self._work_path / f"{tag}.toml"
+        session_file = self._work_path / f"{tag}.sqlite"
+
+        if force or not config_file.exists():
+            self._write_conf(project_name, project_path, [], config_file)
+
+        if force or not session_file.exists():
+            cmd, status, stdout, stderr = self._run(
+                project_path,
+                func=cray_cli.init.callback,
+                args=(config_file, session_file, force),
+            )
+        else:
+            cmd, status, stdout, stderr = "", 0, "", ""
+
+        return config_file, session_file, (cmd, status, stdout, stderr)
+
     # ========================================================================
     # Public Methods
     # ========================================================================
@@ -341,17 +363,13 @@ class CosmicRaySuite(MutationSuiteABC):
             - stderr: str - Standard error from cosmic-ray
             - result: str - XML report with mutation data
         """
-        config_file = self._work_path / "global_run.toml"
-        session_file = self._work_path / "global_run.sqlite"
-        self._write_conf(project_name, project_path, [], config_file)
 
-        # INIT THE MUTATION SUITE =============================================
+        # INIT SUITE ==========================================================
 
-        init_cmd, init_status, init_stdout, init_stderr = self._run(
-            project_path,
-            func=cray_cli.init.callback,
-            args=(config_file, session_file, force),
+        _, session_file, init_output = self._init_suite(
+            project_path, project_name, "get_mutants", force
         )
+        init_cmd, init_status, init_stdout, init_stderr = init_output
 
         # COLLECT THE NUMBER OF MUTATIONS =====================================
 
@@ -375,14 +393,22 @@ class CosmicRaySuite(MutationSuiteABC):
         )
 
     def test_mutations(self, project_path, project_name, force):
-        config_file = self._work_path / "global_run.toml"
-        session_file = self._work_path / "global_run.sqlite"
 
+        # INIT SUITE ==========================================================
+
+        config_file, session_file, init_output = self._init_suite(
+            project_path, project_name, "get_mutants", force
+        )
+        init_cmd, init_status, init_stdout, init_stderr = init_output
+
+        # RUN TESTS ===========================================================
         exec_cmd, exec_status, exec_stdout, exec_stderr = self._run(
             project_path,
             func=cray_cli.handle_exec.callback,
             args=(config_file, session_file),
         )
+
+        # GET MSR =============================================================
 
         sr_cmd, sr_status, sr_stdout, sr_stderr = self._run(
             project_path,
@@ -401,9 +427,9 @@ class CosmicRaySuite(MutationSuiteABC):
 
         return self.pkg_result(
             value=survival_rate,
-            command="\n\n".join([exec_cmd, sr_cmd]),
-            status_code=exec_status + sr_status,
-            stdout="\n\n".join([exec_stdout, sr_stdout]),
-            stderr="\n\n".join([exec_stderr, sr_stderr]),
+            command="\n\n".join([init_cmd, exec_cmd, sr_cmd]),
+            status_code=init_status + exec_status + sr_status,
+            stdout="\n\n".join([init_stdout, exec_stdout, sr_stdout]),
+            stderr="\n\n".join([init_stderr, exec_stderr, sr_stderr]),
             result=sr_stdout,
         )
