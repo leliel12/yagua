@@ -878,6 +878,77 @@ class CLIManager:
             )
             console.print()
 
+    def export(
+        self,
+        work_dir: str = _make_work_dir_argument(),
+        output: str = typer.Option(
+            None,
+            "-o",
+            "--output",
+            help=(
+                "Output path with extension "
+                "(e.g., backup.zip, backup.tar.gz)"
+            ),
+            parser=as_path,
+        ),
+    ) -> None:
+        """Export work directory to an archive file.
+
+        This command creates an archive file containing the entire work
+        directory, including the yagua.db database and all temporary
+        files. The archive format is automatically detected from the
+        file extension. Supported formats: zip, tar, tar.gz (tgz),
+        tar.bz2 (tbz2), tar.xz (txz).
+
+        Parameters
+        ----------
+        work_dir : Path
+            Path to existing work directory containing yagua.db.
+        output : Path, optional
+            Output path including the desired extension (e.g.,
+            'backup.zip', 'backup.tar.gz'). If not provided, defaults to
+            '<work_dir_name>.zip' in the current directory.
+
+        Raises
+        ------
+        typer.Exit
+            If work directory does not exist or export fails.
+        """
+        with self._use_project(work_dir) as proj:
+
+            console.print(
+                "\n[bold cyan]📦 Exporting work directory...[/bold cyan]\n"
+            )
+
+            try:
+                archive_path = proj.export_work_dir(output_path=output)
+            except Exception as err:
+                console.print(
+                    Panel(
+                        f"[red]Failed to export work directory:[/red]\n{err}",
+                        title="❌ Error",
+                        border_style="red",
+                    )
+                )
+                raise typer.Exit(code=1)
+
+            # Build success message
+            info_lines = [
+                "[bold green]✅ Work directory exported successfully!"
+                "[/bold green]\n",
+                f"[cyan]📦 Archive:[/cyan] {archive_path}",
+                f"[cyan]📁 Source:[/cyan] {proj.work_dir}",
+            ]
+
+            console.print(
+                Panel(
+                    "\n".join(info_lines),
+                    border_style="green",
+                    padding=(1, 2),
+                )
+            )
+            console.print()
+
 
 # ============================================================================
 # MAIN FUNCTION
