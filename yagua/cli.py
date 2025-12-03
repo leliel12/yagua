@@ -368,11 +368,7 @@ class CLIManager:
             os.makedirs(work_path)
         except Exception as err:
             console.print(
-                Panel(
-                    f"[red]{err}[/red]",
-                    title="❌ Error",
-                    border_style="red",
-                )
+                Panel(f"[red]{err}[/red]", title="❌ Error", border_style="red")
             )
             raise typer.Exit(code=1)
 

@@ -283,7 +283,9 @@ class MutationSuiteABC(ABC):
     # ========================================================================
 
     @abstractmethod
-    def get_mutants(self, project_path, project_name) -> _SuiteRunResult:
+    def get_mutants(
+        self, project_path, project_name, force
+    ) -> _SuiteRunResult:
         """Run mutation analysis and return the number of mutants.
 
         Parameters
@@ -292,20 +294,19 @@ class MutationSuiteABC(ABC):
             Path to the project directory to run mutation testing on.
         project_name : str
             Name of the project/package to mutate.
+        force : bool
+            Force re-initialization of mutations even if already initialized.
 
         Returns
         -------
-        mutants_number : int | None
-            Number of mutants generated or None if count could not
-            be determined.
-        command : str
-            The command that was executed to initialize mutations.
-        stdout : str
-            Standard output from the command execution.
-        stderr : str
-            Standard error output from the command execution.
-        data : object
-            Additional mutation data (e.g., detailed mutation results).
+        SuiteRunResult
+            Result containing:
+            - value: int | None - Number of mutants generated
+            - command: str - The command that was executed to initialize mutations
+            - status_code: int - Exit status from mutation initialization
+            - stdout: str - Standard output from the command execution
+            - stderr: str - Standard error output from the command execution
+            - result: object - Additional mutation data (e.g., detailed results)
 
         Notes
         -----
