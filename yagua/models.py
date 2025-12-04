@@ -254,6 +254,22 @@ class TestModel(BaseModel):
         Calculated as:
             ((coverage_alone - coverage_impact) / coverage_alone) * 100
         Requires: coverage_alone and coverage_impact
+    msr_impact : float | None
+        Impact on total MSR (unique contribution to mutation detection).
+        Calculated as: total_msr - msr_without
+        Requires: project.msr and msr_without
+    msr_overlap : float | None
+        Mutants killed by this test that are also killed by other tests.
+        Calculated as: msr_alone - msr_impact
+        Requires: project.msr, msr_alone, and msr_without
+    msr_uniqueness : float | None
+        Percentage of test's killed mutants that are unique (0-100).
+        Calculated as: (msr_impact / msr_alone) * 100
+        Requires: msr_alone and msr_impact
+    msr_redundancy : float | None
+        Percentage of test's killed mutants that are redundant (0-100).
+        Calculated as: ((msr_alone - msr_impact) / msr_alone) * 100
+        Requires: msr_alone and msr_impact
 
     Notes
     -----
@@ -370,6 +386,101 @@ class TestModel(BaseModel):
         try:
             impact = self.coverage_impact
             return ((self.coverage_alone - impact) / self.coverage_alone) * 100
+        except ZeroDivisionError:
+            return 0
+        except TypeError:
+            return None
+
+    @hybrid.hybrid_property
+    def msr_impact(self) -> float | None:
+        """Calculate impact on total MSR (unique contribution).
+
+        Returns
+        -------
+        float | None
+            Impact percentage, or None if data unavailable.
+
+        Formula
+        -------
+        msr_impact = total_msr - msr_without
+
+        This represents how much MSR would be lost if this test
+        were removed from the test suite (i.e., how many additional
+        mutants this test kills that no other test kills).
+        """
+        try:
+            return self.project.msr - self.msr_without
+        except TypeError:
+            return None
+
+    @hybrid.hybrid_property
+    def msr_overlap(self) -> float | None:
+        """Calculate mutants killed by this test and other tests.
+
+        Returns
+        -------
+        float | None
+            Overlap percentage, or None if data unavailable.
+
+        Formula
+        -------
+        msr_overlap = msr_alone - msr_impact
+                    = msr_without + msr_alone - total_msr
+
+        This represents how many mutants killed by this test are
+        also killed by other tests (i.e., redundant mutant kills).
+        """
+        try:
+            return (
+                self.msr_without + self.msr_alone - self.project.msr
+            )
+        except TypeError:
+            return None
+
+    @hybrid.hybrid_property
+    def msr_uniqueness(self) -> float | None:
+        """Calculate percentage of test's killed mutants that are unique.
+
+        Returns
+        -------
+        float | None
+            Uniqueness percentage (0-100), or None if data unavailable.
+
+        Formula
+        -------
+        msr_uniqueness = (msr_impact / msr_alone) * 100
+
+        - 100% = All mutants killed by this test are unique
+        - 0% = None of this test's mutant kills are unique (redundant)
+        """
+        try:
+            impact = self.msr_impact
+            return (impact / self.msr_alone) * 100
+        except ZeroDivisionError:
+            return 0
+        except TypeError:
+            return None
+
+    @hybrid.hybrid_property
+    def msr_redundancy(self) -> float | None:
+        """Calculate percentage of test's killed mutants that are redundant.
+
+        Returns
+        -------
+        float | None
+            Redundancy percentage (0-100), or None if data unavailable.
+
+        Formula
+        -------
+        msr_redundancy = (msr_overlap / msr_alone) * 100
+                       = ((msr_alone - msr_impact) / msr_alone) * 100
+
+        - 0% = Test is completely unique (no redundant mutant kills)
+        - 100% = Test is completely redundant (all mutant kills duplicated)
+        """
+        try:
+            impact = self.msr_impact
+            return ((self.msr_alone - impact) / self.msr_alone) * 100
         except ZeroDivisionError:
             return 0
         except TypeError:
