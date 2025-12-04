@@ -268,18 +268,21 @@ class CLIManager:
             ...,
             help="Path to the project directory",
             parser=as_path,
+            metavar="📁 PATH",
         ),
         work_dir: str = _make_work_dir_argument(default=None),
         name: str = typer.Option(
             None,
             "-n",
             "--name",
+            metavar="✏️  TEXT",
             help="Project name (defaults to directory name)",
         ),
         description: str = typer.Option(
             None,
             "-d",
             "--description",
+            metavar="✏️  TEXT",
             help="Project description",
         ),
     ) -> None:
@@ -893,6 +896,7 @@ class CLIManager:
                 "Output path with extension "
                 "(e.g., backup.zip, backup.tar.gz)"
             ),
+            metavar="📁 PATH",
             parser=as_path,
         ),
     ) -> None:
@@ -925,7 +929,7 @@ class CLIManager:
             )
 
             try:
-                archive_path = proj.export_work_dir(output_path=output)
+                archive_path = proj.export(output_path=output)
             except Exception as err:
                 console.print(
                     Panel(
