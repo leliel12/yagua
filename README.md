@@ -2,7 +2,6 @@
 
 <img src="https://github.com/leliel12/yagua/raw/master/res/logo.png" alt="Yagua Logo" width="300"/>
 
-# Yagua
 
 **Test collection and coverage analysis for pytest-based projects**
 
