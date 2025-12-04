@@ -22,9 +22,9 @@
 - [Usage](#usage)
   - [CLI Commands](#cli-commands)
   - [Programmatic API](#programmatic-api)
-- [Coverage Metrics](#coverage-metrics)
-  - [Basic Metrics](#basic-metrics)
-  - [Calculated Metrics](#calculated-metrics)
+- [Advanced Metrics](#advanced-metrics)
+  - [Coverage Metrics](#coverage-metrics)
+  - [Mutation Testing Metrics](#mutation-testing-metrics)
   - [Interpreting Results](#interpreting-results)
   - [Use Cases](#use-cases)
 - [Development](#development)
@@ -201,11 +201,15 @@ For architectural details and system design, see [ARCHITECTURE.md](ARCHITECTURE.
 
 ---
 
-## 📊 Coverage Metrics
+## 📊 Advanced Metrics
 
-Yagua provides advanced coverage metrics to analyze test quality, redundancy, and unique contributions. All metrics are automatically calculated when running `yagua collect-coverage`.
+Yagua provides comprehensive metrics for analyzing test quality, redundancy, and unique contributions. These metrics are available for both **code coverage** and **mutation testing**, enabling deep insights into test suite effectiveness.
 
-### Basic Metrics
+### Coverage Metrics
+
+Coverage metrics analyze how much of your codebase is exercised by tests. All metrics are automatically calculated when running `yagua collect-coverage`.
+
+#### Basic Coverage Metrics
 
 These are directly measured by running pytest with coverage:
 
@@ -215,7 +219,7 @@ These are directly measured by running pytest with coverage:
 | **Coverage Without** | Coverage when running all tests except this one |
 | **Total Coverage** | Overall project coverage with all tests |
 
-### Calculated Metrics
+#### Calculated Coverage Metrics
 
 Yagua automatically derives four additional metrics from the basic measurements:
 
@@ -263,6 +267,68 @@ Yagua automatically derives four additional metrics from the basic measurements:
 - **50%**: Half redundant
 - **100%**: Completely redundant - all coverage duplicated elsewhere
 
+### Mutation Testing Metrics
+
+Mutation testing metrics measure how effectively tests detect bugs by analyzing their ability to kill mutants (intentional code modifications). All metrics are automatically calculated when running `yagua collect-mutations`.
+
+#### Basic MSR Metrics
+
+These are directly measured by running mutation testing:
+
+| Metric | Description |
+|--------|-------------|
+| **MSR Alone** | Mutation Score Ratio when running only this test in isolation |
+| **MSR Without** | Mutation Score Ratio when running all tests except this one |
+| **Total MSR** | Overall project Mutation Score Ratio with all tests |
+
+#### Calculated MSR Metrics
+
+Yagua automatically derives four additional metrics from the basic measurements:
+
+#### 1. MSR Impact
+
+**Formula**: `total_msr - msr_without`
+
+**Meaning**: The unique contribution of this test to mutation detection. How many additional mutants would survive if you removed this test.
+
+**Interpretation**:
+- **High Impact** (close to msr_alone): Test kills mutants uniquely
+- **Low Impact** (close to 0): Mutant kills are mostly redundant
+- **Negative Impact**: Should never occur with a proper test suite
+
+#### 2. MSR Overlap
+
+**Formula**: `msr_alone - msr_impact`
+(Alternative: `msr_without + msr_alone - total_msr`)
+
+**Meaning**: Number of mutants killed by this test that are also killed by other tests. The portion of this test's mutation detection that is NOT unique to it.
+
+**Interpretation**:
+- **High Overlap**: Mutants killed are mostly caught by other tests too
+- **Low Overlap**: Mutants killed are almost exclusively caught by this test
+
+#### 3. MSR Uniqueness (%)
+
+**Formula**: `(msr_impact / msr_alone) × 100`
+
+**Meaning**: Percentage of this test's killed mutants that are unique.
+
+**Interpretation**:
+- **100%**: All mutant kills are unique - critical test for bug detection
+- **50%**: Half unique, half redundant
+- **0%**: Completely redundant test (all mutants caught by others)
+
+#### 4. MSR Redundancy (%)
+
+**Formula**: `((msr_alone - msr_impact) / msr_alone) × 100`
+
+**Meaning**: Percentage of this test's killed mutants that are redundant.
+
+**Interpretation**:
+- **0%**: No redundant mutant kills - completely unique
+- **50%**: Half redundant
+- **100%**: Completely redundant - all mutant kills duplicated elsewhere
+
 ### Interpreting Results
 
 The calculated metrics are available via the Python API using `proj.get_test(test_id)` which returns a pandas Series with all metrics, or displayed in the CLI using `yagua list-tests my_work_dir`:
@@ -271,20 +337,36 @@ The calculated metrics are available via the Python API using `proj.get_test(tes
 
 ### Use Cases
 
+#### Coverage Analysis
+
 **Identify Critical Tests**
-Tests with high uniqueness (>80%) are critical for maintaining coverage. Removing them would significantly reduce overall coverage.
+Tests with high coverage uniqueness (>80%) are critical for maintaining coverage. Removing them would significantly reduce overall coverage.
 
 **Find Redundant Tests**
-Tests with high redundancy (>90%) are candidates for removal or refactoring. They test code already covered by other tests.
+Tests with high coverage redundancy (>90%) are candidates for removal or refactoring. They test code already covered by other tests.
 
 **Optimize Test Suite**
 Balance coverage with test count by removing highly redundant tests while preserving high-uniqueness tests.
 
-**Code Review**
-Use impact metrics to justify new tests. Tests with high impact provide valuable additions to the suite.
-
 **Refactoring Guidance**
-Tests with high overlap indicate areas where code is well-tested, making refactoring safer.
+Tests with high coverage overlap indicate areas where code is well-tested, making refactoring safer.
+
+#### Mutation Testing Analysis
+
+**Identify Bug-Detecting Tests**
+Tests with high MSR uniqueness (>80%) are critical for catching bugs. They detect issues that no other test catches.
+
+**Find Ineffective Tests**
+Tests with high MSR redundancy (>90%) kill mutants already caught by other tests. Consider removing or improving them.
+
+**Prioritize Test Execution**
+Run high-impact mutation tests first in CI/CD. They provide the most unique bug detection per execution time.
+
+**Test Suite Quality Assessment**
+Combine coverage and MSR metrics to identify tests that are both comprehensive (high coverage) and effective (high MSR impact).
+
+**Code Review for Bug Detection**
+Use MSR impact metrics to justify new tests. Tests with high MSR impact demonstrate they catch bugs other tests miss.
 
 ---
 

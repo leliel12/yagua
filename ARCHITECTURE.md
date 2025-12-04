@@ -165,10 +165,16 @@ New test frameworks can be added by implementing TestSuiteABC (e.g., `UnittestSu
   - `msr_alone`: Mutation Score Ratio for this test alone (nullable)
   - `msr_without`: Mutation Score Ratio without this test (nullable)
 - **Calculated Properties** (auto-computed hybrid properties):
-  - `coverage_impact`: Unique coverage contribution = `total_coverage - coverage_without`
-  - `coverage_overlap`: Coverage shared with other tests = `coverage_without + coverage_alone - total_coverage`
-  - `coverage_uniqueness`: % of test's coverage that is unique = `(coverage_impact / coverage_alone) × 100`
-  - `coverage_redundancy`: % of test's coverage that is redundant = `((coverage_alone - coverage_impact) / coverage_alone) × 100`
+  - **Coverage Metrics**:
+    - `coverage_impact`: Unique coverage contribution = `total_coverage - coverage_without`
+    - `coverage_overlap`: Coverage shared with other tests = `coverage_without + coverage_alone - total_coverage`
+    - `coverage_uniqueness`: % of test's coverage that is unique = `(coverage_impact / coverage_alone) × 100`
+    - `coverage_redundancy`: % of test's coverage that is redundant = `((coverage_alone - coverage_impact) / coverage_alone) × 100`
+  - **Mutation Testing Metrics**:
+    - `msr_impact`: Unique MSR contribution = `total_msr - msr_without`
+    - `msr_overlap`: Mutants killed redundantly with other tests = `msr_without + msr_alone - total_msr`
+    - `msr_uniqueness`: % of test's killed mutants that are unique = `(msr_impact / msr_alone) × 100`
+    - `msr_redundancy`: % of test's killed mutants that are redundant = `((msr_alone - msr_impact) / msr_alone) × 100`
 - **Constraints**:
   - Unique constraint on `test_id` field
   - Unique constraint on `(project, file, suite, test)` tuple
