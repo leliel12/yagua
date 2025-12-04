@@ -142,7 +142,7 @@ New test frameworks can be added by implementing TestSuiteABC (e.g., `UnittestSu
 **`ProjectModel`**:
 - Singleton pattern (always id=1)
 - Fields: `name`, `path`, `description`, `coverage`
-- Represents one project per cache file
+- Represents one project per work directory
 
 **`TestModel`**:
 - **Database Fields**: `project` (FK), `file`, `suite`, `test`, `test_id`, `coverage_alone`, `coverage_without`

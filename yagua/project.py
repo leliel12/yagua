@@ -22,8 +22,8 @@ Architecture
 
 Key Patterns
 ------------
-1. **One Cache File Per Project**: Each SQLite file contains exactly
-   one project
+1. **One Work Directory Per Project**: Each work directory contains
+   exactly one project database
 2. **Dynamic Model Binding**: Models are bound to database instances
    at runtime
 3. **Transaction Management**: All DB operations use atomic

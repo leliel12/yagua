@@ -190,7 +190,7 @@ class CLIManager:
     Methods
     -------
     create_project
-        Create an empty cache file with project metadata.
+        Create a work directory with project metadata.
     collect_tests
         Collect tests from a project using pytest.
     list_tests
@@ -198,11 +198,11 @@ class CLIManager:
     collect_coverage
         Collect and store coverage information.
     info
-        Show project information from cache.
+        Show project information from work directory.
 
     Notes
     -----
-    All commands accept a cache file path as their first argument.
+    All commands accept a work directory path as their first argument.
     Method names with underscores are converted to hyphenated command names
     (e.g., `collect_tests` becomes `collect-tests`).
     """

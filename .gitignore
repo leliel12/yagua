@@ -19,7 +19,7 @@ build/
 htmlcov/
 *.cover
 
-# Database cache files
+# Work directory database files
 *.sqlite
 *.db
 
@@ -34,3 +34,4 @@ htmlcov/
 .DS_Store
 Thumbs.db
 simple_proj/_work_path_/
+simple_proj/_yagua_work_/

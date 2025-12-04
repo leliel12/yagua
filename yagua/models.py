@@ -1,8 +1,9 @@
 """Yagua - Database Models.
 
 This module defines the Peewee ORM models for the yagua project database.
-Each cache file contains exactly one project with its associated tests and
-command history. Models are dynamically bound to database instances at runtime.
+Each work directory contains exactly one project database with its associated
+tests and command history. Models are dynamically bound to database instances
+at runtime.
 
 Models
 ------
@@ -151,7 +152,7 @@ class ProjectModel(BaseModel):
     """Project information table.
 
     This table is limited to a single row per database.
-    Each cache file represents exactly one project.
+    Each work directory represents exactly one project.
     The id must always be 1.
 
     Attributes

@@ -140,12 +140,24 @@ yagua collect-coverage my_work_dir -f  # Short form
 
 **Note**: Coverage collection can be time-consuming for large test suites as it runs each test individually and then all tests except each one. For N tests, this results in approximately 2N+1 test runs.
 
+#### Export and Import
+
+```bash
+# Export work directory to archive file
+yagua export my_work_dir
+yagua export my_work_dir --output backup.tar.gz
+
+# Supported formats: .zip, .tar, .tar.gz (.tgz), .tar.bz2 (.tbz2), .tar.xz (.txz)
+```
+
+**Note**: Exported archives can be shared, backed up, or opened using the `read_archive()` function in the Python API.
+
 ### 🐍 Programmatic API
 
 Yagua provides a complete Python API for integration into scripts and tools:
 
 ```python
-from yagua import Project
+from yagua import Project, read_dir, read_archive
 
 # Create new project (creates work_dir with yagua.db inside)
 proj = Project.from_project_info(
@@ -157,6 +169,11 @@ proj = Project.from_project_info(
 
 # Open existing project
 proj = Project(work_dir="my_work_dir")
+# Or use the convenience function
+proj = read_dir("my_work_dir")
+
+# Open project from an archive file
+proj = read_archive("my_project.zip")
 
 # Collect tests
 saved_count, updated_count = proj.collect_tests()
