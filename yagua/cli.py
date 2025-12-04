@@ -335,7 +335,9 @@ class CLIManager:
             )
             raise typer.Exit(code=1)
 
-        console.print("\n[bold cyan]📦 Creating yagua project...[/bold cyan]\n")
+        console.print(
+            "\n[bold cyan]📦 Creating yagua project...[/bold cyan]\n"
+        )
 
         try:
             proj = Project.from_project_info(
@@ -346,7 +348,9 @@ class CLIManager:
             )
         except Exception as err:
             console.print(
-                Panel(f"[red]{err}[/red]", title="❌ Error", border_style="red")
+                Panel(
+                    f"[red]{err}[/red]", title="❌ Error", border_style="red"
+                )
             )
             raise typer.Exit(code=1)
 

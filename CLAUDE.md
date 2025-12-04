@@ -2,7 +2,7 @@
 
 ## Important Rules
 
-**NEVER perform `git push` without explicit permission from the user.**
+**NEVER perform `git push` or `git commit` without explicit permission from the user.**
 
 ## Project Overview
 

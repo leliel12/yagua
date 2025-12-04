@@ -31,12 +31,12 @@ Key Patterns
 """
 
 import contextlib
-import shutil
 from pathlib import Path
 
 import pandas as pd
 from peewee import SqliteDatabase
 
+from . import io as yagua_io
 from .models import BaseModel, HistoryModel, ProjectModel, TestModel
 from .mutationsuites import CosmicRaySuite
 from .testsuites import PytestSuite
@@ -896,8 +896,8 @@ class Project:
                 project.description = description
                 project.save()
 
-    def export_work_dir(self, output_path=None):
-        """Export the entire work directory to an archive file.
+    def export(self, output_path=None):
+        """Export the work directory to an archive file.
 
         This method creates an archive file containing the complete work
         directory, including the yagua.db database and all temporary
@@ -935,60 +935,18 @@ class Project:
         - .tar.gz or .tgz: Gzipped TAR archive
         - .tar.bz2 or .tbz2: Bzip2 compressed TAR archive
         - .tar.xz or .txz: XZ compressed TAR archive
+
+        See Also
+        --------
+        yagua.io.export_work_dir : Lower-level export function.
+        yagua.io.import_archive : Import an archive file.
         """
         # Close database connection before archiving
         self.close()
 
         try:
-            # Determine output path
-            if output_path is None:
-                output_path = Path.cwd() / f"{self.work_dir.name}.zip"
-            else:
-                output_path = Path(output_path)
-
-            # Detect format from extension
-            suffix = output_path.suffix.lower()
-            format_map = {
-                ".zip": "zip",
-                ".tar": "tar",
-                ".tgz": "gztar",
-                ".tar.gz": "gztar",
-                ".tbz2": "bztar",
-                ".tar.bz2": "bztar",
-                ".txz": "xztar",
-                ".tar.xz": "xztar",
-            }
-
-            # Check for compound extensions (tar.gz, tar.bz2, tar.xz)
-            if output_path.suffixes:
-                compound_suffix = "".join(output_path.suffixes[-2:]).lower()
-                if compound_suffix in format_map:
-                    archive_format = format_map[compound_suffix]
-                    # Remove both extensions for base name
-                    base_path = output_path.with_suffix("").with_suffix("")
-                elif suffix in format_map:
-                    archive_format = format_map[suffix]
-                    # Remove single extension for base name
-                    base_path = output_path.with_suffix("")
-                else:
-                    raise ValueError(
-                        f"Unsupported archive format: {suffix}. "
-                        f"Supported formats: {', '.join(format_map.keys())}"
-                    )
-            else:
-                # No extension, default to zip
-                archive_format = "zip"
-                base_path = output_path
-
-            # Create archive
-            archive_path = shutil.make_archive(
-                str(base_path),
-                archive_format,
-                self.work_dir.parent,
-                self.work_dir.name,
-            )
-
-            return Path(archive_path)
+            # Use io module function for export
+            return yagua_io.export_work_dir(self.work_dir, output_path)
         finally:
             # Reconnect to database
             self.db.connect()
