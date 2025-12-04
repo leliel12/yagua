@@ -197,7 +197,7 @@ print(f"Coverage: {proj.coverage}")
 proj.close()
 ```
 
-For detailed API documentation, see [CLAUDE.md](CLAUDE.md).
+For architectural details and system design, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ---
 
@@ -233,12 +233,13 @@ Yagua automatically derives four additional metrics from the basic measurements:
 #### 2. Coverage Overlap
 
 **Formula**: `coverage_alone - coverage_impact`
+(Alternative: `coverage_without + coverage_alone - total_coverage`)
 
-**Meaning**: Amount of coverage this test shares with other tests. The portion of total coverage NOT unique to this test.
+**Meaning**: Amount of coverage this test shares with other tests. The portion of this test's coverage that is NOT unique to it.
 
 **Interpretation**:
-- **High Overlap**: Code mostly already covered by other tests
-- **Low Overlap**: Concerned code exercised almost uniquely by this test
+- **High Overlap**: Code tested is mostly already covered by other tests
+- **Low Overlap**: Code tested is exercised almost uniquely by this test
 
 #### 3. Coverage Uniqueness (%)
 
@@ -296,11 +297,8 @@ pytest
 # Run tests with coverage
 pytest --cov=yagua --cov-report=term-missing
 
-# Check code style
-ruff check .
-
-# Format code
-ruff format .
+# Format code (PEP 8 style, max 79 columns)
+black -l 79 .
 ```
 
 ---

@@ -11,11 +11,13 @@
 ```
 yagua/
 ├── __init__.py
-├── models.py           # Peewee ORM models
-├── project.py          # Project class - database management
-├── cli.py              # Typer CLI commands
+├── models.py           # Peewee ORM models (ProjectModel, TestModel, HistoryModel)
+├── project.py          # Project class - database management and orchestration
+├── cli.py              # Typer CLI commands (CLIManager with auto-registration)
+├── io.py               # Import/export operations (export_work_dir, read_archive, read_dir)
 ├── testsuites/         # Test suite handlers (TestSuiteABC, PytestSuite)
-└── mutationsuites/     # Mutation suite handlers (MutationSuiteABC, CosmicRaySuite)
+├── mutationsuites/     # Mutation suite handlers (MutationSuiteABC, CosmicRaySuite)
+└── utils/              # Utility functions (df2rt for Rich table formatting)
 ```
 
 ## Key Patterns

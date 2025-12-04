@@ -80,16 +80,16 @@ Project.from_project_info(
    - Binds ORM models to database at runtime
 
 2. **Test Management**:
-   - `collect_tests(suite)`: Orchestrates test collection via suite handlers
+   - `collect_tests()`: Orchestrates test collection via suite handlers (returns tuple of saved and updated counts)
    - `add_test()`: Add/update individual test records
    - `get_tests_dataframe()`: Query tests as pandas DataFrame
    - `get_test(test_id)`: Get specific test by test_id (returns TestModel with calculated properties)
    - `count_tests()`: Get test count
 
 3. **Coverage Management**:
-   - `collect_coverage(suite)`: Run and store project-level coverage data
-   - `collect_coverage_for_test(suite, test_id)`: Run and store coverage for individual test in isolation
-   - `collect_coverage_without_test(suite, test_id)`: Run and store coverage excluding a specific test
+   - `collect_coverage()`: Run and store project-level coverage data
+   - `collect_coverage_for_test(test_id)`: Run and store coverage for individual test in isolation
+   - `collect_coverage_without_test(test_id)`: Run and store coverage excluding a specific test
 
 4. **Project Information**:
    - `store_project_info()`: Update project metadata
@@ -141,24 +141,47 @@ New test frameworks can be added by implementing TestSuiteABC (e.g., `UnittestSu
 
 **`ProjectModel`**:
 - Singleton pattern (always id=1)
-- Fields: `name`, `path`, `description`, `coverage`
+- **Fields**:
+  - `name`: Project name or identifier
+  - `path`: Filesystem path to the project directory
+  - `work_path`: Working directory for yagua operations
+  - `test_suite_name`: Name of the test suite implementation being used
+  - `mutation_suite_name`: Name of the mutation suite implementation being used
+  - `description`: Optional project description (nullable)
+  - `coverage`: Total project coverage percentage (nullable)
+  - `mutants_number`: Total number of mutants generated (nullable)
+  - `msr`: Mutation Score Ratio for the entire project (nullable)
 - Represents one project per work directory
 
 **`TestModel`**:
-- **Database Fields**: `project` (FK), `file`, `suite`, `test`, `test_id`, `coverage_alone`, `coverage_without`
-- **Calculated Properties** (auto-computed from stored fields):
+- **Database Fields**:
+  - `project`: Foreign key to ProjectModel
+  - `test_id`: Unique pytest node ID (e.g., 'test_file.py::TestClass::test_method')
+  - `file`: Test file path
+  - `suite`: Test suite/class name (nullable)
+  - `test`: Test function name
+  - `coverage_alone`: Coverage when running this test in isolation (nullable)
+  - `coverage_without`: Coverage when running all tests except this one (nullable)
+  - `msr_alone`: Mutation Score Ratio for this test alone (nullable)
+  - `msr_without`: Mutation Score Ratio without this test (nullable)
+- **Calculated Properties** (auto-computed hybrid properties):
   - `coverage_impact`: Unique coverage contribution = `total_coverage - coverage_without`
-  - `coverage_overlap`: Coverage shared with other tests = `total_coverage - coverage_alone`
+  - `coverage_overlap`: Coverage shared with other tests = `coverage_without + coverage_alone - total_coverage`
   - `coverage_uniqueness`: % of test's coverage that is unique = `(coverage_impact / coverage_alone) × 100`
   - `coverage_redundancy`: % of test's coverage that is redundant = `((coverage_alone - coverage_impact) / coverage_alone) × 100`
-- `test_id`: Unique pytest node ID (e.g., 'test_file.py::TestClass::test_method')
-- `coverage_alone`: Coverage when running this test in isolation
-- `coverage_without`: Coverage when running all tests except this one
-- Unique constraint: `(project, file, suite, test)`
+- **Constraints**:
+  - Unique constraint on `test_id` field
+  - Unique constraint on `(project, file, suite, test)` tuple
 
 **`HistoryModel`**:
-- Fields: `project` (FK), `tag`, `command`, `stdout`, `stderr`, `result`
-- `tag`: Command type identifier with test context (e.g., 'collect_tests', 'collect_coverage', 'collect_coverage_for_test::{test_id}', 'collect_coverage_without_test::{test_id}')
+- **Fields**:
+  - `project`: Foreign key to ProjectModel
+  - `tag`: Command type identifier with test context (e.g., 'collect_tests', 'collect_coverage', 'collect_coverage_for_test::{test_id}', 'collect_coverage_without_test::{test_id}')
+  - `command`: The full command string that was executed
+  - `status_code`: Exit code from command execution
+  - `stdout`: Standard output from the command execution
+  - `stderr`: Standard error output from the command execution
+  - `result`: Additional result data (can store JSON or other structured information)
 - Tracks execution history for all operations with granular test-level tracking
 
 **Design Decisions**:
