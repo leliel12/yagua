@@ -24,7 +24,6 @@ from rich.table import Table
 
 from .project import Project
 from .project_manager import ProjectManager, PipelineError
-from .models import TestModel
 from .utils.df2rt import df_to_rich_table
 
 
@@ -143,17 +142,6 @@ def _make_work_dir_argument(**kwargs):
     kwargs.setdefault("parser", as_path)
     kwargs.setdefault("metavar", "📁 Work Directory")
     return typer.Argument(**kwargs)
-
-
-#: Enum for selecting test ordering column in collect-mutations command.
-_CollectMutationOrder = enum.StrEnum(
-    "_CollectMutationOrder",
-    {
-        k.upper(): k
-        for k, v in vars(TestModel).items()
-        if k.startswith("coverage_")
-    },
-)
 
 
 # ============================================================================
@@ -425,18 +413,6 @@ class CLI2Manager:
             "-f",
             help="Force re-execution of steps",
         ),
-        priority: _CollectMutationOrder = typer.Option(
-            _CollectMutationOrder.COVERAGE_UNIQUENESS,
-            "--priority",
-            "-p",
-            help="Column to determine test evaluation order for mutations.",
-        ),
-        ascending: bool = typer.Option(
-            False,
-            "--ascending",
-            "-a",
-            help="Sort tests in ascending order by priority column.",
-        ),
     ) -> None:
         """Execute the yagua pipeline (resumable).
 
@@ -449,6 +425,9 @@ class CLI2Manager:
         The pipeline state is tracked in the database, allowing you to
         resume from interruptions or failures.
 
+        Mutations are evaluated in coverage_uniqueness order (descending)
+        to optimize detection.
+
         Parameters
         ----------
         work_dir : Path
@@ -459,10 +438,6 @@ class CLI2Manager:
             current pipeline step.
         force : bool
             Force re-execution of steps even if already completed.
-        priority : _CollectMutationOrder
-            Column used to sort tests for mutation evaluation order.
-        ascending : bool
-            Sort tests in ascending order by priority column.
 
         Raises
         ------
@@ -506,9 +481,7 @@ class CLI2Manager:
                     self._run_collect_coverage(pm, force)
 
                 if "mutations" in steps_to_run:
-                    self._run_collect_mutations(
-                        pm, force, priority, ascending
-                    )
+                    self._run_collect_mutations(pm, force)
 
                 console.print(
                     "\n[bold green]✅ Pipeline completed successfully!"
@@ -618,7 +591,7 @@ class CLI2Manager:
             f"({len(result['tests_data'])} tests)\n"
         )
 
-    def _run_collect_mutations(self, pm, force, priority, ascending):
+    def _run_collect_mutations(self, pm, force):
         """Execute mutation collection step.
 
         Parameters
@@ -627,10 +600,6 @@ class CLI2Manager:
             ProjectManager instance.
         force : bool
             Force re-execution even if already done.
-        priority : _CollectMutationOrder
-            Column to sort tests by.
-        ascending : bool
-            Sort in ascending order.
         """
         console.print(
             "[bold blue]🧬 Collecting mutations...[/bold blue]\n"
@@ -660,8 +629,6 @@ class CLI2Manager:
             try:
                 result = pm.collect_mutations(
                     force=force,
-                    priority=priority.value if priority else None,
-                    ascending=ascending,
                     progress_callback=progress_callback,
                 )
             except (ValueError, PipelineError) as err:

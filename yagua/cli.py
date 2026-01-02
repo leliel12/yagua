@@ -10,7 +10,6 @@ collecting and managing test information from pytest-based projects.
 # =============================================================================
 
 import contextlib
-import enum
 import inspect
 import os
 import sys
@@ -23,7 +22,6 @@ from rich.panel import Panel
 
 from .project import Project
 from .project_manager import ProjectManager, PipelineError
-from .models import TestModel
 from .utils.df2rt import df_to_rich_table
 
 
@@ -125,25 +123,6 @@ def _make_work_dir_argument(**kwargs):
     kwargs.setdefault("metavar", "📁 Work Directory")
     return typer.Argument(**kwargs)
 
-
-#: Enum for selecting test ordering column in collect-mutations command.
-#:
-#: This enum is dynamically generated from TestModel's coverage-related
-#: fields and hybrid properties. It allows users to specify which coverage
-#: metric should be used to prioritize test evaluation order during
-#: mutation analysis.
-#:
-#: Members are created from all TestModel attributes starting with
-#: "coverage_" (e.g., COVERAGE_ALONE, COVERAGE_WITHOUT, COVERAGE_IMPACT,
-#: COVERAGE_UNIQUENESS, COVERAGE_REDUNDANCY, COVERAGE_OVERLAP).
-_CollectMutationOrder = enum.StrEnum(
-    "_CollectMutationOrder",
-    {
-        k.upper(): k
-        for k, v in vars(TestModel).items()
-        if k.startswith("coverage_")
-    },
-)
 
 # ============================================================================
 # CLI MANAGER CLASS
@@ -591,18 +570,6 @@ class CLIManager:
             "-f",
             help="Force recalculation even if mutations exist.",
         ),
-        priority: _CollectMutationOrder = typer.Option(
-            _CollectMutationOrder.COVERAGE_UNIQUENESS,
-            "--priority",
-            "-p",
-            help="Column to determine test evaluation order.",
-        ),
-        ascending: bool = typer.Option(
-            False,
-            "--ascending",
-            "-a",
-            help="Sort tests in ascending order by priority column.",
-        ),
     ) -> None:
         """Collect and analyze mutation testing data for the project.
 
@@ -621,6 +588,9 @@ class CLIManager:
         The mutation score is calculated as (1 - survival_rate/100), where
         a lower survival rate indicates a more effective test suite.
 
+        Tests are evaluated in coverage_uniqueness order (descending)
+        to optimize mutation detection.
+
         Parameters
         ----------
         work_dir : Path
@@ -628,11 +598,6 @@ class CLIManager:
         force : bool, optional
             Force re-initialization and re-execution of mutations even if
             they already exist. Default is False.
-        priority : _CollectMutationOrder, optional
-            Column used to sort tests for evaluation order (for future
-            per-test mutation analysis). Default is COVERAGE_UNIQUENESS.
-        ascending : bool, optional
-            Sort tests in ascending order. Default is False (descending).
 
         Raises
         ------
@@ -669,8 +634,6 @@ class CLIManager:
 
                 result = pm.collect_mutations(
                     force=force,
-                    priority=priority.value,
-                    ascending=ascending,
                     progress_callback=progress_callback,
                 )
 

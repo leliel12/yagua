@@ -238,7 +238,7 @@ class ProjectManager:
     # Public Methods - Test Management
     # ========================================================================
 
-    def collect_tests(self, force=False):
+    def collect_tests(self, force=False, progress_callback=None):
         """Collect tests from the project using pytest.
 
         This method runs pytest --collect-only to discover all tests
@@ -248,8 +248,13 @@ class ProjectManager:
 
         Parameters
         ----------
-        force : bool
+        force : bool, optional
             Force recollection of tests even if already collected.
+            Default is False.
+        progress_callback : callable, optional
+            Callback function called for progress updates with signature:
+            progress_callback(current, total, test_id).
+            Default is None.
 
         Returns
         -------
@@ -275,9 +280,17 @@ class ProjectManager:
         was_collected = False
 
         if total_tests == 0 or force:
+            # Call progress callback before collection
+            if progress_callback is not None:
+                progress_callback(0, 1, "collecting")
+
             saved_count, updated_count = self.project.collect_tests()
             total_tests = saved_count + updated_count
             was_collected = True
+
+            # Call progress callback after collection
+            if progress_callback is not None:
+                progress_callback(1, 1, "collecting")
 
         if total_tests == 0:
             raise ValueError("No tests found in the project.")
@@ -436,13 +449,7 @@ class ProjectManager:
     # Public Methods - Mutation Management
     # ========================================================================
 
-    def collect_mutations(
-        self,
-        force=False,
-        priority=None,
-        ascending=False,
-        progress_callback=None,
-    ):
+    def collect_mutations(self, force=False, progress_callback=None):
         """Collect and analyze mutation testing data for the project.
 
         This method performs mutation testing analysis in phases:
@@ -450,16 +457,15 @@ class ProjectManager:
         2. Mutation execution (calculate survival rate)
         3. Per-test mutation analysis
 
+        Tests are evaluated in order of coverage_uniqueness (descending)
+        to optimize mutation detection.
+
         Pipeline step: Updates from 'coverage_collected' to 'mutations_collected'.
 
         Parameters
         ----------
         force : bool, optional
             Force recalculation even if mutations exist. Default is False.
-        priority : str, optional
-            Column to determine test evaluation order. Default is None.
-        ascending : bool, optional
-            Sort tests in ascending order. Default is False (descending).
         progress_callback : callable, optional
             Callback function called for each test with signature:
             progress_callback(current, total, test_id).
@@ -501,17 +507,16 @@ class ProjectManager:
 
         msr = self.project.msr
 
-        # Prepare dataframe with mutation and coverage columns
-        if priority is None:
-            priority = "coverage_uniqueness"
-
+        priority = "coverage_uniqueness"
         cov_columns = list({"coverage_alone", "coverage_without", priority})
         mutation_columns = ["test_id", "msr_alone", "msr_without"]
 
         tests_df = self.project.get_tests_dataframe()[
             mutation_columns + cov_columns
         ]
-        tests_df.sort_values(priority, ascending=ascending, inplace=True)
+
+        # Priority
+        tests_df.sort_values(priority, ascending=False, inplace=True)
 
         # Validate that coverage collection is complete
         if tests_df[cov_columns].isna().to_numpy().any():
