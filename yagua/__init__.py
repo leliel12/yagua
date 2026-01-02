@@ -7,7 +7,9 @@ metrics, and analyze test redundancy and uniqueness.
 Main Components
 ---------------
 main : function
-    CLI entry point for the yagua command-line tool.
+    CLI entry point for the yagua command-line tool (original).
+main2 : function
+    CLI entry point for session-based yagua (new pipeline design).
 Project : class
     Main class for managing project databases and test information.
 PytestSuite : class
@@ -21,12 +23,14 @@ read_archive : function
 """
 
 from .cli import main
+from .cli2 import main as main2
 from .io import read_archive, read_dir
 from .project import Project
 from .testsuites import PytestSuite, TestSuiteABC
 
 __all__ = [
     "main",
+    "main2",
     "Project",
     "PytestSuite",
     "TestSuiteABC",

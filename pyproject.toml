@@ -43,6 +43,7 @@ dev = [
 
 [project.scripts]
 yagua = "yagua.cli:main"
+yagua2 = "yagua.cli2:main"
 
 [project.urls]
 Homepage = "https://github.com/yourusername/yagua"

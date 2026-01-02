@@ -174,6 +174,14 @@ class ProjectModel(BaseModel):
         Mutation Score Ratio for the entire project (0-100).
         Represents the percentage of mutants killed by the test suite.
         Updated via collect-mutations command.
+    pipeline_step : CharField
+        Current step in the analysis pipeline. One of:
+        'created', 'tests_collected', 'coverage_collected',
+        'mutations_collected', 'completed'.
+        Used for resumability and progress tracking.
+    failed_at : DateTimeField, optional
+        UTC timestamp of last pipeline failure, if any.
+        None if pipeline has not failed.
 
     Notes
     -----
@@ -193,6 +201,10 @@ class ProjectModel(BaseModel):
 
     mutants_number = IntegerField(null=True, default=None)
     msr = FloatField(null=True, default=None)
+
+    # Pipeline state tracking
+    pipeline_step = CharField(default="created")
+    failed_at = DateTimeField(null=True, default=None)
 
     class Meta:
         # Ensure only one project per database
