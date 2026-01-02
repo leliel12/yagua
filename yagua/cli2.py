@@ -443,54 +443,93 @@ class CLI2Manager:
         typer.Exit
             If work directory does not exist or execution fails.
         """
-        step_name = ""
         with self._use_project(work_dir) as pm:
             console.print(
                 "[bold cyan]🚀 Running yagua pipeline...[/bold cyan]\n"
             )
             try:
-                while step := pm.next_step():
-                    self._run_step(step, step_name, force)
+
+                while step_method := pm.next_step():
+                    step_name = step_method.__name__.replace("_", "-")
+                    self._run_step(step_method, step_name, force)
 
                 console.print(
                     "\n[bold green]✅ Pipeline completed successfully!"
                     "[/bold green]\n"
                 )
-                # console.print(
-                #     f"[green]✓[/green] Tests collected: "
-                #     f"[cyan]{result['total_tests']}[/cyan] tests\n"
-                # )
             except Exception as err:
-
                 # Mark failure using ProjectManager
                 pm.mark_failed()
 
                 console.print(
                     Panel(
                         f"[red]Pipeline failed:[/red]\n{err}",
-                        title=f"❌ Error - Step {step_name!r}",
+                        title="❌ Error",
                         border_style="red",
                     )
                 )
                 raise typer.Exit(code=1)
 
     def _run_step(self, step, step_name, force):
+        """Execute a single pipeline step with progress display.
+
+        Parameters
+        ----------
+        step : callable
+            Method to execute (collect_tests, collect_coverage, or
+            collect_mutations).
+        step_name : str
+            Display name for the step.
+        force : bool
+            Force re-execution flag.
+
+        Returns
+        -------
+        dict
+            Result dictionary from the step execution.
+        """
+        console.print(f"[bold blue]{step_name}...[/bold blue]")
+
         # Create Rich Progress for the operation
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
             console=console,
         ) as progress:
-            task = progress.add_task(f"{step_name}...", total=None)
+            task = progress.add_task("Initializing...", total=None)
 
             def callback(current, total, test_id):
-                counter = f" {current}/{total}" if total else ""
-                test_id = f": {test_id}" if test_id else ""
-                progress.update(
-                    task, description=(f"{step_name}{counter}{test_id}")
-                )
+                if total:
+                    progress.update(
+                        task,
+                        description=f"Processing [dim]{current}/{total}[/dim]: {test_id}",
+                        total=total,
+                        completed=current,
+                    )
+                else:
+                    progress.update(task, description=f"Processing: {test_id}")
 
-            step(force=force, progress_callback=callback)
+            result = step(force=force, progress_callback=callback)
+
+        # Display result summary - transform dict to displayable format
+        result_items = []
+        for key, value in result.items():
+            # Skip values that are too large to display
+            if len(str(value)) > 100:
+                continue
+            key = key.replace("_", "-")
+            if isinstance(value, float):
+                result_items.append(f"{key}={value:.2f}")
+            else:
+                result_items.append(f"{key}={value}")
+
+        result_str = ", ".join(result_items)
+        console.print(
+            f"[green]✓[/green] {step_name} [bold]Done[/bold]: "
+            f"[cyan]{result_str}[/cyan]\n"
+        )
+
+        return result
 
     # ========================================================================
     # Public Methods - Status & Reporting
