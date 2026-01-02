@@ -448,7 +448,6 @@ class CLI2Manager:
                 "[bold cyan]🚀 Running yagua pipeline...[/bold cyan]\n"
             )
             try:
-
                 while step_method := pm.next_step():
                     step_name = step_method.__name__.replace("_", "-")
                     self._run_step(step_method, step_name, force)
@@ -480,6 +479,8 @@ class CLI2Manager:
             collect_mutations).
         step_name : str
             Display name for the step.
+        step_number : int
+            Step number in the pipeline sequence.
         force : bool
             Force re-execution flag.
 
@@ -488,7 +489,7 @@ class CLI2Manager:
         dict
             Result dictionary from the step execution.
         """
-        console.print(f"[bold blue]{step_name}...[/bold blue]")
+        console.print(f"[bold blue]🌟 {step_name}...[/bold blue]")
 
         # Create Rich Progress for the operation
         with Progress(
@@ -496,18 +497,18 @@ class CLI2Manager:
             TextColumn("[progress.description]{task.description}"),
             console=console,
         ) as progress:
-            task = progress.add_task("Initializing...", total=None)
+            task = progress.add_task("⚙️ Initializing...", total=None)
 
             def callback(current, total, test_id):
                 if total:
                     progress.update(
                         task,
-                        description=f"Processing [dim]{current}/{total}[/dim]: {test_id}",
+                        description=f"⚙️ Processing [dim]{current}/{total}[/dim]: {test_id}",
                         total=total,
                         completed=current,
                     )
                 else:
-                    progress.update(task, description=f"Processing: {test_id}")
+                    progress.update(task, description=f"⚙️ Processing: {test_id}")
 
             result = step(force=force, progress_callback=callback)
 
@@ -525,7 +526,7 @@ class CLI2Manager:
 
         result_str = ", ".join(result_items)
         console.print(
-            f"[green]✓[/green] {step_name} [bold]Done[/bold]: "
+            f"[green]💯[/green] {emoji} {step_name} [bold]Done[/bold]: "
             f"[cyan]{result_str}[/cyan]\n"
         )
 
@@ -570,7 +571,7 @@ class CLI2Manager:
             if current_step.value == PipelineStep.CREATED.value:
                 tests_status = "⏳ Pending"
             else:
-                tests_status = f"✓ Complete ({progress['total_tests']} tests)"
+                tests_status = f"✅ Complete ({progress['total_tests']} tests)"
             table.add_row(
                 "1. Collect Tests",
                 tests_status,
@@ -593,7 +594,7 @@ class CLI2Manager:
                 or progress["coverage_alone_complete"]
                 == progress["total_tests"]
             ):
-                coverage_status = "✓ Complete"
+                coverage_status = "✅ Complete"
                 cov_progress = (
                     f"{progress['coverage_alone_complete']}/"
                     f"{progress['total_tests']}"
@@ -619,7 +620,7 @@ class CLI2Manager:
                 or progress["mutations_alone_complete"]
                 == progress["total_tests"]
             ):
-                mutations_status = "✓ Complete"
+                mutations_status = "✅ Complete"
                 mut_progress = (
                     f"{progress['mutations_alone_complete']}/"
                     f"{progress['total_tests']}"
