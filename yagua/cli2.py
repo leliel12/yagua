@@ -380,8 +380,7 @@ class CLI2Manager:
             )
 
         info_lines.append(
-            "\n[dim]💡 Next step:[/dim] "
-            f"[cyan]yagua run {work_dir}[/cyan]"
+            "\n[dim]💡 Next step:[/dim] " f"[cyan]yagua run {work_dir}[/cyan]"
         )
 
         console.print(
@@ -444,215 +443,54 @@ class CLI2Manager:
         typer.Exit
             If work directory does not exist or execution fails.
         """
+        step_name = ""
         with self._use_project(work_dir) as pm:
             console.print(
                 "[bold cyan]🚀 Running yagua pipeline...[/bold cyan]\n"
             )
-
-            # Determine which steps to run
-            if step == "all" or force:
-                steps_to_run = [
-                    "tests",
-                    "coverage",
-                    "mutations",
-                ]
-            elif step:
-                steps_to_run = [step]
-            else:
-                # Resume from current step
-                current = PipelineStep(pm.project.pipeline_step)
-                if current == PipelineStep.CREATED:
-                    steps_to_run = ["tests", "coverage", "mutations"]
-                elif current == PipelineStep.TESTS_COLLECTED:
-                    steps_to_run = ["coverage", "mutations"]
-                elif current == PipelineStep.COVERAGE_COLLECTED:
-                    steps_to_run = ["mutations"]
-                elif current == PipelineStep.MUTATIONS_COLLECTED:
-                    steps_to_run = []
-                else:
-                    steps_to_run = []
-
-            # Execute pipeline steps
             try:
-                if "tests" in steps_to_run:
-                    self._run_collect_tests(pm, force)
-
-                if "coverage" in steps_to_run:
-                    self._run_collect_coverage(pm, force)
-
-                if "mutations" in steps_to_run:
-                    self._run_collect_mutations(pm, force)
+                while step := pm.next_step():
+                    self._run_step(step, step_name, force)
 
                 console.print(
                     "\n[bold green]✅ Pipeline completed successfully!"
                     "[/bold green]\n"
                 )
-
+                # console.print(
+                #     f"[green]✓[/green] Tests collected: "
+                #     f"[cyan]{result['total_tests']}[/cyan] tests\n"
+                # )
             except Exception as err:
+
                 # Mark failure using ProjectManager
                 pm.mark_failed()
 
                 console.print(
                     Panel(
                         f"[red]Pipeline failed:[/red]\n{err}",
-                        title="❌ Error",
+                        title=f"❌ Error - Step {step_name!r}",
                         border_style="red",
                     )
                 )
                 raise typer.Exit(code=1)
 
-    def _run_collect_tests(self, pm, force):
-        """Execute test collection step.
-
-        Parameters
-        ----------
-        pm : ProjectManager
-            ProjectManager instance.
-        force : bool
-            Force recollection even if already done.
-        """
-        if pm.project.count_tests() == 0 or force:
-            console.print("[bold blue]🧪 Collecting tests...[/bold blue]\n")
-
-        try:
-            result = pm.collect_tests(force=force)
-        except (ValueError, PipelineError) as err:
-            console.print(
-                Panel(
-                    f"[yellow]{err}[/yellow]\n\n"
-                    "[dim]Make sure the project contains "
-                    "pytest-compatible test files.[/dim]",
-                    title="⚠️  Warning",
-                    border_style="yellow",
-                )
-            )
-            raise typer.Exit(code=1)
-
-        console.print(
-            f"[green]✓[/green] Tests collected: "
-            f"[cyan]{result['total_tests']}[/cyan] tests\n"
-        )
-
-    def _run_collect_coverage(self, pm, force):
-        """Execute coverage collection step.
-
-        Parameters
-        ----------
-        pm : ProjectManager
-            ProjectManager instance.
-        force : bool
-            Force recalculation even if already done.
-        """
-        console.print(
-            "[bold blue]📊 Collecting coverage...[/bold blue]\n"
-        )
-
+    def _run_step(self, step, step_name, force):
         # Create Rich Progress for the operation
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
             console=console,
         ) as progress:
-            # Initialize progress tracking
-            task = progress.add_task("Initializing...", total=None)
+            task = progress.add_task(f"{step_name}...", total=None)
 
-            # Progress callback for ProjectManager
-            def progress_callback(current, total, test_id):
-                if task is not None:
-                    progress.update(
-                        task,
-                        description=(
-                            f"Processing test {current}/{total}: {test_id}"
-                        ),
-                        total=total,
-                        completed=current,
-                    )
-
-            try:
-                result = pm.collect_coverage(
-                    force=force, progress_callback=progress_callback
+            def callback(current, total, test_id):
+                counter = f" {current}/{total}" if total else ""
+                test_id = f": {test_id}" if test_id else ""
+                progress.update(
+                    task, description=(f"{step_name}{counter}{test_id}")
                 )
-            except (ValueError, PipelineError) as err:
-                console.print(
-                    Panel(
-                        f"[yellow]{err}[/yellow]",
-                        title="⚠️  Warning",
-                        border_style="yellow",
-                    )
-                )
-                raise typer.Exit(1)
 
-        console.print(
-            f"[green]✓[/green] Total coverage: "
-            f"[cyan]{result['coverage']:.2f}%[/cyan]\n"
-        )
-        console.print(
-            f"[green]✓[/green] Coverage analysis complete "
-            f"({len(result['tests_data'])} tests)\n"
-        )
-
-    def _run_collect_mutations(self, pm, force):
-        """Execute mutation collection step.
-
-        Parameters
-        ----------
-        pm : ProjectManager
-            ProjectManager instance.
-        force : bool
-            Force re-execution even if already done.
-        """
-        console.print(
-            "[bold blue]🧬 Collecting mutations...[/bold blue]\n"
-        )
-
-        # Create Rich Progress for the operation
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            console=console,
-        ) as progress:
-            # Initialize progress tracking
-            task = progress.add_task("Initializing...", total=None)
-
-            # Progress callback for ProjectManager
-            def progress_callback(current, total, test_id):
-                if task is not None:
-                    progress.update(
-                        task,
-                        description=(
-                            f"Processing test {current}/{total}: {test_id}"
-                        ),
-                        total=total,
-                        completed=current,
-                    )
-
-            try:
-                result = pm.collect_mutations(
-                    force=force,
-                    progress_callback=progress_callback,
-                )
-            except (ValueError, PipelineError) as err:
-                console.print(
-                    Panel(
-                        f"[yellow]{err}[/yellow]",
-                        title="⚠️  Warning",
-                        border_style="yellow",
-                    )
-                )
-                raise typer.Exit(1)
-
-        console.print(
-            f"[green]✓[/green] Mutants generated: "
-            f"[cyan]{result['mutants_number']}[/cyan]\n"
-        )
-        console.print(
-            f"[green]✓[/green] Survival rate: "
-            f"[cyan]{result['msr']:.2f}%[/cyan]\n"
-        )
-        console.print(
-            f"[green]✓[/green] Mutation analysis complete "
-            f"({len(result['tests_data'])} tests)\n"
-        )
+            step(force=force, progress_callback=callback)
 
     # ========================================================================
     # Public Methods - Status & Reporting
@@ -693,9 +531,7 @@ class CLI2Manager:
             if current_step.value == PipelineStep.CREATED.value:
                 tests_status = "⏳ Pending"
             else:
-                tests_status = (
-                    f"✓ Complete ({progress['total_tests']} tests)"
-                )
+                tests_status = f"✓ Complete ({progress['total_tests']} tests)"
             table.add_row(
                 "1. Collect Tests",
                 tests_status,
@@ -714,8 +550,7 @@ class CLI2Manager:
                 coverage_status = "⏳ Pending"
                 cov_progress = "-"
             elif (
-                current_step.value
-                == PipelineStep.COVERAGE_COLLECTED.value
+                current_step.value == PipelineStep.COVERAGE_COLLECTED.value
                 or progress["coverage_alone_complete"]
                 == progress["total_tests"]
             ):
@@ -741,8 +576,7 @@ class CLI2Manager:
                 mutations_status = "⏳ Pending"
                 mut_progress = "-"
             elif (
-                current_step.value
-                == PipelineStep.MUTATIONS_COLLECTED.value
+                current_step.value == PipelineStep.MUTATIONS_COLLECTED.value
                 or progress["mutations_alone_complete"]
                 == progress["total_tests"]
             ):
