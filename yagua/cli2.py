@@ -15,7 +15,6 @@ import inspect
 import sys
 from pathlib import Path
 
-import numpy as np
 import typer
 
 from rich.console import Console
@@ -24,6 +23,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
 
 from .project import Project
+from .project_manager import ProjectManager, PipelineError
 from .models import TestModel
 from .utils.df2rt import df_to_rich_table
 
@@ -125,24 +125,6 @@ def _make_help(obj) -> str:
     return "\n".join(lines)
 
 
-def _coerce_na(value):
-    """Coerce None and NaN values to None.
-
-    Parameters
-    ----------
-    value : Any
-        Value to check.
-
-    Returns
-    -------
-    Any | None
-        None if value is None or NaN, otherwise original value.
-    """
-    if value is None or (isinstance(value, float) and np.isnan(value)):
-        return None
-    return value
-
-
 def _make_work_dir_argument(**kwargs):
     """Create a reusable Typer argument for work directory path.
 
@@ -206,7 +188,7 @@ class CLI2Manager:
 
     @contextlib.contextmanager
     def _use_project(self, work_dir):
-        """Context manager to validate work directory and provide Project.
+        """Context manager to validate work directory and provide ProjectManager.
 
         Parameters
         ----------
@@ -215,8 +197,8 @@ class CLI2Manager:
 
         Yields
         ------
-        Project
-            Project instance connected to the yagua database.
+        ProjectManager
+            ProjectManager instance with the project.
 
         Raises
         ------
@@ -238,24 +220,25 @@ class CLI2Manager:
                 f"[dim]🔍 Using project:[/dim] [cyan]{proj.name}[/cyan] "
                 f"[dim]({proj.path})[/dim]\n"
             )
-            yield proj
+            pm = ProjectManager(proj)
+            yield pm
         finally:
             proj.close()
 
-    def _get_pipeline_progress(self, proj):
+    def _get_pipeline_progress(self, pm):
         """Calculate pipeline progress statistics.
 
         Parameters
         ----------
-        proj : Project
-            Project instance.
+        pm : ProjectManager
+            ProjectManager instance.
 
         Returns
         -------
         dict
             Dictionary with progress statistics for each phase.
         """
-        tests_df = proj.get_tests_dataframe()
+        tests_df = pm.project.get_tests_dataframe()
         total_tests = len(tests_df)
 
         progress = {
@@ -486,7 +469,7 @@ class CLI2Manager:
         typer.Exit
             If work directory does not exist or execution fails.
         """
-        with self._use_project(work_dir) as proj:
+        with self._use_project(work_dir) as pm:
             console.print(
                 "[bold cyan]🚀 Running yagua pipeline...[/bold cyan]\n"
             )
@@ -502,7 +485,7 @@ class CLI2Manager:
                 steps_to_run = [step]
             else:
                 # Resume from current step
-                current = PipelineStep(proj.pipeline_step)
+                current = PipelineStep(pm.project.pipeline_step)
                 if current == PipelineStep.CREATED:
                     steps_to_run = ["tests", "coverage", "mutations"]
                 elif current == PipelineStep.TESTS_COLLECTED:
@@ -517,21 +500,15 @@ class CLI2Manager:
             # Execute pipeline steps
             try:
                 if "tests" in steps_to_run:
-                    self._run_collect_tests(proj, force)
+                    self._run_collect_tests(pm, force)
 
                 if "coverage" in steps_to_run:
-                    self._run_collect_coverage(proj, force)
+                    self._run_collect_coverage(pm, force)
 
                 if "mutations" in steps_to_run:
                     self._run_collect_mutations(
-                        proj, force, priority, ascending
+                        pm, force, priority, ascending
                     )
-
-                # Mark as completed
-                with proj.transaction():
-                    pm = proj._get_project_model()
-                    pm.pipeline_step = PipelineStep.COMPLETED.value
-                    pm.save()
 
                 console.print(
                     "\n[bold green]✅ Pipeline completed successfully!"
@@ -542,10 +519,10 @@ class CLI2Manager:
                 # Mark failure
                 from datetime import datetime, timezone
 
-                with proj.transaction():
-                    pm = proj._get_project_model()
-                    pm.failed_at = datetime.now(timezone.utc)
-                    pm.save()
+                with pm.project.transaction():
+                    proj_model = pm.project._get_project_model()
+                    proj_model.failed_at = datetime.now(timezone.utc)
+                    proj_model.save()
 
                 console.print(
                     Panel(
@@ -556,31 +533,27 @@ class CLI2Manager:
                 )
                 raise typer.Exit(code=1)
 
-    def _run_collect_tests(self, proj, force):
+    def _run_collect_tests(self, pm, force):
         """Execute test collection step.
 
         Parameters
         ----------
-        proj : Project
-            Project instance.
+        pm : ProjectManager
+            ProjectManager instance.
         force : bool
             Force recollection even if already done.
         """
-        total_tests = proj.count_tests()
-
-        if total_tests == 0 or force:
+        if pm.project.count_tests() == 0 or force:
             console.print("[bold blue]🧪 Collecting tests...[/bold blue]\n")
-            saved_count, updated_count = proj.collect_tests()
-            total_tests = saved_count + updated_count
 
-        if total_tests == 0:
+        try:
+            result = pm.collect_tests(force=force)
+        except (ValueError, PipelineError) as err:
             console.print(
                 Panel(
-                    (
-                        "[yellow]No tests found in the project.[/yellow]"
-                        "\n\n[dim]Make sure the project contains "
-                        "pytest-compatible test files.[/dim]"
-                    ),
+                    f"[yellow]{err}[/yellow]\n\n"
+                    "[dim]Make sure the project contains "
+                    "pytest-compatible test files.[/dim]",
                     title="⚠️  Warning",
                     border_style="yellow",
                 )
@@ -589,22 +562,16 @@ class CLI2Manager:
 
         console.print(
             f"[green]✓[/green] Tests collected: "
-            f"[cyan]{total_tests}[/cyan] tests\n"
+            f"[cyan]{result['total_tests']}[/cyan] tests\n"
         )
 
-        # Update pipeline step
-        with proj.transaction():
-            pm = proj._get_project_model()
-            pm.pipeline_step = PipelineStep.TESTS_COLLECTED.value
-            pm.save()
-
-    def _run_collect_coverage(self, proj, force):
+    def _run_collect_coverage(self, pm, force):
         """Execute coverage collection step.
 
         Parameters
         ----------
-        proj : Project
-            Project instance.
+        pm : ProjectManager
+            ProjectManager instance.
         force : bool
             Force recalculation even if already done.
         """
@@ -612,86 +579,57 @@ class CLI2Manager:
             "[bold blue]📊 Collecting coverage...[/bold blue]\n"
         )
 
-        # Validate that there are tests to analyze
-        if not proj.count_tests():
-            console.print(
-                Panel(
-                    (
-                        f"[yellow]No tests found for project "
-                        f"'{proj.name}'.[/yellow]"
-                    ),
-                    title="⚠️  Warning",
-                    border_style="yellow",
-                )
-            )
-            raise typer.Exit(1)
-
-        # Phase 1: Calculate coverage for all tests combined
-        if proj.coverage is None or force:
-            proj.collect_coverage()
-        console.print(
-            f"[green]✓[/green] Total coverage: "
-            f"[cyan]{proj.coverage:.2f}%[/cyan]\n"
-        )
-
-        # Phase 2 & 3: Calculate per-test coverage metrics
-        console.print(
-            "[bold blue]🧪 Per-test coverage analysis...[/bold blue]\n"
-        )
-
-        tests_ids = proj.get_tests_dataframe()[
-            ["test_id", "coverage_alone", "coverage_without"]
-        ].to_numpy()
-
-        tests_count = len(tests_ids)
-
+        # Create Rich Progress for the operation
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
             console=console,
         ) as progress:
-            task = progress.add_task(
-                "Processing tests...", total=tests_count
-            )
+            # Initialize progress tracking
+            task = progress.add_task("Initializing...", total=None)
 
-            for idx, (test_id, cov_alone, cov_wo) in enumerate(
-                tests_ids, 1
-            ):
-                progress.update(
-                    task,
-                    description=(
-                        f"Processing test {idx}/{tests_count}: {test_id}"
-                    ),
+            # Progress callback for ProjectManager
+            def progress_callback(current, total, test_id):
+                if task is not None:
+                    progress.update(
+                        task,
+                        description=(
+                            f"Processing test {current}/{total}: {test_id}"
+                        ),
+                        total=total,
+                        completed=current,
+                    )
+
+            try:
+                result = pm.collect_coverage(
+                    force=force, progress_callback=progress_callback
                 )
-
-                cov_alone = _coerce_na(cov_alone)
-                if cov_alone is None or force:
-                    proj.collect_coverage_for_test(test_id)
-
-                cov_wo = _coerce_na(cov_wo)
-                if cov_wo is None or force:
-                    proj.collect_coverage_without_test(test_id)
-
-                progress.advance(task)
+            except (ValueError, PipelineError) as err:
+                console.print(
+                    Panel(
+                        f"[yellow]{err}[/yellow]",
+                        title="⚠️  Warning",
+                        border_style="yellow",
+                    )
+                )
+                raise typer.Exit(1)
 
         console.print(
+            f"[green]✓[/green] Total coverage: "
+            f"[cyan]{result['coverage']:.2f}%[/cyan]\n"
+        )
+        console.print(
             f"[green]✓[/green] Coverage analysis complete "
-            f"({tests_count} tests)\n"
+            f"({len(result['tests_data'])} tests)\n"
         )
 
-        # Update pipeline step
-        with proj.transaction():
-            pm = proj._get_project_model()
-            pm.pipeline_step = PipelineStep.COVERAGE_COLLECTED.value
-            pm.save()
-
-    def _run_collect_mutations(self, proj, force, priority, ascending):
+    def _run_collect_mutations(self, pm, force, priority, ascending):
         """Execute mutation collection step.
 
         Parameters
         ----------
-        proj : Project
-            Project instance.
+        pm : ProjectManager
+            ProjectManager instance.
         force : bool
             Force re-execution even if already done.
         priority : _CollectMutationOrder
@@ -703,118 +641,56 @@ class CLI2Manager:
             "[bold blue]🧬 Collecting mutations...[/bold blue]\n"
         )
 
-        # Validate that coverage exists before running mutations
-        if not proj.coverage:
-            console.print(
-                Panel(
-                    (
-                        "[yellow]Coverage data is required before "
-                        "running mutation analysis.[/yellow]\n\n"
-                        "[dim]Run coverage step first.[/dim]"
-                    ),
-                    title="⚠️  Warning",
-                    border_style="yellow",
-                )
-            )
-            raise typer.Exit(1)
-
-        # Phase 1: Initialize mutations and count mutants
-        if proj.mutants_number is None or force:
-            proj.collect_mutants(force=force)
-        console.print(
-            f"[green]✓[/green] Mutants generated: "
-            f"[cyan]{proj.mutants_number}[/cyan]\n"
-        )
-
-        # Phase 2: Execute mutations and calculate survival rate
-        if proj.msr is None or force:
-            console.print(
-                "[bold blue]🎯 Calculating survival rate...[/bold blue]\n"
-            )
-            proj.collect_survival_rate(force)
-        console.print(
-            f"[green]✓[/green] Survival rate: "
-            f"[cyan]{proj.msr:.2f}%[/cyan]\n"
-        )
-
-        # Prepare dataframe with mutation and coverage columns
-        priority_column = priority.value
-        cov_columns = list(
-            {"coverage_alone", "coverage_without", priority_column}
-        )
-        mutation_columns = ["test_id", "msr_alone", "msr_without"]
-
-        tests_df = proj.get_tests_dataframe()[
-            mutation_columns + cov_columns
-        ]
-        tests_df.sort_values(
-            priority_column, ascending=ascending, inplace=True
-        )
-
-        # Validate that coverage collection is complete
-        if tests_df[cov_columns].isna().to_numpy().any():
-            console.print(
-                Panel(
-                    (
-                        "[yellow]Coverage collection appears to be "
-                        "incomplete.[/yellow]\n\n"
-                        "[dim]Run coverage step first with --force.[/dim]"
-                    ),
-                    title="⚠️  Warning",
-                    border_style="yellow",
-                )
-            )
-            raise typer.Exit(1)
-
-        # Phase 3: Calculate per-test mutation metrics
-        console.print(
-            "[bold blue]🧪 Per-test mutation analysis...[/bold blue]\n"
-        )
-
-        tests_data = tests_df[mutation_columns].to_numpy()
-        tests_count = len(tests_data)
-
+        # Create Rich Progress for the operation
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
             console=console,
         ) as progress:
-            task = progress.add_task(
-                "Processing tests...", total=tests_count
-            )
+            # Initialize progress tracking
+            task = progress.add_task("Initializing...", total=None)
 
-            for idx, (test_id, msr_alone, msr_wo) in enumerate(
-                tests_data, 1
-            ):
-                progress.update(
-                    task,
-                    description=(
-                        f"Processing test {idx}/{tests_count}: {test_id}"
-                    ),
-                )
-
-                msr_alone = _coerce_na(msr_alone)
-                if msr_alone is None or force:
-                    proj.collect_survival_rate_for_test(test_id, force=force)
-
-                msr_wo = _coerce_na(msr_wo)
-                if msr_wo is None or force:
-                    proj.collect_survival_rate_without_test(
-                        test_id, force=force
+            # Progress callback for ProjectManager
+            def progress_callback(current, total, test_id):
+                if task is not None:
+                    progress.update(
+                        task,
+                        description=(
+                            f"Processing test {current}/{total}: {test_id}"
+                        ),
+                        total=total,
+                        completed=current,
                     )
 
-                progress.advance(task)
+            try:
+                result = pm.collect_mutations(
+                    force=force,
+                    priority=priority.value if priority else None,
+                    ascending=ascending,
+                    progress_callback=progress_callback,
+                )
+            except (ValueError, PipelineError) as err:
+                console.print(
+                    Panel(
+                        f"[yellow]{err}[/yellow]",
+                        title="⚠️  Warning",
+                        border_style="yellow",
+                    )
+                )
+                raise typer.Exit(1)
 
         console.print(
-            f"[green]✓[/green] Mutation analysis complete "
-            f"({tests_count} tests)\n"
+            f"[green]✓[/green] Mutants generated: "
+            f"[cyan]{result['mutants_number']}[/cyan]\n"
         )
-
-        # Update pipeline step
-        with proj.transaction():
-            pm = proj._get_project_model()
-            pm.pipeline_step = PipelineStep.MUTATIONS_COLLECTED.value
-            pm.save()
+        console.print(
+            f"[green]✓[/green] Survival rate: "
+            f"[cyan]{result['msr']:.2f}%[/cyan]\n"
+        )
+        console.print(
+            f"[green]✓[/green] Mutation analysis complete "
+            f"({len(result['tests_data'])} tests)\n"
+        )
 
     # ========================================================================
     # Public Methods - Status & Reporting
@@ -840,10 +716,10 @@ class CLI2Manager:
         typer.Exit
             If work directory does not exist.
         """
-        with self._use_project(work_dir) as proj:
+        with self._use_project(work_dir) as pm:
             # Get progress statistics
-            progress = self._get_pipeline_progress(proj)
-            current_step = PipelineStep(proj.pipeline_step)
+            progress = self._get_pipeline_progress(pm)
+            current_step = PipelineStep(pm.project.pipeline_step)
 
             # Build status table
             table = Table(title="Pipeline Status", show_header=True)
@@ -932,24 +808,24 @@ class CLI2Manager:
                 f"[cyan]📊 Current Step:[/cyan] {current_step.value}",
             ]
 
-            if proj.coverage is not None:
+            if pm.project.coverage is not None:
                 info_lines.append(
-                    f"[cyan]💯 Coverage:[/cyan] {proj.coverage:.2f}%"
+                    f"[cyan]💯 Coverage:[/cyan] {pm.project.coverage:.2f}%"
                 )
 
-            if proj.mutants_number is not None:
+            if pm.project.mutants_number is not None:
                 info_lines.append(
-                    f"[cyan]🧬 Mutants:[/cyan] {proj.mutants_number}"
+                    f"[cyan]🧬 Mutants:[/cyan] {pm.project.mutants_number}"
                 )
 
-            if proj.msr is not None:
+            if pm.project.msr is not None:
                 info_lines.append(
-                    f"[cyan]🎯 Survival Rate:[/cyan] {proj.msr:.2f}%"
+                    f"[cyan]🎯 Survival Rate:[/cyan] {pm.project.msr:.2f}%"
                 )
 
-            if proj.failed_at:
+            if pm.project.failed_at:
                 info_lines.append(
-                    f"[yellow]⚠️  Last Failure:[/yellow] {proj.failed_at}"
+                    f"[yellow]⚠️  Last Failure:[/yellow] {pm.project.failed_at}"
                 )
 
             console.print(Panel("\n".join(info_lines), border_style="blue"))
@@ -994,57 +870,40 @@ class CLI2Manager:
         typer.Exit
             If work directory does not exist.
         """
-        with self._use_project(work_dir) as proj:
-            tests = proj.get_tests_dataframe()
-
-            # Filter out internal columns unless --long is specified
-            if not long:
-                ignore_columns = [
-                    "id",
-                    "project",
-                    "test_id",
-                    "created_at",
-                    "modified_at",
-                ]
-                columns = [
-                    col for col in tests.columns if col not in ignore_columns
-                ]
-                tests = tests[columns]
-
-            # Check if any tests were found
-            if not len(tests):
+        with self._use_project(work_dir) as pm:
+            try:
+                result = pm.get_tests_info(include_internal=long)
+            except (ValueError, PipelineError) as err:
                 console.print(
                     Panel(
-                        (
-                            f"[yellow]No tests found for project:[/yellow] "
-                            f"[cyan]{proj.name}[/cyan]"
-                        ),
+                        f"[yellow]{err}[/yellow]",
                         title="⚠️  Warning",
                         border_style="yellow",
                     )
                 )
-                return
+                raise typer.Exit(1)
 
+            tests = result["tests_df"]
             tests_table = df_to_rich_table(tests, show_index=False)
 
             # Show summary info
             console.print()
-            if proj.coverage is not None:
+            if result["coverage"] is not None:
                 console.print(
                     f"💯 [bold green]Total coverage:[/bold green] "
-                    f"[cyan]{proj.coverage:.2f}%[/cyan]"
+                    f"[cyan]{result['coverage']:.2f}%[/cyan]"
                 )
-            if proj.msr is not None:
+            if pm.project.msr is not None:
                 console.print(
                     f"🎯 [bold green]Survival rate:[/bold green] "
-                    f"[cyan]{proj.msr:.2f}%[/cyan]"
+                    f"[cyan]{pm.project.msr:.2f}%[/cyan]"
                 )
             console.print()
 
             console.print("[bold cyan]🧪 Tests:[/bold cyan]\n")
             console.print(tests_table)
             console.print(
-                f"\n[dim]📊 Total:[/dim] [bold]{len(tests)}[/bold] "
+                f"\n[dim]📊 Total:[/dim] [bold]{result['total_count']}[/bold] "
                 f"[dim]tests[/dim]\n"
             )
 
@@ -1088,13 +947,13 @@ class CLI2Manager:
         typer.Exit
             If work directory does not exist or export fails.
         """
-        with self._use_project(work_dir) as proj:
+        with self._use_project(work_dir) as pm:
             console.print(
                 "\n[bold cyan]📦 Exporting work directory...[/bold cyan]\n"
             )
 
             try:
-                archive_path = proj.export(output_path=output)
+                archive_path = pm.export_project(output_path=output)
             except Exception as err:
                 console.print(
                     Panel(
@@ -1115,7 +974,7 @@ class CLI2Manager:
                     "[/bold green]\n"
                 ),
                 f"[cyan]📦 Archive:[/cyan] {archive_path}",
-                f"[cyan]📁 Source:[/cyan] {proj.work_dir}",
+                f"[cyan]📁 Source:[/cyan] {pm.project.work_dir}",
             ]
 
             console.print(

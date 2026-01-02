@@ -840,6 +840,27 @@ class Project:
     # Public Methods - Project Information
     # ========================================================================
 
+    def update_pipeline_step(self, new_step: str) -> None:
+        """Update the pipeline step in the database.
+
+        This method updates the pipeline step without validation.
+        Validation should be performed by the caller (ProjectManager).
+
+        Parameters
+        ----------
+        new_step : str
+            New pipeline step to set.
+
+        Notes
+        -----
+        This method does not validate the step order or validity.
+        Use ProjectManager for proper pipeline validation and updates.
+        """
+        with self.transaction():
+            proj_model = self._get_project_model()
+            proj_model.pipeline_step = new_step
+            proj_model.save()
+
     def store_project_info(
         self,
         name: str,

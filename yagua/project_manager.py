@@ -203,13 +203,8 @@ class ProjectManager:
                 f"to '{new_step}'"
             )
 
-        # Update the pipeline step in the database
-        with self.project.transaction():
-            from .models import ProjectModel
-
-            proj_model = ProjectModel.get_by_id(1)
-            proj_model.pipeline_step = new_step
-            proj_model.save()
+        # Delegate to Project for the database update
+        self.project.update_pipeline_step(new_step)
 
     # ========================================================================
     # Public Methods - Test Management
