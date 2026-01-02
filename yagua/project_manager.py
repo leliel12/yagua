@@ -206,6 +206,34 @@ class ProjectManager:
         # Delegate to Project for the database update
         self.project.update_pipeline_step(new_step)
 
+    def next_step(self):
+        """Get the next method to execute in the pipeline based on current state.
+
+        Returns
+        -------
+        callable | None
+            Next method to execute (collect_tests, collect_coverage,
+            collect_mutations), or None if pipeline is complete.
+
+        Notes
+        -----
+        This method determines the next step by examining the current
+        pipeline_step value:
+        - 'created' -> collect_tests
+        - 'tests_collected' -> collect_coverage
+        - 'coverage_collected' -> collect_mutations
+        - 'mutations_collected' -> None (pipeline complete)
+        """
+        current = self._get_current_step()
+
+        if current == "created":
+            return self.collect_tests
+        elif current == "tests_collected":
+            return self.collect_coverage
+        elif current == "coverage_collected":
+            return self.collect_mutations
+        return None
+
     # ========================================================================
     # Public Methods - Test Management
     # ========================================================================
@@ -560,6 +588,19 @@ class ProjectManager:
             "coverage": self.project.coverage,
             "mutants_number": self.project.mutants_number,
         }
+
+    def mark_failed(self):
+        """Mark the project as failed with current timestamp.
+
+        This method updates the project's failed_at timestamp to indicate
+        when a pipeline failure occurred.
+        """
+        from datetime import datetime, timezone
+
+        with self.project.transaction():
+            proj_model = self.project._get_project_model()
+            proj_model.failed_at = datetime.now(timezone.utc)
+            proj_model.save()
 
     def export_project(self, output_path):
         """Export work directory to an archive file.

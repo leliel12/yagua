@@ -516,13 +516,8 @@ class CLI2Manager:
                 )
 
             except Exception as err:
-                # Mark failure
-                from datetime import datetime, timezone
-
-                with pm.project.transaction():
-                    proj_model = pm.project._get_project_model()
-                    proj_model.failed_at = datetime.now(timezone.utc)
-                    proj_model.save()
+                # Mark failure using ProjectManager
+                pm.mark_failed()
 
                 console.print(
                     Panel(
