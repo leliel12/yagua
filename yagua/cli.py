@@ -22,7 +22,7 @@ from rich.console import Console
 from rich.panel import Panel
 
 from .project import Project
-from .project_manager import ProjectManager
+from .project_manager import ProjectManager, PipelineError
 from .models import TestModel
 from .utils.df2rt import df_to_rich_table
 
@@ -395,7 +395,7 @@ class CLIManager:
 
             try:
                 result = pm.collect_tests(force=force)
-            except ValueError as err:
+            except (ValueError, PipelineError) as err:
                 console.print(
                     Panel(
                         f"[yellow]{err}[/yellow]\n\n"
@@ -455,7 +455,7 @@ class CLIManager:
         with self._use_project(work_dir) as pm:
             try:
                 info = pm.get_tests_info(include_internal=long)
-            except ValueError as err:
+            except (ValueError, PipelineError) as err:
                 console.print(
                     Panel(
                         f"[yellow]{err}[/yellow]",
@@ -564,7 +564,7 @@ class CLIManager:
                     f"[cyan]{result['coverage']:.2f}%[/cyan]\n"
                 )
 
-            except ValueError as err:
+            except (ValueError, PipelineError) as err:
                 console.print(
                     Panel(
                         f"[yellow]{err}[/yellow]",
@@ -693,7 +693,7 @@ class CLIManager:
                     f"[cyan]{result['msr']:.2f}%[/cyan]\n"
                 )
 
-            except ValueError as err:
+            except (ValueError, PipelineError) as err:
                 console.print(
                     Panel(
                         f"[yellow]{err}[/yellow]\n\n"

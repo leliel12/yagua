@@ -4,6 +4,13 @@ This module provides the ProjectManager class, which encapsulates the
 business logic for project operations. It separates the core functionality
 from the CLI presentation layer, making the code more maintainable and
 testable.
+
+The ProjectManager implements a pipeline workflow:
+1. created -> Project is initialized
+2. tests_collected -> Tests have been collected
+3. coverage_collected -> Coverage has been analyzed
+4. mutations_collected -> Mutations have been analyzed
+5. completed -> All analysis steps finished
 """
 
 # =============================================================================
@@ -11,6 +18,33 @@ testable.
 # =============================================================================
 
 import numpy as np
+
+
+# =============================================================================
+# CONSTANTS
+# =============================================================================
+
+#: Valid pipeline steps in order
+PIPELINE_STEPS = [
+    "created",
+    "tests_collected",
+    "coverage_collected",
+    "mutations_collected",
+]
+
+#: Mapping of pipeline steps to their index for ordering
+PIPELINE_ORDER = {step: idx for idx, step in enumerate(PIPELINE_STEPS)}
+
+
+# =============================================================================
+# EXCEPTIONS
+# =============================================================================
+
+
+class PipelineError(Exception):
+    """Exception raised when pipeline step validation fails."""
+
+    pass
 
 
 # =============================================================================
@@ -103,6 +137,81 @@ class ProjectManager:
         self.project = project
 
     # ========================================================================
+    # Private Methods - Pipeline Management
+    # ========================================================================
+
+    def _get_current_step(self):
+        """Get current pipeline step from the database.
+
+        Returns
+        -------
+        str
+            Current pipeline step.
+        """
+        return self.project.pipeline_step
+
+    def _validate_step(self, required_step):
+        """Validate that the required pipeline step has been completed.
+
+        Parameters
+        ----------
+        required_step : str
+            The pipeline step that must have been completed.
+
+        Raises
+        ------
+        PipelineError
+            If the required step has not been completed yet.
+        """
+        current = self._get_current_step()
+        current_idx = PIPELINE_ORDER.get(current, -1)
+        required_idx = PIPELINE_ORDER.get(required_step, -1)
+
+        if current_idx < required_idx:
+            raise PipelineError(
+                f"Cannot proceed: required pipeline step '{required_step}' "
+                f"has not been completed yet. Current step: '{current}'."
+            )
+
+    def _update_step(self, new_step):
+        """Update the pipeline step in the database.
+
+        Parameters
+        ----------
+        new_step : str
+            New pipeline step to set.
+
+        Raises
+        ------
+        ValueError
+            If the new step is not valid or out of order.
+        """
+        if new_step not in PIPELINE_ORDER:
+            raise ValueError(
+                f"Invalid pipeline step: {new_step}. "
+                f"Valid steps: {', '.join(PIPELINE_STEPS)}"
+            )
+
+        current = self._get_current_step()
+        current_idx = PIPELINE_ORDER[current]
+        new_idx = PIPELINE_ORDER[new_step]
+
+        # Allow moving to the next step or staying in the same step
+        if new_idx < current_idx:
+            raise ValueError(
+                f"Cannot move backwards in pipeline from '{current}' "
+                f"to '{new_step}'"
+            )
+
+        # Update the pipeline step in the database
+        with self.project.transaction():
+            from .models import ProjectModel
+
+            proj_model = ProjectModel.get_by_id(1)
+            proj_model.pipeline_step = new_step
+            proj_model.save()
+
+    # ========================================================================
     # Public Methods - Test Management
     # ========================================================================
 
@@ -111,6 +220,8 @@ class ProjectManager:
 
         This method runs pytest --collect-only to discover all tests
         in the project and stores them in the yagua database.
+
+        Pipeline step: Updates from 'created' to 'tests_collected'.
 
         Parameters
         ----------
@@ -130,7 +241,12 @@ class ProjectManager:
         ------
         ValueError
             If no tests are found in the project.
+        PipelineError
+            If called before project is created.
         """
+        # Validate pipeline: must be at least 'created'
+        self._validate_step("created")
+
         total_tests = self.project.count_tests()
         saved_count, updated_count = 0, 0
         was_collected = False
@@ -143,6 +259,9 @@ class ProjectManager:
         if total_tests == 0:
             raise ValueError("No tests found in the project.")
 
+        # Update pipeline step
+        self._update_step("tests_collected")
+
         return {
             "total_tests": total_tests,
             "saved_count": saved_count,
@@ -152,6 +271,8 @@ class ProjectManager:
 
     def get_tests_info(self, include_internal=False):
         """Get tests information as DataFrame.
+
+        Pipeline step: Requires 'tests_collected' or later.
 
         Parameters
         ----------
@@ -171,7 +292,12 @@ class ProjectManager:
         ------
         ValueError
             If no tests are found.
+        PipelineError
+            If called before tests are collected.
         """
+        # Validate pipeline: must have collected tests
+        self._validate_step("tests_collected")
+
         tests = self.project.get_tests_dataframe()
 
         # Filter out internal columns unless requested
@@ -211,6 +337,8 @@ class ProjectManager:
         2. Per-test coverage (each test in isolation)
         3. Coverage without each test (all tests except one)
 
+        Pipeline step: Updates from 'tests_collected' to 'coverage_collected'.
+
         Parameters
         ----------
         force : bool, optional
@@ -232,7 +360,12 @@ class ProjectManager:
         ------
         ValueError
             If no tests found.
+        PipelineError
+            If called before tests are collected.
         """
+        # Validate pipeline: must have collected tests
+        self._validate_step("tests_collected")
+
         # Validate that there are tests to analyze
         if not self.project.count_tests():
             raise ValueError(
@@ -271,6 +404,9 @@ class ProjectManager:
 
             tests_data.append((test_id, cov_alone, cov_wo))
 
+        # Update pipeline step
+        self._update_step("coverage_collected")
+
         return {"coverage": coverage, "tests_data": tests_data}
 
     # ========================================================================
@@ -290,6 +426,8 @@ class ProjectManager:
         1. Mutation initialization (count mutants)
         2. Mutation execution (calculate survival rate)
         3. Per-test mutation analysis
+
+        Pipeline step: Updates from 'coverage_collected' to 'mutations_collected'.
 
         Parameters
         ----------
@@ -316,7 +454,12 @@ class ProjectManager:
         ------
         ValueError
             If coverage data does not exist or is incomplete.
+        PipelineError
+            If called before coverage is collected.
         """
+        # Validate pipeline: must have collected coverage
+        self._validate_step("coverage_collected")
+
         # Validate that coverage exists before running mutations
         if not self.project.coverage:
             raise ValueError(
@@ -380,6 +523,9 @@ class ProjectManager:
                 )
 
             tests_data.append((test_id, msr_alone, msr_wo))
+
+        # Update pipeline step
+        self._update_step("mutations_collected")
 
         return {
             "mutants_number": mutants_number,
