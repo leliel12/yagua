@@ -16,13 +16,13 @@ import os
 import sys
 from pathlib import Path
 
-import numpy as np
 import typer
 
 from rich.console import Console
 from rich.panel import Panel
 
 from .project import Project
+from .project_manager import ProjectManager
 from .models import TestModel
 from .utils.df2rt import df_to_rich_table
 
@@ -90,36 +90,6 @@ def _make_help(obj) -> str:
         last_line = lineno - 1
         lines = lines[:last_line]
     return "\n".join(lines)
-
-
-def _coerce_na(value):
-    """
-    Coerces input values that are None or NaN (Not a Number) to None.
-
-    This function is useful in data cleaning pipelines where you need a
-    consistent representation for missing data points before further processing
-    or storage (e.g., storing in a database that uses NULL).
-
-    Parameters
-    ----------
-    value : Any
-        The input value to check. Can be of various types
-        (float, int, str, None, etc.).
-
-    Returns
-    -------
-    Union[Any, None]
-        Returns ``None`` if the input value is ``None`` or if it is a
-        floating-point ``NaN`` value from numpy. Otherwise, the original value
-        is returned unchanged.
-
-    See Also
-    --------
-    numpy.isnan : Function used internally to check for NaN values.
-    """
-    if value is None or (isinstance(value, float) and np.isnan(value)):
-        return None
-    return value
 
 
 def _make_work_dir_argument(**kwargs):
@@ -213,11 +183,11 @@ class CLIManager:
 
     @contextlib.contextmanager
     def _use_project(self, work_dir):
-        """Context manager to validate work directory and provide Project instance.
+        """Context manager to validate work directory and provide ProjectManager.
 
         This method validates that the work directory exists, creates a Project
-        instance, displays project information to the user, and ensures the
-        database connection is properly closed when done.
+        instance and ProjectManager, displays project information, and ensures
+        the database connection is properly closed when done.
 
         Parameters
         ----------
@@ -226,8 +196,8 @@ class CLIManager:
 
         Yields
         ------
-        Project
-            Project instance connected to the yagua database.
+        ProjectManager
+            ProjectManager instance with the project.
 
         Raises
         ------
@@ -248,13 +218,15 @@ class CLIManager:
                 )
             )
             raise typer.Exit(code=1)
+
         proj = Project(work_dir=work_dir)
         try:
             console.print(
                 f"[dim]🔍 Using project:[/dim] [cyan]{proj.name}[/cyan] "
                 f"[dim]({proj.path})[/dim]\n"
             )
-            yield proj
+            pm = ProjectManager(proj)
+            yield pm
         finally:
             proj.close()
 
@@ -311,6 +283,11 @@ class CLIManager:
         typer.Exit
             If project path does not exist or work directory already exists.
         """
+        console.print(
+            "\n[bold cyan]📦 Creating yagua project...[/bold cyan]\n"
+        )
+
+        # Validate inputs
         if not project_path.exists():
             console.print(
                 Panel(
@@ -325,7 +302,8 @@ class CLIManager:
         project_name = name or project_path.name
 
         # Use provided work_dir or default to _yagua_wd_<project_name>_
-        work_dir = work_dir or as_path(f"_yagua_wd_{project_name}_")
+        if work_dir is None:
+            work_dir = as_path(f"_yagua_wd_{project_name}_")
 
         # Validate work directory does not exist
         if work_dir.exists():
@@ -337,10 +315,6 @@ class CLIManager:
                 )
             )
             raise typer.Exit(code=1)
-
-        console.print(
-            "\n[bold cyan]📦 Creating yagua project...[/bold cyan]\n"
-        )
 
         try:
             proj = Project.from_project_info(
@@ -413,22 +387,18 @@ class CLIManager:
         typer.Exit
             If work directory does not exist or no tests are collected.
         """
-        with self._use_project(work_dir) as proj:
-
-            total_tests = proj.count_tests()
-            saved_count, updated_count = 0, 0
-
-            if total_tests == 0 or force:
+        with self._use_project(work_dir) as pm:
+            if force or pm.project.count_tests() == 0:
                 console.print(
                     "\n[bold cyan]🧪 Collecting tests...[/bold cyan]\n"
                 )
-                saved_count, updated_count = proj.collect_tests()
-                total_tests = saved_count + updated_count
 
-            if total_tests == 0:
+            try:
+                result = pm.collect_tests(force=force)
+            except ValueError as err:
                 console.print(
                     Panel(
-                        "[yellow]No tests found in the project.[/yellow]\n\n"
+                        f"[yellow]{err}[/yellow]\n\n"
                         "[dim]Make sure the project contains "
                         "pytest-compatible test files.[/dim]",
                         title="⚠️  Warning",
@@ -440,7 +410,7 @@ class CLIManager:
             # Build success message
             info_lines = [
                 "[bold green]✅ Tests collected successfully![/bold green]\n",
-                f"[cyan]📊 Total tests:[/cyan] {total_tests}",
+                f"[cyan]📊 Total tests:[/cyan] {result['total_tests']}",
             ]
 
             console.print(
@@ -482,52 +452,34 @@ class CLIManager:
         typer.Exit
             If work directory does not exist.
         """
-        with self._use_project(work_dir) as proj:
-
-            tests = proj.get_tests_dataframe()
-
-            # Filter out internal columns unless --long is specified
-            if not long:
-                # Define columns to hide in compact view
-                ignore_columns = [
-                    "id",
-                    "project",
-                    "test_id",
-                    "created_at",
-                    "modified_at",
-                ]
-
-                # Keep only user-facing columns
-                columns = [
-                    col for col in tests.columns if col not in ignore_columns
-                ]
-                tests = tests[columns]
-
-            # Check if any tests were found
-            if not len(tests):
+        with self._use_project(work_dir) as pm:
+            try:
+                info = pm.get_tests_info(include_internal=long)
+            except ValueError as err:
                 console.print(
                     Panel(
-                        f"[yellow]No tests found for project:[/yellow] "
-                        f"[cyan]{proj.name}[/cyan]",
+                        f"[yellow]{err}[/yellow]",
                         title="⚠️  Warning",
                         border_style="yellow",
                     )
                 )
                 return
 
-            tests_table = df_to_rich_table(tests, show_index=False)
+            tests_table = df_to_rich_table(
+                info["tests_df"], show_index=False
+            )
 
             # Show coverage info if available
-            if proj.coverage is not None:
+            if info["coverage"] is not None:
                 console.print(
                     f"\n💯 [bold green]Total coverage:[/bold green] "
-                    f"[cyan]{proj.coverage:.2f}%[/cyan]\n"
+                    f"[cyan]{info['coverage']:.2f}%[/cyan]\n"
                 )
 
             console.print("\n[bold cyan]🧪 Tests:[/bold cyan]\n")
             console.print(tests_table)
             console.print(
-                f"\n[dim]📊 Total:[/dim] [bold]{len(tests)}[/bold] "
+                f"\n[dim]📊 Total:[/dim] [bold]{info['total_count']}[/bold] "
                 f"[dim]tests[/dim]\n"
             )
 
@@ -576,62 +528,51 @@ class CLIManager:
         After collecting coverage, the command automatically displays a summary
         of all tests with their coverage metrics using the list-tests command.
         """
-        with self._use_project(work_dir) as proj:
-
+        with self._use_project(work_dir) as pm:
             console.print("[bold blue]📊 Calculating coverage...[/bold blue]")
 
-            # Validate that there are tests to analyze
-            if not proj.count_tests():
-                typer.echo(f"⚠️  No tests found for project '{proj.name}'.")
-                raise typer.Exit(1)
-
-            # Phase 1: Calculate coverage for all tests combined
-            if proj.coverage is None or force:
-                proj.collect_coverage()
-            console.print(
-                "\n💯 [bold green]Total coverage:[/bold green] "
-                f"[cyan]{proj.coverage:.2f}%[/cyan]\n"
-            )
-
-            # Phase 2 & 3: Calculate per-test coverage metrics
-            console.print(
-                "[bold blue]🧪 Per-test coverage analysis...[/bold blue]\n"
-            )
-
-            # Extract test IDs and existing coverage data from dataframe
-            tests_ids = proj.get_tests_dataframe()[
-                ["test_id", "coverage_alone", "coverage_without"]
-            ].to_numpy()
-
-            # Get total count for progress indicator
-            tests_count = len(tests_ids)
-
-            # Iterate through each test to calculate coverage metrics
-            for idx, (test_id, cov_alone, cov_wo) in enumerate(tests_ids, 1):
-
-                # Show progress to user
-                proc_test_msg = (
-                    f"  [dim][{idx}/{tests_count}][/dim] "
-                    f"Processing {test_id}..."
+            try:
+                # Phase 1: Calculate coverage for all tests combined
+                console.print(
+                    "[bold blue]🧪 Per-test coverage analysis..."
+                    "[/bold blue]\n"
                 )
-                console.print(proc_test_msg, end="\r")
 
-                # Phase 2: Calculate coverage when running only this test
-                # in isolation
-                # This shows what this specific test covers on its own
-                cov_alone = _coerce_na(cov_alone)
-                if cov_alone is None or force:
-                    cov_alone = proj.collect_coverage_for_test(test_id)
+                # Define progress callback
+                def progress_callback(current, total, test_id):
+                    proc_test_msg = (
+                        f"  [dim][{current}/{total}][/dim] "
+                        f"Processing {test_id}..."
+                    )
+                    console.print(proc_test_msg, end="\r")
 
-                # Phase 3: Calculate coverage when running all tests except
-                # this one
-                # This helps identify if this test adds unique coverage
-                cov_wo = _coerce_na(cov_wo)
-                if cov_wo is None or force:
-                    cov_wo = proj.collect_coverage_without_test(test_id)
+                result = pm.collect_coverage(
+                    force=force, progress_callback=progress_callback
+                )
 
                 # Clear progress message
-                console.print(" " * len(proc_test_msg), end="\r")
+                tests_count = len(result["tests_data"])
+                if tests_count > 0:
+                    proc_test_msg = (
+                        f"  [dim][{tests_count}/{tests_count}][/dim] "
+                        f"Processing..."
+                    )
+                    console.print(" " * len(proc_test_msg), end="\r")
+
+                console.print(
+                    "\n💯 [bold green]Total coverage:[/bold green] "
+                    f"[cyan]{result['coverage']:.2f}%[/cyan]\n"
+                )
+
+            except ValueError as err:
+                console.print(
+                    Panel(
+                        f"[yellow]{err}[/yellow]",
+                        title="⚠️  Warning",
+                        border_style="yellow",
+                    )
+                )
+                raise typer.Exit(1)
 
         console.print(
             "[bold green]✅ Coverage collection complete!"
@@ -707,18 +648,55 @@ class CLIManager:
         Coverage data must be collected before running mutation analysis.
         Use the collect-coverage command first if coverage is missing.
         """
-        with self._use_project(work_dir) as proj:
-
+        with self._use_project(work_dir) as pm:
             console.print(
                 "[bold blue]🧬 Running mutation analysis...[/bold blue]"
             )
 
-            # Validate that coverage exists before running mutations
-            if not proj.coverage:
+            try:
+                # Define progress callback
+                def progress_callback(current, total, test_id):
+                    proc_test_msg = (
+                        f"  [dim][{current}/{total}][/dim] "
+                        f"Processing {test_id}..."
+                    )
+                    console.print(proc_test_msg, end="\r")
+
+                console.print(
+                    "\n[bold blue]🧪 Per-test mutation analysis..."
+                    "[/bold blue]\n"
+                )
+
+                result = pm.collect_mutations(
+                    force=force,
+                    priority=priority.value,
+                    ascending=ascending,
+                    progress_callback=progress_callback,
+                )
+
+                # Clear progress message
+                tests_count = len(result["tests_data"])
+                if tests_count > 0:
+                    proc_test_msg = (
+                        f"  [dim][{tests_count}/{tests_count}][/dim] "
+                        f"Processing..."
+                    )
+                    console.print(" " * len(proc_test_msg), end="\r")
+
+                console.print(
+                    f"\n🧬 [bold green]Mutants Generated:[/bold green] "
+                    f"[cyan]{result['mutants_number']}[/cyan]"
+                )
+
+                console.print(
+                    f"\n🎯 [bold green]Survival Rate:[/bold green] "
+                    f"[cyan]{result['msr']:.2f}%[/cyan]\n"
+                )
+
+            except ValueError as err:
                 console.print(
                     Panel(
-                        "[yellow]Coverage data is required before "
-                        "running mutation analysis.[/yellow]\n\n"
+                        f"[yellow]{err}[/yellow]\n\n"
                         f"[dim]Run[/dim] [cyan]'yagua collect-coverage "
                         f"{work_dir}'[/cyan] [dim]first.[/dim]",
                         title="⚠️  Warning",
@@ -726,95 +704,6 @@ class CLIManager:
                     )
                 )
                 raise typer.Exit(1)
-
-            # Phase 1: Initialize mutations and count mutants
-            if proj.mutants_number is None or force:
-                proj.collect_mutants(force=force)
-            console.print(
-                f"\n🧬 [bold green]Mutants Generated:[/bold green] "
-                f"[cyan]{proj.mutants_number}[/cyan]"
-            )
-
-            # Phase 2: Execute mutations and calculate survival rate
-            if proj.msr is None or force:
-                console.print(
-                    "\n[bold blue]🎯 Calculating survival rate...[/bold blue]"
-                )
-                proj.collect_survival_rate(force)
-            console.print(
-                f"\n🎯 [bold green]Survival Rate:[/bold green] "
-                f"[cyan]{proj.msr:.2f}%[/cyan]\n"
-            )
-
-            # Prepare dataframe with mutation and coverage columns
-            priority_column = priority.value
-            cov_columns = list(
-                {"coverage_alone", "coverage_without", priority_column}
-            )
-            mutation_columns = ["test_id", "msr_alone", "msr_without"]
-
-            tests_df = proj.get_tests_dataframe()[
-                mutation_columns + cov_columns
-            ]
-            tests_df.sort_values(
-                priority_column, ascending=ascending, inplace=True
-            )
-
-            # Validate that coverage collection is complete
-            if tests_df[cov_columns].isna().to_numpy().any():
-                console.print(
-                    Panel(
-                        "[yellow]Coverage collection appears to be "
-                        "incomplete.[/yellow]\n\n"
-                        "[dim]Some tests are missing coverage data. Run[/dim] "
-                        f"[cyan]'yagua collect-coverage {work_dir} --force'"
-                        "[/cyan] [dim]to recalculate.[/dim]",
-                        title="⚠️  Warning",
-                        border_style="yellow",
-                    )
-                )
-                raise typer.Exit(1)
-
-            # Phase 2 & 3: Calculate per-test mutation metrics
-            console.print(
-                "[bold blue]🧪 Per-test mutation analysis...[/bold blue]\n"
-            )
-
-            # Extract test data as numpy array for iteration
-            tests_data = tests_df[mutation_columns].to_numpy()
-            tests_count = len(tests_data)
-
-            # Iterate through each test to calculate mutation metrics
-            for idx, (test_id, msr_alone, msr_wo) in enumerate(tests_data, 1):
-
-                # Show progress to user
-                proc_test_msg = (
-                    f"  [dim][{idx}/{tests_count}][/dim] "
-                    f"Processing {test_id}..."
-                )
-                console.print(proc_test_msg, end="\r")
-
-                # Phase 2: Calculate mutation score when running only this test
-                # in isolation
-                # This shows what mutants this specific test can detect on its
-                # own
-                msr_alone = _coerce_na(msr_alone)
-                if msr_alone is None or force:
-                    msr_alone = proj.collect_survival_rate_for_test(
-                        test_id, force=force
-                    )
-
-                # Phase 3: Calculate mutation score when running all tests
-                # except this one
-                # This helps identify if this test detects unique mutants
-                msr_wo = _coerce_na(msr_wo)
-                if msr_wo is None or force:
-                    msr_wo = proj.collect_survival_rate_without_test(
-                        test_id, force=force
-                    )
-
-                # Clear progress message
-                console.print(" " * len(proc_test_msg), end="\r")
 
         console.print(
             "[bold green]✅ Mutation collection complete![/bold green]\n\n"
@@ -845,34 +734,36 @@ class CLIManager:
         typer.Exit
             If work directory does not exist.
         """
-        with self._use_project(work_dir) as proj:
-            test_count = proj.count_tests()
+        with self._use_project(work_dir) as pm:
+            info = pm.get_project_info()
 
             # Build info lines
             info_lines = [
-                f"[cyan]📝 Name:[/cyan] {proj.name}",
-                f"[cyan]📁 Path:[/cyan] {proj.path}",
-                f"[cyan]🗂️  Work Dir:[/cyan] {proj.work_dir}",
-                f"[cyan]💾 Database:[/cyan] {proj.db_path}",
+                f"[cyan]📝 Name:[/cyan] {info['name']}",
+                f"[cyan]📁 Path:[/cyan] {info['path']}",
+                f"[cyan]🗂️  Work Dir:[/cyan] {info['work_dir']}",
+                f"[cyan]💾 Database:[/cyan] {info['db_path']}",
             ]
 
-            if proj.description:
+            if info["description"]:
                 info_lines.append(
-                    f"[cyan]🪪 Description:[/cyan] {proj.description}"
+                    f"[cyan]🪪 Description:[/cyan] {info['description']}"
                 )
 
-            if test_count:
-                info_lines.append(f"[cyan]🧪 Tests:[/cyan] {test_count}")
+            if info["test_count"]:
+                info_lines.append(
+                    f"[cyan]🧪 Tests:[/cyan] {info['test_count']}"
+                )
 
-            if proj.coverage:
+            if info["coverage"]:
                 info_lines.append(
                     f"[cyan]💯 Coverage:[/cyan] "
-                    f"[bold green]{proj.coverage:.2f}%[/bold green]"
+                    f"[bold green]{info['coverage']:.2f}%[/bold green]"
                 )
 
-            if proj.mutants_number:
+            if info["mutants_number"]:
                 info_lines.append(
-                    f"[cyan]🧬 Mutants:[/cyan] {proj.mutants_number}"
+                    f"[cyan]🧬 Mutants:[/cyan] {info['mutants_number']}"
                 )
 
             console.print(
@@ -922,14 +813,13 @@ class CLIManager:
         typer.Exit
             If work directory does not exist or export fails.
         """
-        with self._use_project(work_dir) as proj:
-
+        with self._use_project(work_dir) as pm:
             console.print(
                 "\n[bold cyan]📦 Exporting work directory...[/bold cyan]\n"
             )
 
             try:
-                archive_path = proj.export(output_path=output)
+                archive_path = pm.export_project(output_path=output)
             except Exception as err:
                 console.print(
                     Panel(
@@ -945,7 +835,7 @@ class CLIManager:
                 "[bold green]✅ Work directory exported successfully!"
                 "[/bold green]\n",
                 f"[cyan]📦 Archive:[/cyan] {archive_path}",
-                f"[cyan]📁 Source:[/cyan] {proj.work_dir}",
+                f"[cyan]📁 Source:[/cyan] {pm.project.work_dir}",
             ]
 
             console.print(
