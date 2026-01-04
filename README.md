@@ -3,7 +3,7 @@
 <img src="https://github.com/leliel12/yagua/raw/master/res/logo.png" alt="Yagua Logo" width="300"/>
 
 
-**Test collection and coverage analysis for pytest-based projects**
+**Software entropy analysis through test and mutation testing metrics**
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -15,6 +15,7 @@
 ## Table of Contents
 
 - [About](#about)
+- [Theoretical Foundation](#theoretical-foundation)
 - [Features](#features)
 - [Installation](#installation)
 - [Quick Start](#quick-start)
@@ -37,6 +38,57 @@
 Yagua is a Python package for collecting, storing, and analyzing test information from pytest-based projects. It uses a dedicated work directory containing an SQLite database (yagua.db) to store test metadata and coverage metrics, enabling efficient analysis without repeated execution of expensive coverage measurements.
 
 **Key Design Principle**: Yagua operates on a **caching-first** model. Once data is collected (tests, coverage metrics), it is cached and never recalculated unless explicitly requested using flags like `--force` or `-f`. This ensures fast operations and prevents unnecessary re-execution of expensive coverage analysis.
+
+## 🔬 Theoretical Foundation
+
+Yagua is grounded in a rigorous theoretical framework that defines **software entropy** using principles from statistical mechanics. This foundation provides both theoretical justification and practical metrics for assessing test suite quality.
+
+### Software Entropy: A Formal Definition
+
+The concept of software entropy has long been used informally to describe the tendency of software systems to become more disordered and harder to maintain as they evolve. Yagua implements a formal definition based on statistical mechanics:
+
+- **Microstates** (𝑝 ∈ ℙ): Concrete implementations of source code that satisfy a given specification
+- **Macrostates** (t₁, ..., tₘ): Sets of tests that define observable properties of the system
+- **Entropy Formula**: `S = -log W`, where `W` is the number of valid programs that pass the test suite
+
+This formula is analogous to **Boltzmann's entropy** in physics, where entropy measures the number of microstates compatible with macroscopic constraints (like temperature and pressure). In software, tests play the role of macroscopic constraints.
+
+### How Tests Reduce Entropy
+
+Each test constrains the space of possible implementations:
+
+- **High Entropy**: Many different programs could pass the test suite → high uncertainty about correct behavior → higher probability of bugs
+- **Low Entropy**: Few programs satisfy the tests → behavior is well-specified → lower probability of unexpected behavior
+
+**Adding non-redundant tests reduces entropy**, making the specification more precise and reducing the space of potential bugs.
+
+### Connection to Mutation Testing
+
+While computing the global entropy `S = -log W` is computationally intractable (it would require enumerating all possible programs), **mutation testing provides a practical local approximation**:
+
+- **Mutation Testing** generates syntactic variants (mutants) of the implemented program
+- **Surviving mutants** represent nearby programs in the microstate space that still pass the tests
+- **Killing mutants** (by adding tests) reduces the local entropy
+
+The **Software Entropy Density (SED)** metric quantifies this:
+
+```
+SEDₗₒc = (log |M₀| - log |Mₘ|) / Lcode
+```
+
+Where `M₀` is mutants without tests and `Mₘ` is mutants that survive the full test suite, normalized by code length.
+
+### Why This Matters
+
+This theoretical framework explains why the metrics computed by yagua are meaningful:
+
+1. **MSR Impact**: Measures how much each test reduces local entropy
+2. **MSR Uniqueness**: Identifies tests that eliminate microstates (mutants) no other test eliminates
+3. **MSR Redundancy**: Identifies tests that eliminate microstates already eliminated by other tests
+
+By measuring these quantities, yagua provides a **principled, theory-grounded approach** to assessing test suite quality, moving beyond ad-hoc metrics to measurements with clear physical interpretation.
+
+For the complete theoretical development, see: *Fotinós, J. & Cabral, J.B. "A Formal Definition of Software Entropy" (in preparation)*.
 
 ## ✨ Features
 
@@ -208,6 +260,8 @@ For architectural details and system design, see [ARCHITECTURE.md](ARCHITECTURE.
 ## 📊 Advanced Metrics
 
 Yagua provides comprehensive metrics for analyzing test quality, redundancy, and unique contributions. These metrics are available for both **code coverage** and **mutation testing**, enabling deep insights into test suite effectiveness.
+
+**Note**: These metrics are grounded in the [theoretical framework](#theoretical-foundation) of software entropy, where each metric has a clear interpretation in terms of reducing uncertainty about program behavior.
 
 ### Coverage Metrics
 
