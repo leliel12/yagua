@@ -156,7 +156,7 @@ yagua export my_work_dir --output backup.tar.gz
 Yagua provides a complete Python API for integration into scripts and tools:
 
 ```python
-from yagua import Project, read_dir, read_archive
+from yagua import Project, ProjectManager, read_dir, read_archive
 
 # Create new project (creates work_dir with yagua.db inside)
 proj = Project.from_project_info(
@@ -165,35 +165,40 @@ proj = Project.from_project_info(
     work_dir="my_work_dir",
     description="Optional description"
 )
+# Wrap in ProjectManager for business logic operations
+pm = ProjectManager(proj)
 
-# Open existing project
-proj = Project(work_dir="my_work_dir")
-# Or use the convenience function
-proj = read_dir("my_work_dir")
+# Open existing project (returns ProjectManager)
+pm = read_dir("my_work_dir")
 
-# Open project from an archive file
-proj = read_archive("my_project.zip")
+# Open project from an archive file (returns ProjectManager)
+pm = read_archive("my_project.zip")
 
-# Collect tests
-saved_count, updated_count = proj.collect_tests()
+# Collect tests with pipeline validation
+result = pm.collect_tests()
+print(f"Tests collected: {result['total_tests']}")
 
 # Get tests as DataFrame
-tests_df = proj.get_tests_dataframe()
+info = pm.get_tests_info()
+tests_df = info['tests_df']
 
-# Collect coverage
-total_coverage = proj.collect_coverage()
-test_coverage_alone = proj.collect_coverage_for_test("test_id")
-coverage_without = proj.collect_coverage_without_test("test_id")
+# Collect coverage with progress tracking
+def progress(current, total, test_id):
+    print(f"Processing {current}/{total}: {test_id}")
 
-# Access project properties
-print(f"Name: {proj.name}")
-print(f"Path: {proj.path}")
-print(f"Work Dir: {proj.work_dir}")
-print(f"Database: {proj.db_path}")
-print(f"Coverage: {proj.coverage}")
+result = pm.collect_coverage(progress_callback=progress)
+print(f"Total coverage: {result['coverage']}%")
+
+# Access project properties through ProjectManager
+project_info = pm.get_project_info()
+print(f"Name: {project_info['name']}")
+print(f"Path: {project_info['path']}")
+print(f"Work Dir: {project_info['work_dir']}")
+print(f"Database: {project_info['db_path']}")
+print(f"Coverage: {project_info['coverage']}")
 
 # Close when done
-proj.close()
+pm.project.close()
 ```
 
 For architectural details and system design, see [ARCHITECTURE.md](ARCHITECTURE.md).
