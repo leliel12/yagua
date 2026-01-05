@@ -3,7 +3,7 @@
 <img src="https://github.com/leliel12/yagua/raw/master/res/logo.png" alt="Yagua Logo" width="300"/>
 
 
-**Test collection and coverage analysis for pytest-based projects**
+**Software entropy analysis through test and mutation testing metrics**
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -15,6 +15,7 @@
 ## Table of Contents
 
 - [About](#about)
+- [Theoretical Foundation](#theoretical-foundation)
 - [Features](#features)
 - [Installation](#installation)
 - [Quick Start](#quick-start)
@@ -36,7 +37,75 @@
 
 Yagua is a Python package for collecting, storing, and analyzing test information from pytest-based projects. It uses a dedicated work directory containing an SQLite database (yagua.db) to store test metadata and coverage metrics, enabling efficient analysis without repeated execution of expensive coverage measurements.
 
-**Key Design Principle**: Yagua operates on a **caching-first** model. Once data is collected (tests, coverage metrics), it is cached and never recalculated unless explicitly requested using flags like `--force` or `-f`. This ensures fast operations and prevents unnecessary re-execution of expensive coverage analysis.
+**What Makes Yagua Different**: Unlike ad-hoc test quality metrics, yagua is grounded in a rigorous theoretical framework from statistical mechanics. It approximates **software entropy** by exploring the **local neighborhood of the mutation graph**—the space of syntactic variants (mutants) around your implementation. This provides a principled, computationally tractable approach to quantifying test suite quality, without needing to enumerate all possible programs (which would be intractable).
+
+**Key Design Principle**: Yagua operates on a **caching-first** model. Once data is collected (tests, coverage metrics, mutations), it is cached and never recalculated unless explicitly requested using flags like `--force` or `-f`. This ensures fast operations and prevents unnecessary re-execution of expensive analysis.
+
+## 🔬 Theoretical Foundation
+
+Yagua is grounded in a rigorous theoretical framework that defines **software entropy** using principles from statistical mechanics. This foundation provides both theoretical justification and practical metrics for assessing test suite quality.
+
+### Software Entropy: A Formal Definition
+
+The concept of software entropy has long been used informally to describe the tendency of software systems to become more disordered and harder to maintain as they evolve. Yagua implements a formal definition based on statistical mechanics:
+
+- **Microstates** (𝑝 ∈ ℙ): Concrete implementations of source code that satisfy a given specification
+- **Macrostates** (t₁, ..., tₘ): Sets of tests that define observable properties of the system
+- **Entropy Formula**: `S = -log W`, where `W` is the number of valid programs that pass the test suite
+
+This formula is analogous to **Boltzmann's entropy** in physics, where entropy measures the number of microstates compatible with macroscopic constraints (like temperature and pressure). In software, tests play the role of macroscopic constraints.
+
+### How Tests Reduce Entropy
+
+Each test constrains the space of possible implementations:
+
+- **High Entropy**: Many different programs could pass the test suite → high uncertainty about correct behavior → higher probability of bugs
+- **Low Entropy**: Few programs satisfy the tests → behavior is well-specified → lower probability of unexpected behavior
+
+**Adding non-redundant tests reduces entropy**, making the specification more precise and reducing the space of potential bugs.
+
+### Connection to Mutation Testing
+
+While computing the global entropy `S = -log W` is computationally intractable (it would require enumerating all possible programs of length L_code), **mutation testing provides a practical local approximation** by exploring the **mutation graph**:
+
+#### The Mutation Graph G = (V, E_M)
+
+- **Nodes (V)**: Programs (your implementation p_impl + all its mutants)
+- **Edges (E_M)**: Connections via mutation operations (one syntactic change)
+- **Subgraph G[ℙ]**: Syntactic variants that pass the test suite
+
+**Key Insight**: Instead of exploring the entire (intractable) program space, yagua explores only the **local neighborhood** around your implementation in this graph.
+
+#### How Yagua Uses the Graph
+
+- **Mutation Testing** generates syntactic variants (mutants) one step away from p_impl
+- **Surviving mutants** represent nearby programs in the microstate space that still pass the tests
+- **Killing mutants** (by adding tests) reduces the local entropy
+- **Graph Structure** reveals fragility:
+  - **Many connected components** → tests are restrictive (good)
+  - **Large connected basin** → tests are permissive (problematic)
+
+The **Software Entropy Density (SED)** metric quantifies this local reduction:
+
+```
+SEDₗₒc = (log |M₀| - log |Mₘ|) / Lcode
+```
+
+Where `M₀` is mutants without tests and `Mₘ` is mutants that survive the full test suite, normalized by code length.
+
+**Why This Works**: The local neighborhood provides an upper-bound proxy for the global entropy. If many mutants survive locally, the global entropy is likely high; if few survive, entropy is constrained.
+
+### Why This Matters
+
+This theoretical framework explains why the metrics computed by yagua are meaningful:
+
+1. **MSR Impact**: Measures how much each test reduces local entropy
+2. **MSR Uniqueness**: Identifies tests that eliminate microstates (mutants) no other test eliminates
+3. **MSR Redundancy**: Identifies tests that eliminate microstates already eliminated by other tests
+
+By measuring these quantities, yagua provides a **principled, theory-grounded approach** to assessing test suite quality, moving beyond ad-hoc metrics to measurements with clear physical interpretation.
+
+For the complete theoretical development, see: *Fotinós, J. & Cabral, J.B. "A Formal Definition of Software Entropy" (in preparation)*.
 
 ## ✨ Features
 
@@ -156,7 +225,7 @@ yagua export my_work_dir --output backup.tar.gz
 Yagua provides a complete Python API for integration into scripts and tools:
 
 ```python
-from yagua import Project, read_dir, read_archive
+from yagua import Project, ProjectManager, read_dir, read_archive
 
 # Create new project (creates work_dir with yagua.db inside)
 proj = Project.from_project_info(
@@ -165,35 +234,40 @@ proj = Project.from_project_info(
     work_dir="my_work_dir",
     description="Optional description"
 )
+# Wrap in ProjectManager for business logic operations
+pm = ProjectManager(proj)
 
-# Open existing project
-proj = Project(work_dir="my_work_dir")
-# Or use the convenience function
-proj = read_dir("my_work_dir")
+# Open existing project (returns ProjectManager)
+pm = read_dir("my_work_dir")
 
-# Open project from an archive file
-proj = read_archive("my_project.zip")
+# Open project from an archive file (returns ProjectManager)
+pm = read_archive("my_project.zip")
 
-# Collect tests
-saved_count, updated_count = proj.collect_tests()
+# Collect tests with pipeline validation
+result = pm.collect_tests()
+print(f"Tests collected: {result['total_tests']}")
 
 # Get tests as DataFrame
-tests_df = proj.get_tests_dataframe()
+info = pm.get_tests_info()
+tests_df = info['tests_df']
 
-# Collect coverage
-total_coverage = proj.collect_coverage()
-test_coverage_alone = proj.collect_coverage_for_test("test_id")
-coverage_without = proj.collect_coverage_without_test("test_id")
+# Collect coverage with progress tracking
+def progress(current, total, test_id):
+    print(f"Processing {current}/{total}: {test_id}")
 
-# Access project properties
-print(f"Name: {proj.name}")
-print(f"Path: {proj.path}")
-print(f"Work Dir: {proj.work_dir}")
-print(f"Database: {proj.db_path}")
-print(f"Coverage: {proj.coverage}")
+result = pm.collect_coverage(progress_callback=progress)
+print(f"Total coverage: {result['coverage']}%")
+
+# Access project properties through ProjectManager
+project_info = pm.get_project_info()
+print(f"Name: {project_info['name']}")
+print(f"Path: {project_info['path']}")
+print(f"Work Dir: {project_info['work_dir']}")
+print(f"Database: {project_info['db_path']}")
+print(f"Coverage: {project_info['coverage']}")
 
 # Close when done
-proj.close()
+pm.project.close()
 ```
 
 For architectural details and system design, see [ARCHITECTURE.md](ARCHITECTURE.md).
@@ -203,6 +277,8 @@ For architectural details and system design, see [ARCHITECTURE.md](ARCHITECTURE.
 ## 📊 Advanced Metrics
 
 Yagua provides comprehensive metrics for analyzing test quality, redundancy, and unique contributions. These metrics are available for both **code coverage** and **mutation testing**, enabling deep insights into test suite effectiveness.
+
+**Note**: These metrics are grounded in the [theoretical framework](#theoretical-foundation) of software entropy, where each metric has a clear interpretation in terms of reducing uncertainty about program behavior.
 
 ### Coverage Metrics
 

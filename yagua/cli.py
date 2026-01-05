@@ -1,8 +1,8 @@
 """
-Yagua - CLI Interface.
+Yagua - Session-based CLI Interface.
 
-This module provides the command-line interface for yagua, a tool for
-collecting and managing test information from pytest-based projects.
+This module provides a session-based command-line interface for yagua,
+implementing a resumable pipeline pattern similar to cosmic-ray and mutmut.
 """
 
 # =============================================================================
@@ -10,8 +10,8 @@ collecting and managing test information from pytest-based projects.
 # =============================================================================
 
 import contextlib
+import enum
 import inspect
-import os
 import sys
 from pathlib import Path
 
@@ -19,6 +19,8 @@ import typer
 
 from rich.console import Console
 from rich.panel import Panel
+from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich.table import Table
 
 from .project import Project
 from .project_manager import ProjectManager, PipelineError
@@ -31,6 +33,50 @@ from .utils.df2rt import df_to_rich_table
 
 # Rich console for colored output
 console = Console()
+
+
+# ============================================================================
+# PIPELINE STEPS ENUM
+# ============================================================================
+
+
+class PipelineStep(str, enum.Enum):
+    """Pipeline execution steps."""
+
+    CREATED = "created"
+    TESTS_COLLECTED = "tests_collected"
+    COVERAGE_COLLECTED = "coverage_collected"
+    MUTATIONS_COLLECTED = "mutations_collected"
+    COMPLETED = "completed"
+
+    @classmethod
+    def get_next_step(cls, current_step):
+        """Get the next step in the pipeline.
+
+        Parameters
+        ----------
+        current_step : PipelineStep
+            Current pipeline step.
+
+        Returns
+        -------
+        PipelineStep | None
+            Next step in pipeline, or None if completed.
+        """
+        steps = [
+            cls.CREATED,
+            cls.TESTS_COLLECTED,
+            cls.COVERAGE_COLLECTED,
+            cls.MUTATIONS_COLLECTED,
+            cls.COMPLETED,
+        ]
+        try:
+            idx = steps.index(PipelineStep(current_step))
+            if idx < len(steps) - 1:
+                return steps[idx + 1]
+            return None
+        except (ValueError, IndexError):
+            return None
 
 
 # ============================================================================
@@ -57,27 +103,15 @@ def as_path(string):
 def _make_help(obj) -> str:
     """Extract summary from a method's NumPy-style docstring.
 
-    This function extracts the summary section from an object's
-    docstring, which includes all content before the first section
-    separator (a line of dashes). This is useful for generating
-    concise help text for CLI commands.
-
     Parameters
     ----------
     obj : object
-        Object with a NumPy-style docstring to extract help from.
+        Object with a NumPy-style docstring.
 
     Returns
     -------
     str
-        Summary portion of the docstring, or empty string if no
-        docstring exists.
-
-    Notes
-    -----
-    The function stops extracting at the first line that contains
-    only dashes (e.g., "----------"), which marks the beginning of
-    a formal section in NumPy-style docstrings.
+        Summary portion of the docstring.
     """
     lines = (obj.__doc__ or "").strip().splitlines()
     if lines:
@@ -93,29 +127,15 @@ def _make_help(obj) -> str:
 def _make_work_dir_argument(**kwargs):
     """Create a reusable Typer argument for work directory path.
 
-    This factory function creates consistent work directory argument
-    definitions across all CLI commands. It sets sensible defaults while
-    allowing customization via keyword arguments.
-
     Parameters
     ----------
     **kwargs
-        Keyword arguments passed to typer.Argument. Defaults are set for:
-        - default: ... (required argument)
-        - help: "Path to work directory containing yagua.db"
-        - parser: as_path (converts to resolved Path)
-        - metavar: "📁 Work Directory"
+        Keyword arguments passed to typer.Argument.
 
     Returns
     -------
     typer.Argument
         Configured Typer argument for work directory path.
-
-    Notes
-    -----
-    The work directory contains:
-    - yagua.db: SQLite database with project data
-    - Temporary files from test/mutation frameworks
     """
     kwargs.setdefault("default", ...)
     kwargs.setdefault("help", "Path to work directory containing yagua.db")
@@ -129,31 +149,25 @@ def _make_work_dir_argument(**kwargs):
 # ============================================================================
 
 
-class CLIManager:
-    """CLI manager that exposes methods as typer subcommands.
+class CLI2Manager:
+    """Session-based CLI manager for yagua.
 
-    This class contains methods that are automatically registered as
-    Typer commands through introspection. Each public method becomes
-    a CLI subcommand.
+    This class implements a resumable pipeline pattern where projects
+    progress through stages: created -> tests_collected ->
+    coverage_collected -> mutations_collected -> completed.
 
     Methods
     -------
-    create_project
-        Create a work directory with project metadata.
-    collect_tests
-        Collect tests from a project using pytest.
-    list_tests
-        List all tests for a project (with optional timestamp display).
-    collect_coverage
-        Collect and store coverage information.
-    info
-        Show project information from work directory.
-
-    Notes
-    -----
-    All commands accept a work directory path as their first argument.
-    Method names with underscores are converted to hyphenated command names
-    (e.g., `collect_tests` becomes `collect-tests`).
+    init
+        Initialize a new yagua project.
+    run
+        Execute the pipeline (resumable).
+    status
+        Show pipeline status and progress.
+    report
+        Display test results and metrics.
+    export
+        Export work directory to archive.
     """
 
     # ========================================================================
@@ -163,10 +177,6 @@ class CLIManager:
     @contextlib.contextmanager
     def _use_project(self, work_dir):
         """Context manager to validate work directory and provide ProjectManager.
-
-        This method validates that the work directory exists, creates a Project
-        instance and ProjectManager, displays project information, and ensures
-        the database connection is properly closed when done.
 
         Parameters
         ----------
@@ -182,11 +192,6 @@ class CLIManager:
         ------
         typer.Exit
             If work directory does not exist (exits with code 1).
-
-        Notes
-        -----
-        This is the recommended way to access projects in CLI commands as it
-        handles validation, error reporting, and cleanup automatically.
         """
         if not work_dir.exists():
             console.print(
@@ -197,7 +202,6 @@ class CLIManager:
                 )
             )
             raise typer.Exit(code=1)
-
         proj = Project(work_dir=work_dir)
         try:
             console.print(
@@ -209,11 +213,56 @@ class CLIManager:
         finally:
             proj.close()
 
+    def _get_pipeline_progress(self, pm):
+        """Calculate pipeline progress statistics.
+
+        Parameters
+        ----------
+        pm : ProjectManager
+            ProjectManager instance.
+
+        Returns
+        -------
+        dict
+            Dictionary with progress statistics for each phase.
+        """
+        tests_df = pm.project.get_tests_dataframe()
+        total_tests = len(tests_df)
+
+        progress = {
+            "total_tests": total_tests,
+            "coverage_alone_complete": 0,
+            "coverage_without_complete": 0,
+            "mutations_alone_complete": 0,
+            "mutations_without_complete": 0,
+        }
+
+        if total_tests == 0:
+            return progress
+
+        # Count completed coverage metrics
+        progress["coverage_alone_complete"] = (
+            tests_df["coverage_alone"].notna().sum()
+        )
+        progress["coverage_without_complete"] = (
+            tests_df["coverage_without"].notna().sum()
+        )
+
+        # Count completed mutation metrics
+        progress["mutations_alone_complete"] = (
+            tests_df["msr_alone"].notna().sum()
+        )
+        progress["mutations_without_complete"] = (
+            tests_df["msr_without"].notna().sum()
+        )
+
+        return progress
+
     # ========================================================================
-    # Public Methods - Project Creation
+    # Public Methods - Project Initialization
     # ========================================================================
 
-    def create_project(
+    def init(
         self,
         project_path: str = typer.Argument(
             ...,
@@ -237,12 +286,12 @@ class CLIManager:
             help="Project description",
         ),
     ) -> None:
-        """Create a new yagua project with database and work directory.
+        """Initialize a new yagua project with database and work directory.
 
-        This command initializes a new yagua project by creating a work
+        This command creates a new yagua project by initializing a work
         directory containing the SQLite database (yagua.db) and all
-        project metadata. The database is automatically created inside
-        the work directory.
+        project metadata. The project starts in the 'created' pipeline
+        step.
 
         Parameters
         ----------
@@ -250,8 +299,8 @@ class CLIManager:
             Path to the project directory to analyze.
         work_dir : Path, optional
             Path to work directory where yagua.db and temporary files will
-            be stored. If not provided, defaults to _yagua_wd_<project_name>_
-            in the current directory.
+            be stored. If not provided, defaults to
+            _yagua_wd_<project_name>_ in the current directory.
         name : str, optional
             Project name. If not provided, uses the directory name.
         description : str, optional
@@ -260,17 +309,16 @@ class CLIManager:
         Raises
         ------
         typer.Exit
-            If project path does not exist or work directory already exists.
+            If project path does not exist or work directory already
+            exists.
         """
-        console.print(
-            "\n[bold cyan]📦 Creating yagua project...[/bold cyan]\n"
-        )
-
-        # Validate inputs
         if not project_path.exists():
             console.print(
                 Panel(
-                    f"[red]Project path does not exist:[/red]\n{project_path}",
+                    (
+                        f"[red]Project path does not exist:[/red]"
+                        f"\n{project_path}"
+                    ),
                     title="❌ Error",
                     border_style="red",
                 )
@@ -281,19 +329,25 @@ class CLIManager:
         project_name = name or project_path.name
 
         # Use provided work_dir or default to _yagua_wd_<project_name>_
-        if work_dir is None:
-            work_dir = as_path(f"_yagua_wd_{project_name}_")
+        work_dir = work_dir or as_path(f"_yagua_wd_{project_name}_")
 
         # Validate work directory does not exist
         if work_dir.exists():
             console.print(
                 Panel(
-                    f"[red]Work directory already exists:[/red]\n{work_dir}",
+                    (
+                        f"[red]Work directory already exists:[/red]"
+                        f"\n{work_dir}"
+                    ),
                     title="❌ Error",
                     border_style="red",
                 )
             )
             raise typer.Exit(code=1)
+
+        console.print(
+            "\n[bold cyan]📦 Initializing yagua project...[/bold cyan]\n"
+        )
 
         try:
             proj = Project.from_project_info(
@@ -312,11 +366,12 @@ class CLIManager:
 
         # Build success message
         info_lines = [
-            f"[bold green]✅ Project created successfully![/bold green]\n",
+            "[bold green]✅ Project initialized successfully![/bold green]\n",
             f"[cyan]📝 Name:[/cyan] {proj.name}",
             f"[cyan]📁 Path:[/cyan] {proj.path}",
             f"[cyan]🗂️  Work Dir:[/cyan] {proj.work_dir}",
             f"[cyan]💾 Database:[/cyan] {proj.db_path}",
+            f"[cyan]📊 Pipeline:[/cyan] {proj.pipeline_step}",
         ]
 
         if proj.description:
@@ -324,7 +379,9 @@ class CLIManager:
                 f"[cyan]🪪 Description:[/cyan] {proj.description}"
             )
 
-        info_lines.append(f"\n[dim]✨ Cache initialized with 0 tests[/dim]")
+        info_lines.append(
+            "\n[dim]💡 Next step:[/dim] " f"[cyan]yagua run {work_dir}[/cyan]"
+        )
 
         console.print(
             Panel(
@@ -335,214 +392,323 @@ class CLIManager:
         )
 
     # ========================================================================
-    # Public Commands - Test Management
+    # Public Methods - Pipeline Execution
     # ========================================================================
 
-    def collect_tests(
+    def run(
         self,
         work_dir: str = _make_work_dir_argument(),
+        step: str = typer.Option(
+            None,
+            "--step",
+            "-s",
+            help=(
+                "Execute specific step only (tests, coverage, mutations, all)"
+            ),
+        ),
         force: bool = typer.Option(
             False,
             "--force",
             "-f",
-            help="Force recollection of tests",
+            help="Force re-execution of steps",
         ),
     ) -> None:
-        """Collect tests from a project using pytest.
+        """Execute the yagua pipeline (resumable).
 
-        This command runs pytest --collect-only to discover all tests
-        in the project and stores them in the yagua database. The work
-        directory must already exist (use create-project first).
+        This command runs the analysis pipeline, automatically resuming
+        from the last completed step. The pipeline consists of:
+        1. Collect tests (pytest --collect-only)
+        2. Collect coverage (per-test and without-test)
+        3. Collect mutations (per-test and without-test)
+
+        The pipeline state is tracked in the database, allowing you to
+        resume from interruptions or failures.
+
+        Mutations are evaluated in coverage_uniqueness order (descending)
+        to optimize detection.
 
         Parameters
         ----------
         work_dir : Path
             Path to existing work directory containing yagua.db.
+        step : str, optional
+            Execute only a specific step: 'tests', 'coverage',
+            'mutations', or 'all'. If not specified, resumes from
+            current pipeline step.
         force : bool
-            Force recollection of tests even if already collected.
+            Force re-execution of steps even if already completed.
 
         Raises
         ------
         typer.Exit
-            If work directory does not exist or no tests are collected.
+            If work directory does not exist or execution fails.
         """
         with self._use_project(work_dir) as pm:
-            if force or pm.project.count_tests() == 0:
-                console.print(
-                    "\n[bold cyan]🧪 Collecting tests...[/bold cyan]\n"
-                )
-
+            console.print(
+                "[bold cyan]🚀 Running yagua pipeline...[/bold cyan]\n"
+            )
             try:
-                result = pm.collect_tests(force=force)
-            except (ValueError, PipelineError) as err:
+                while step_method := pm.next_step():
+                    step_name = step_method.__name__.replace("_", "-")
+                    self._run_step(step_method, step_name, force)
+
+                console.print(
+                    "\n[bold green]✅ Pipeline completed successfully!"
+                    "[/bold green]\n"
+                )
+            except Exception as err:
+                # Mark failure using ProjectManager
+                pm.mark_failed()
+
                 console.print(
                     Panel(
-                        f"[yellow]{err}[/yellow]\n\n"
-                        "[dim]Make sure the project contains "
-                        "pytest-compatible test files.[/dim]",
-                        title="⚠️  Warning",
-                        border_style="yellow",
+                        f"[red]Pipeline failed:[/red]\n{err}",
+                        title="❌ Error",
+                        border_style="red",
                     )
                 )
                 raise typer.Exit(code=1)
 
-            # Build success message
-            info_lines = [
-                "[bold green]✅ Tests collected successfully![/bold green]\n",
-                f"[cyan]📊 Total tests:[/cyan] {result['total_tests']}",
-            ]
+    def _run_step(self, step, step_name, force):
+        """Execute a single pipeline step with progress display.
 
-            console.print(
-                Panel(
-                    "\n".join(info_lines),
-                    border_style="green",
-                    padding=(1, 2),
-                )
+        Parameters
+        ----------
+        step : callable
+            Method to execute (collect_tests, collect_coverage, or
+            collect_mutations).
+        step_name : str
+            Display name for the step.
+        step_number : int
+            Step number in the pipeline sequence.
+        force : bool
+            Force re-execution flag.
+
+        Returns
+        -------
+        dict
+            Result dictionary from the step execution.
+        """
+        console.print(f"[bold blue]🌟 {step_name}...[/bold blue]")
+
+        # Create Rich Progress for the operation
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
+        ) as progress:
+            task = progress.add_task("⚙️ Initializing...", total=None)
+
+            def callback(current, total, test_id):
+                if total:
+                    progress.update(
+                        task,
+                        description=f"⚙️ Processing [dim]{current}/{total}[/dim]: {test_id}",
+                        total=total,
+                        completed=current,
+                    )
+                else:
+                    progress.update(task, description=f"⚙️ Processing: {test_id}")
+
+            result = step(force=force, progress_callback=callback)
+
+        # Display result summary - transform dict to displayable format
+        result_items = []
+        for key, value in result.items():
+            # Skip values that are too large to display
+            if len(str(value)) > 100:
+                continue
+            key = key.replace("_", "-")
+            if isinstance(value, float):
+                result_items.append(f"{key}={value:.2f}")
+            else:
+                result_items.append(f"{key}={value}")
+
+        result_str = ", ".join(result_items)
+        console.print(
+            f"[green]💯[/green] {emoji} {step_name} [bold]Done[/bold]: "
+            f"[cyan]{result_str}[/cyan]\n"
+        )
+
+        return result
+
+    # ========================================================================
+    # Public Methods - Status & Reporting
+    # ========================================================================
+
+    def status(
+        self,
+        work_dir: str = _make_work_dir_argument(),
+    ) -> None:
+        """Show project status and pipeline progress.
+
+        This command displays the current state of the analysis pipeline,
+        including which steps are completed and detailed progress for
+        each phase.
+
+        Parameters
+        ----------
+        work_dir : Path
+            Path to existing work directory containing yagua.db.
+
+        Raises
+        ------
+        typer.Exit
+            If work directory does not exist.
+        """
+        with self._use_project(work_dir) as pm:
+            # Get progress statistics
+            progress = self._get_pipeline_progress(pm)
+            current_step = PipelineStep(pm.project.pipeline_step)
+
+            # Build status table
+            table = Table(title="Pipeline Status", show_header=True)
+            table.add_column("Step", style="cyan")
+            table.add_column("Status", style="bold")
+            table.add_column("Progress", justify="right")
+
+            # Tests collection
+            if current_step.value == PipelineStep.CREATED.value:
+                tests_status = "⏳ Pending"
+            else:
+                tests_status = f"✅ Complete ({progress['total_tests']} tests)"
+            table.add_row(
+                "1. Collect Tests",
+                tests_status,
+                (
+                    f"{progress['total_tests']}"
+                    if progress["total_tests"]
+                    else "-"
+                ),
             )
 
-    def list_tests(
+            # Coverage collection
+            if current_step.value in [
+                PipelineStep.CREATED.value,
+                PipelineStep.TESTS_COLLECTED.value,
+            ]:
+                coverage_status = "⏳ Pending"
+                cov_progress = "-"
+            elif (
+                current_step.value == PipelineStep.COVERAGE_COLLECTED.value
+                or progress["coverage_alone_complete"]
+                == progress["total_tests"]
+            ):
+                coverage_status = "✅ Complete"
+                cov_progress = (
+                    f"{progress['coverage_alone_complete']}/"
+                    f"{progress['total_tests']}"
+                )
+            else:
+                coverage_status = "🔄 In Progress"
+                cov_progress = (
+                    f"{progress['coverage_alone_complete']}/"
+                    f"{progress['total_tests']}"
+                )
+            table.add_row("2. Collect Coverage", coverage_status, cov_progress)
+
+            # Mutation collection
+            if current_step.value in [
+                PipelineStep.CREATED.value,
+                PipelineStep.TESTS_COLLECTED.value,
+                PipelineStep.COVERAGE_COLLECTED.value,
+            ]:
+                mutations_status = "⏳ Pending"
+                mut_progress = "-"
+            elif (
+                current_step.value == PipelineStep.MUTATIONS_COLLECTED.value
+                or progress["mutations_alone_complete"]
+                == progress["total_tests"]
+            ):
+                mutations_status = "✅ Complete"
+                mut_progress = (
+                    f"{progress['mutations_alone_complete']}/"
+                    f"{progress['total_tests']}"
+                )
+            else:
+                mutations_status = "🔄 In Progress"
+                mut_progress = (
+                    f"{progress['mutations_alone_complete']}/"
+                    f"{progress['total_tests']}"
+                )
+            table.add_row(
+                "3. Collect Mutations", mutations_status, mut_progress
+            )
+
+            console.print()
+            console.print(table)
+            console.print()
+
+            # Summary information
+            info_lines = [
+                f"[cyan]📊 Current Step:[/cyan] {current_step.value}",
+            ]
+
+            if pm.project.coverage is not None:
+                info_lines.append(
+                    f"[cyan]💯 Coverage:[/cyan] {pm.project.coverage:.2f}%"
+                )
+
+            if pm.project.mutants_number is not None:
+                info_lines.append(
+                    f"[cyan]🧬 Mutants:[/cyan] {pm.project.mutants_number}"
+                )
+
+            if pm.project.msr is not None:
+                info_lines.append(
+                    f"[cyan]🎯 Survival Rate:[/cyan] {pm.project.msr:.2f}%"
+                )
+
+            if pm.project.failed_at:
+                info_lines.append(
+                    f"[yellow]⚠️  Last Failure:[/yellow] {pm.project.failed_at}"
+                )
+
+            console.print(Panel("\n".join(info_lines), border_style="blue"))
+
+            # Next step suggestion
+            if current_step != PipelineStep.COMPLETED:
+                console.print(
+                    f"\n[dim]💡 Next:[/dim] [cyan]yagua run "
+                    f"{work_dir}[/cyan]\n"
+                )
+            else:
+                console.print(
+                    f"\n[dim]💡 View results:[/dim] [cyan]yagua report "
+                    f"{work_dir}[/cyan]\n"
+                )
+
+    def report(
         self,
         work_dir: str = _make_work_dir_argument(),
         long: bool = typer.Option(
             False,
             "--long",
             "-l",
-            help="Show all the information of the tests",
+            help="Show all test information including timestamps and IDs",
         ),
     ) -> None:
-        """List all tests for a project.
+        """Display test results and metrics.
 
-        This command displays all tests associated with the project,
-        including their file paths, suite names (if any), test names, and
-        coverage information. By default, internal columns (id, project,
-        test_id, created_at, modified_at) are hidden unless --long is
-        specified.
+        This command shows all tests with their coverage and mutation
+        metrics in a formatted table.
 
         Parameters
         ----------
         work_dir : Path
             Path to existing work directory containing yagua.db.
         long : bool, optional
-            Show all test information including timestamps, IDs, and
-            internal fields. Default is False.
-
-        Raises
-        ------
-        typer.Exit
-            If work directory does not exist.
-        """
-        with self._use_project(work_dir) as pm:
-            try:
-                info = pm.get_tests_info(include_internal=long)
-            except (ValueError, PipelineError) as err:
-                console.print(
-                    Panel(
-                        f"[yellow]{err}[/yellow]",
-                        title="⚠️  Warning",
-                        border_style="yellow",
-                    )
-                )
-                return
-
-            tests_table = df_to_rich_table(
-                info["tests_df"], show_index=False
-            )
-
-            # Show coverage info if available
-            if info["coverage"] is not None:
-                console.print(
-                    f"\n💯 [bold green]Total coverage:[/bold green] "
-                    f"[cyan]{info['coverage']:.2f}%[/cyan]\n"
-                )
-
-            console.print("\n[bold cyan]🧪 Tests:[/bold cyan]\n")
-            console.print(tests_table)
-            console.print(
-                f"\n[dim]📊 Total:[/dim] [bold]{info['total_count']}[/bold] "
-                f"[dim]tests[/dim]\n"
-            )
-
-    # ========================================================================
-    # Public Commands - Coverage Management
-    # ========================================================================
-    def collect_coverage(
-        self,
-        work_dir: str = _make_work_dir_argument(),
-        force: bool = typer.Option(
-            False,
-            "--force",
-            "-f",
-            help="Force recalculation even if coverage exists",
-        ),
-    ) -> None:
-        """Collect and store coverage information for the project.
-
-        This command runs pytest with coverage enabled in three phases:
-        1. Total project coverage (all tests)
-        2. Per-test coverage (each test in isolation)
-        3. Coverage without each test (all tests except one)
-
-        The collected data enables calculation of test uniqueness,
-        redundancy, and impact metrics.
-
-        Parameters
-        ----------
-        work_dir : Path
-            Path to existing work directory containing yagua.db.
-        force : bool, optional
-            Force recalculation of coverage even if it already exists.
+            Show all test information including timestamps and IDs.
             Default is False.
 
         Raises
         ------
         typer.Exit
-            If work directory does not exist or no tests found.
-
-        Notes
-        -----
-        Coverage collection can be time-consuming for large test suites
-        as it runs each test individually and then all tests except each one.
-        For N tests, this results in approximately 2N+1 test runs.
-
-        After collecting coverage, the command automatically displays a summary
-        of all tests with their coverage metrics using the list-tests command.
+            If work directory does not exist.
         """
         with self._use_project(work_dir) as pm:
-            console.print("[bold blue]📊 Calculating coverage...[/bold blue]")
-
             try:
-                # Phase 1: Calculate coverage for all tests combined
-                console.print(
-                    "[bold blue]🧪 Per-test coverage analysis..."
-                    "[/bold blue]\n"
-                )
-
-                # Define progress callback
-                def progress_callback(current, total, test_id):
-                    proc_test_msg = (
-                        f"  [dim][{current}/{total}][/dim] "
-                        f"Processing {test_id}..."
-                    )
-                    console.print(proc_test_msg, end="\r")
-
-                result = pm.collect_coverage(
-                    force=force, progress_callback=progress_callback
-                )
-
-                # Clear progress message
-                tests_count = len(result["tests_data"])
-                if tests_count > 0:
-                    proc_test_msg = (
-                        f"  [dim][{tests_count}/{tests_count}][/dim] "
-                        f"Processing..."
-                    )
-                    console.print(" " * len(proc_test_msg), end="\r")
-
-                console.print(
-                    "\n💯 [bold green]Total coverage:[/bold green] "
-                    f"[cyan]{result['coverage']:.2f}%[/cyan]\n"
-                )
-
+                result = pm.get_tests_info(include_internal=long)
             except (ValueError, PipelineError) as err:
                 console.print(
                     Panel(
@@ -553,191 +719,33 @@ class CLIManager:
                 )
                 raise typer.Exit(1)
 
-        console.print(
-            "[bold green]✅ Coverage collection complete!"
-            "[/bold green]\n\n"
-            "[dim]💡 Use[/dim] "
-            f"[cyan]'yagua list-tests {work_dir}'[/cyan][dim] "
-            "to view all coverage metrics[/dim]\n"
-        )
+            tests = result["tests_df"]
+            tests_table = df_to_rich_table(tests, show_index=False)
 
-    def collect_mutations(
-        self,
-        work_dir: str = _make_work_dir_argument(),
-        force: bool = typer.Option(
-            False,
-            "--force",
-            "-f",
-            help="Force recalculation even if mutations exist.",
-        ),
-    ) -> None:
-        """Collect and analyze mutation testing data for the project.
-
-        This command performs mutation testing analysis in two phases:
-
-        Phase 1 - Mutation Initialization:
-        - Initializes the mutation testing session
-        - Counts the total number of mutants generated
-        - Stores mutants_number in the project database
-
-        Phase 2 - Mutation Execution:
-        - Executes all mutations against the test suite
-        - Calculates the mutation survival rate (% of mutants that survived)
-        - Stores the survival rate (msr) in the project database
-
-        The mutation score is calculated as (1 - survival_rate/100), where
-        a lower survival rate indicates a more effective test suite.
-
-        Tests are evaluated in coverage_uniqueness order (descending)
-        to optimize mutation detection.
-
-        Parameters
-        ----------
-        work_dir : Path
-            Path to existing work directory containing yagua.db.
-        force : bool, optional
-            Force re-initialization and re-execution of mutations even if
-            they already exist. Default is False.
-
-        Raises
-        ------
-        typer.Exit
-            If work directory does not exist, no coverage data exists,
-            or coverage collection is incomplete.
-
-        Notes
-        -----
-        Mutation testing can be very time-consuming for large codebases as it
-        requires running the entire test suite against each generated mutant.
-
-        Coverage data must be collected before running mutation analysis.
-        Use the collect-coverage command first if coverage is missing.
-        """
-        with self._use_project(work_dir) as pm:
-            console.print(
-                "[bold blue]🧬 Running mutation analysis...[/bold blue]"
-            )
-
-            try:
-                # Define progress callback
-                def progress_callback(current, total, test_id):
-                    proc_test_msg = (
-                        f"  [dim][{current}/{total}][/dim] "
-                        f"Processing {test_id}..."
-                    )
-                    console.print(proc_test_msg, end="\r")
-
-                console.print(
-                    "\n[bold blue]🧪 Per-test mutation analysis..."
-                    "[/bold blue]\n"
-                )
-
-                result = pm.collect_mutations(
-                    force=force,
-                    progress_callback=progress_callback,
-                )
-
-                # Clear progress message
-                tests_count = len(result["tests_data"])
-                if tests_count > 0:
-                    proc_test_msg = (
-                        f"  [dim][{tests_count}/{tests_count}][/dim] "
-                        f"Processing..."
-                    )
-                    console.print(" " * len(proc_test_msg), end="\r")
-
-                console.print(
-                    f"\n🧬 [bold green]Mutants Generated:[/bold green] "
-                    f"[cyan]{result['mutants_number']}[/cyan]"
-                )
-
-                console.print(
-                    f"\n🎯 [bold green]Survival Rate:[/bold green] "
-                    f"[cyan]{result['msr']:.2f}%[/cyan]\n"
-                )
-
-            except (ValueError, PipelineError) as err:
-                console.print(
-                    Panel(
-                        f"[yellow]{err}[/yellow]\n\n"
-                        f"[dim]Run[/dim] [cyan]'yagua collect-coverage "
-                        f"{work_dir}'[/cyan] [dim]first.[/dim]",
-                        title="⚠️  Warning",
-                        border_style="yellow",
-                    )
-                )
-                raise typer.Exit(1)
-
-        console.print(
-            "[bold green]✅ Mutation collection complete![/bold green]\n\n"
-            f"[dim]💡 Use[/dim] [cyan]'yagua list-tests {work_dir}'[/cyan]"
-            "[dim] to view all mutation metrics[/dim]\n"
-        )
-
-    # ========================================================================
-    # Public Commands - Project Information
-    # ========================================================================
-
-    def info(
-        self,
-        work_dir: str = _make_work_dir_argument(),
-    ) -> None:
-        """Show project information from database.
-
-        This command displays information about the project stored in the
-        yagua database, including its name, path, description, and test count.
-
-        Parameters
-        ----------
-        work_dir : Path
-            Path to existing work directory containing yagua.db.
-
-        Raises
-        ------
-        typer.Exit
-            If work directory does not exist.
-        """
-        with self._use_project(work_dir) as pm:
-            info = pm.get_project_info()
-
-            # Build info lines
-            info_lines = [
-                f"[cyan]📝 Name:[/cyan] {info['name']}",
-                f"[cyan]📁 Path:[/cyan] {info['path']}",
-                f"[cyan]🗂️  Work Dir:[/cyan] {info['work_dir']}",
-                f"[cyan]💾 Database:[/cyan] {info['db_path']}",
-            ]
-
-            if info["description"]:
-                info_lines.append(
-                    f"[cyan]🪪 Description:[/cyan] {info['description']}"
-                )
-
-            if info["test_count"]:
-                info_lines.append(
-                    f"[cyan]🧪 Tests:[/cyan] {info['test_count']}"
-                )
-
-            if info["coverage"]:
-                info_lines.append(
-                    f"[cyan]💯 Coverage:[/cyan] "
-                    f"[bold green]{info['coverage']:.2f}%[/bold green]"
-                )
-
-            if info["mutants_number"]:
-                info_lines.append(
-                    f"[cyan]🧬 Mutants:[/cyan] {info['mutants_number']}"
-                )
-
-            console.print(
-                Panel(
-                    "\n".join(info_lines),
-                    title="📊 Project Information",
-                    border_style="blue",
-                    padding=(1, 2),
-                )
-            )
+            # Show summary info
             console.print()
+            if result["coverage"] is not None:
+                console.print(
+                    f"💯 [bold green]Total coverage:[/bold green] "
+                    f"[cyan]{result['coverage']:.2f}%[/cyan]"
+                )
+            if pm.project.msr is not None:
+                console.print(
+                    f"🎯 [bold green]Survival rate:[/bold green] "
+                    f"[cyan]{pm.project.msr:.2f}%[/cyan]"
+                )
+            console.print()
+
+            console.print("[bold cyan]🧪 Tests:[/bold cyan]\n")
+            console.print(tests_table)
+            console.print(
+                f"\n[dim]📊 Total:[/dim] [bold]{result['total_count']}[/bold] "
+                f"[dim]tests[/dim]\n"
+            )
+
+    # ========================================================================
+    # Public Methods - Export
+    # ========================================================================
 
     def export(
         self,
@@ -759,8 +767,7 @@ class CLIManager:
         This command creates an archive file containing the entire work
         directory, including the yagua.db database and all temporary
         files. The archive format is automatically detected from the
-        file extension. Supported formats: zip, tar, tar.gz (tgz),
-        tar.bz2 (tbz2), tar.xz (txz).
+        file extension.
 
         Parameters
         ----------
@@ -786,7 +793,10 @@ class CLIManager:
             except Exception as err:
                 console.print(
                     Panel(
-                        f"[red]Failed to export work directory:[/red]\n{err}",
+                        (
+                            f"[red]Failed to export work directory:[/red]"
+                            f"\n{err}"
+                        ),
                         title="❌ Error",
                         border_style="red",
                     )
@@ -795,8 +805,10 @@ class CLIManager:
 
             # Build success message
             info_lines = [
-                "[bold green]✅ Work directory exported successfully!"
-                "[/bold green]\n",
+                (
+                    "[bold green]✅ Work directory exported successfully!"
+                    "[/bold green]\n"
+                ),
                 f"[cyan]📦 Archive:[/cyan] {archive_path}",
                 f"[cyan]📁 Source:[/cyan] {pm.project.work_dir}",
             ]
@@ -821,45 +833,30 @@ def _create_app(cli_manager):
 
     This function sets up the main Typer application instance and
     automatically registers all public methods from the CLI class as
-    subcommands using introspection. This approach allows for clean
-    separation of command logic while maintaining a simple
-    registration mechanism.
+    subcommands using introspection.
 
     Parameters
     ----------
-    cli_manager : CLIManager
-        Instance of CLIManager class containing command methods to
-        register.
+    cli_manager : CLI2Manager
+        Instance of CLI2Manager class containing command methods.
 
     Returns
     -------
     typer.Typer
         Configured Typer application instance with all commands
-        registered and ready to use.
-
-    Notes
-    -----
-    Only public methods (not starting with '_') from the CLIManager
-    class are registered as commands. Method names with underscores
-    are converted to hyphenated command names (e.g., create_project
-    becomes create-project).
+        registered.
     """
     app = typer.Typer(
         name="yagua",
-        help="🐕 Yagua - Tool for collecting and managing test information",
+        help="🐕 Yagua - Session-based tool for test analysis",
         add_completion=True,
     )
 
-    # Introspect CLIManager instance and register all public methods
-    # as commands
+    # Introspect CLI2Manager instance and register all public methods
     members = inspect.getmembers(cli_manager, predicate=inspect.ismethod)
     for name, method in members:
-        # Only register public methods (those not starting with underscore)
         if not name.startswith("_"):
-            # Extract help text from method docstring
             command_help = _make_help(method)
-            # Create command with hyphenated name
-            # (e.g., collect_tests -> collect-tests)
             cmd_wrapper = app.command(
                 name=name.replace("_", "-"), help=command_help
             )
@@ -869,11 +866,11 @@ def _create_app(cli_manager):
 
 
 def main():
-    """Entry point for the Yagua CLI application."""
+    """Entry point for the Yagua CLI2 application."""
     # Show help if no arguments provided
     if len(sys.argv) == 1:
         sys.argv.append("--help")
 
-    cli_manager = CLIManager()
+    cli_manager = CLI2Manager()
     app = _create_app(cli_manager)
     app()
