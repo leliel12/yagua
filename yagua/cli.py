@@ -144,6 +144,24 @@ def _make_work_dir_argument(**kwargs):
     return typer.Argument(**kwargs)
 
 
+def _make_raise_errors_option(**kwargs):
+    """Create a reusable Typer option for raise errors flag.
+
+    Parameters
+    ----------
+    **kwargs
+        Keyword arguments passed to typer.Option.
+
+    Returns
+    -------
+    typer.Option
+        Configured Typer option for raise errors flag.
+    """
+    default = kwargs.pop("default", False)
+    kwargs.setdefault("help", "Raise exceptions instead of catching them")
+    return typer.Option(default, "-r", "--raise-errors", **kwargs)
+
+
 # ============================================================================
 # CLI MANAGER CLASS
 # ============================================================================
@@ -285,6 +303,7 @@ class CLI2Manager:
             metavar="✏️  TEXT",
             help="Project description",
         ),
+        raise_errors: bool = _make_raise_errors_option(),
     ) -> None:
         """Initialize a new yagua project with database and work directory.
 
@@ -313,6 +332,10 @@ class CLI2Manager:
             exists.
         """
         if not project_path.exists():
+            if raise_errors:
+                raise FileNotFoundError(
+                    f"Project path does not exist: {project_path}"
+                )
             console.print(
                 Panel(
                     (
@@ -333,6 +356,10 @@ class CLI2Manager:
 
         # Validate work directory does not exist
         if work_dir.exists():
+            if raise_errors:
+                raise FileExistsError(
+                    f"Work directory already exists: {work_dir}"
+                )
             console.print(
                 Panel(
                     (
@@ -357,6 +384,8 @@ class CLI2Manager:
                 description=description,
             )
         except Exception as err:
+            if raise_errors:
+                raise
             console.print(
                 Panel(
                     f"[red]{err}[/red]", title="❌ Error", border_style="red"
@@ -412,6 +441,7 @@ class CLI2Manager:
             "-f",
             help="Force re-execution of steps",
         ),
+        raise_errors: bool = _make_raise_errors_option(),
     ) -> None:
         """Execute the yagua pipeline (resumable).
 
@@ -459,6 +489,9 @@ class CLI2Manager:
             except Exception as err:
                 # Mark failure using ProjectManager
                 pm.mark_failed()
+
+                if raise_errors:
+                    raise
 
                 console.print(
                     Panel(
@@ -526,7 +559,7 @@ class CLI2Manager:
 
         result_str = ", ".join(result_items)
         console.print(
-            f"[green]💯[/green] {emoji} {step_name} [bold]Done[/bold]: "
+            f"[green]💯[/green] {step_name} [bold]Done[/bold]: "
             f"[cyan]{result_str}[/cyan]\n"
         )
 
@@ -687,6 +720,7 @@ class CLI2Manager:
             "-l",
             help="Show all test information including timestamps and IDs",
         ),
+        raise_errors: bool = _make_raise_errors_option(),
     ) -> None:
         """Display test results and metrics.
 
@@ -710,6 +744,8 @@ class CLI2Manager:
             try:
                 result = pm.get_tests_info(include_internal=long)
             except (ValueError, PipelineError) as err:
+                if raise_errors:
+                    raise
                 console.print(
                     Panel(
                         f"[yellow]{err}[/yellow]",
@@ -761,6 +797,7 @@ class CLI2Manager:
             metavar="📁 PATH",
             parser=as_path,
         ),
+        raise_errors: bool = _make_raise_errors_option(),
     ) -> None:
         """Export work directory to an archive file.
 
@@ -791,6 +828,8 @@ class CLI2Manager:
             try:
                 archive_path = pm.export_project(output_path=output)
             except Exception as err:
+                if raise_errors:
+                    raise
                 console.print(
                     Panel(
                         (
