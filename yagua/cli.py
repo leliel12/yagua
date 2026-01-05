@@ -303,6 +303,13 @@ class CLIManager:
             metavar="✏️  TEXT",
             help="Project description",
         ),
+        mutation_timeout: float = typer.Option(
+            10.0,
+            "-mt",
+            "--mutation-timeout",
+            metavar="⏱️  SECONDS",
+            help="Timeout in seconds for mutation testing (default: 10)",
+        ),
         raise_errors: bool = _make_raise_errors_option(),
     ) -> None:
         """Initialize a new yagua project with database and work directory.
@@ -324,6 +331,11 @@ class CLIManager:
             Project name. If not provided, uses the directory name.
         description : str, optional
             Project description.
+        mutation_timeout : float, optional
+            Timeout in seconds for mutation testing execution.
+            Default is 10 seconds.
+        raise_errors : bool, optional
+            Raise exceptions instead of catching them. Default is False.
 
         Raises
         ------
@@ -382,6 +394,7 @@ class CLIManager:
                 path=project_path,
                 work_dir=work_dir,
                 description=description,
+                mutation_timeout=mutation_timeout,
             )
         except Exception as err:
             if raise_errors:
@@ -407,6 +420,10 @@ class CLIManager:
             info_lines.append(
                 f"[cyan]🪪 Description:[/cyan] {proj.description}"
             )
+
+        info_lines.append(
+            f"[cyan]⏱️  Mutation Timeout:[/cyan] {proj.mutation_timeout}s"
+        )
 
         info_lines.append(
             "\n[dim]💡 Next step:[/dim] " f"[cyan]yagua run {work_dir}[/cyan]"
@@ -530,6 +547,7 @@ class CLIManager:
             TextColumn("[progress.description]{task.description}"),
             console=console,
         ) as progress:
+
             task = progress.add_task("⚙️ Initializing...", total=None)
 
             def callback(current, total, test_id):
@@ -541,7 +559,10 @@ class CLIManager:
                         completed=current,
                     )
                 else:
-                    progress.update(task, description=f"⚙️ Processing: {test_id}")
+                    progress.update(
+                        task, description=f"⚙️ Processing: {test_id}"
+                    )
+                progress.refresh()
 
             result = step(force=force, progress_callback=callback)
 

@@ -137,7 +137,7 @@ class Project:
 
     @classmethod
     def from_project_info(
-        cls, name, path, work_dir, description=None
+        cls, name, path, work_dir, description=None, mutation_timeout=None
     ) -> "Project":
         """Create new Project with initial project information.
 
@@ -155,6 +155,8 @@ class Project:
             be stored (must not exist).
         description : str, optional
             Project description. Default is None.
+        mutation_timeout : float, optional
+            Timeout in seconds for mutation testing. Default is None.
 
         Returns
         -------
@@ -196,6 +198,7 @@ class Project:
             test_suite_name,
             mutation_suite_name,
             description,
+            mutation_timeout,
         )
 
         return project
@@ -869,6 +872,7 @@ class Project:
         test_suite_name: str,
         mutation_suite_name: str,
         description: str | None = None,
+        mutation_timeout: float | None = 10,
     ) -> None:
         """Store or update project information in database.
 
@@ -886,6 +890,8 @@ class Project:
             Name of the mutation suite handler (e.g., 'cosmic-ray').
         description : str, optional
             Project description.
+        mutation_timeout : float, optional
+            Timeout in seconds for mutation testing.
         """
         if test_suite_name not in TEST_SUITES:
             raise ValueError(
@@ -907,6 +913,7 @@ class Project:
                 path=path,
                 work_path=work_path,
                 description=description,
+                mutation_timeout=mutation_timeout,
             )
             if not created:
                 project.name = name
@@ -915,6 +922,7 @@ class Project:
                 project.test_suite_name = test_suite_name
                 project.mutation_suite_name = mutation_suite_name
                 project.description = description
+                project.mutation_timeout = mutation_timeout
                 project.save()
 
     def export(self, output_path=None):

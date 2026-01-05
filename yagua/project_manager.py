@@ -82,6 +82,10 @@ def _coerce_na(value):
     return value
 
 
+def _default_callback(current, total, test_id):
+    pass
+
+
 # =============================================================================
 # PROJECT MANAGER CLASS
 # =============================================================================
@@ -238,7 +242,7 @@ class ProjectManager:
     # Public Methods - Test Management
     # ========================================================================
 
-    def collect_tests(self, force=False, progress_callback=None):
+    def collect_tests(self, force=False, progress_callback=_default_callback):
         """Collect tests from the project using pytest.
 
         This method runs pytest --collect-only to discover all tests
@@ -254,7 +258,7 @@ class ProjectManager:
         progress_callback : callable, optional
             Callback function called for progress updates with signature:
             progress_callback(current, total, test_id).
-            Default is None.
+            Default is _default_callback (no-op function).
 
         Returns
         -------
@@ -281,16 +285,14 @@ class ProjectManager:
 
         if total_tests == 0 or force:
             # Call progress callback before collection
-            if progress_callback is not None:
-                progress_callback(0, 1, "collecting")
+            progress_callback(0, 1, "collecting")
 
             saved_count, updated_count = self.project.collect_tests()
             total_tests = saved_count + updated_count
             was_collected = True
 
             # Call progress callback after collection
-            if progress_callback is not None:
-                progress_callback(1, 1, "collecting")
+            progress_callback(1, 1, "collecting")
 
         if total_tests == 0:
             raise ValueError("No tests found in the project.")
@@ -365,7 +367,9 @@ class ProjectManager:
     # Public Methods - Coverage Management
     # ========================================================================
 
-    def collect_coverage(self, force=False, progress_callback=None):
+    def collect_coverage(
+        self, force=False, progress_callback=_default_callback
+    ):
         """Collect and store coverage information for the project.
 
         This method runs pytest with coverage enabled in three phases:
@@ -383,7 +387,7 @@ class ProjectManager:
         progress_callback : callable, optional
             Callback function called for each test with signature:
             progress_callback(current, total, test_id).
-            Default is None.
+            Default is _default_callback (no-op function).
 
         Returns
         -------
@@ -410,6 +414,7 @@ class ProjectManager:
 
         # Phase 1: Calculate coverage for all tests combined
         if self.project.coverage is None or force:
+            progress_callback(1, 1, "All Tests")
             self.project.collect_coverage()
 
         coverage = self.project.coverage
@@ -423,9 +428,8 @@ class ProjectManager:
         tests_data = []
 
         for idx, (test_id, cov_alone, cov_wo) in enumerate(tests_ids, 1):
-            # Call progress callback if provided
-            if progress_callback is not None:
-                progress_callback(idx, tests_count, test_id)
+            # Call progress callback
+            progress_callback(idx, tests_count, test_id)
 
             # Phase 2: Calculate coverage when running only this test
             cov_alone = _coerce_na(cov_alone)
@@ -449,7 +453,9 @@ class ProjectManager:
     # Public Methods - Mutation Management
     # ========================================================================
 
-    def collect_mutations(self, force=False, progress_callback=None):
+    def collect_mutations(
+        self, force=False, progress_callback=_default_callback
+    ):
         """Collect and analyze mutation testing data for the project.
 
         This method performs mutation testing analysis in phases:
@@ -469,7 +475,7 @@ class ProjectManager:
         progress_callback : callable, optional
             Callback function called for each test with signature:
             progress_callback(current, total, test_id).
-            Default is None.
+            Default is _default_callback (no-op function).
 
         Returns
         -------
@@ -494,7 +500,7 @@ class ProjectManager:
             raise ValueError(
                 "Coverage data is required before running mutation analysis."
             )
-
+        
         # Phase 1: Initialize mutations and count mutants
         if self.project.mutants_number is None or force:
             self.project.collect_mutants(force=force)
@@ -503,6 +509,7 @@ class ProjectManager:
 
         # Phase 2: Execute mutations and calculate survival rate
         if self.project.msr is None or force:
+            progress_callback(1, 1, "All tests")
             self.project.collect_survival_rate(force)
 
         msr = self.project.msr
@@ -531,9 +538,8 @@ class ProjectManager:
 
         tests_data = []
         for idx, (test_id, msr_alone, msr_wo) in enumerate(tests_data_arr, 1):
-            # Call progress callback if provided
-            if progress_callback is not None:
-                progress_callback(idx, tests_count, test_id)
+            # Call progress callback
+            progress_callback(idx, tests_count, test_id)
 
             # Phase 2: Calculate mutation score when running only this test
             msr_alone = _coerce_na(msr_alone)

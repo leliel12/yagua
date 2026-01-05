@@ -167,6 +167,9 @@ class ProjectModel(BaseModel):
         _yagua_wd_<project_name>_ in the current directory.
     description : CharField, optional
         Optional project description.
+    mutation_timeout : FloatField, optional
+        Timeout in seconds for mutation testing execution.
+        None means no timeout (use mutation suite's default).
     coverage : FloatField, optional
         Total project coverage percentage (0-100).
         Updated via collect-coverage command.
@@ -196,11 +199,13 @@ class ProjectModel(BaseModel):
     test_suite_name = CharField()
     mutation_suite_name = CharField()
     description = CharField(null=True)
+    mutation_timeout = FloatField(null=True, default=None)
 
     coverage = FloatField(null=True, default=None)
 
     mutants_number = IntegerField(null=True, default=None)
     msr = FloatField(null=True, default=None)
+    
 
     # Pipeline state tracking
     pipeline_step = CharField(default="created")
@@ -443,9 +448,7 @@ class TestModel(BaseModel):
         also killed by other tests (i.e., redundant mutant kills).
         """
         try:
-            return (
-                self.msr_without + self.msr_alone - self.project.msr
-            )
+            return self.msr_without + self.msr_alone - self.project.msr
         except TypeError:
             return None
 
