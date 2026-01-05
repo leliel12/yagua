@@ -526,7 +526,7 @@ class CLI2Manager:
 
         result_str = ", ".join(result_items)
         console.print(
-            f"[green]💯[/green] {emoji} {step_name} [bold]Done[/bold]: "
+            f"[green]💯[/green] {step_name} [bold]Done[/bold]: "
             f"[cyan]{result_str}[/cyan]\n"
         )
 

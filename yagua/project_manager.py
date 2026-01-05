@@ -230,8 +230,8 @@ class ProjectManager:
             return self.collect_tests
         elif current == "tests_collected":
             return self.collect_coverage
-        # elif current == "coverage_collected":
-        #     return self.collect_mutations
+        elif current == "coverage_collected":
+            return self.collect_mutations
         return None
 
     # ========================================================================
