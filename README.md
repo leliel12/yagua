@@ -37,7 +37,9 @@
 
 Yagua is a Python package for collecting, storing, and analyzing test information from pytest-based projects. It uses a dedicated work directory containing an SQLite database (yagua.db) to store test metadata and coverage metrics, enabling efficient analysis without repeated execution of expensive coverage measurements.
 
-**Key Design Principle**: Yagua operates on a **caching-first** model. Once data is collected (tests, coverage metrics), it is cached and never recalculated unless explicitly requested using flags like `--force` or `-f`. This ensures fast operations and prevents unnecessary re-execution of expensive coverage analysis.
+**What Makes Yagua Different**: Unlike ad-hoc test quality metrics, yagua is grounded in a rigorous theoretical framework from statistical mechanics. It approximates **software entropy** by exploring the **local neighborhood of the mutation graph**—the space of syntactic variants (mutants) around your implementation. This provides a principled, computationally tractable approach to quantifying test suite quality, without needing to enumerate all possible programs (which would be intractable).
+
+**Key Design Principle**: Yagua operates on a **caching-first** model. Once data is collected (tests, coverage metrics, mutations), it is cached and never recalculated unless explicitly requested using flags like `--force` or `-f`. This ensures fast operations and prevents unnecessary re-execution of expensive analysis.
 
 ## 🔬 Theoretical Foundation
 
@@ -64,19 +66,34 @@ Each test constrains the space of possible implementations:
 
 ### Connection to Mutation Testing
 
-While computing the global entropy `S = -log W` is computationally intractable (it would require enumerating all possible programs), **mutation testing provides a practical local approximation**:
+While computing the global entropy `S = -log W` is computationally intractable (it would require enumerating all possible programs of length L_code), **mutation testing provides a practical local approximation** by exploring the **mutation graph**:
 
-- **Mutation Testing** generates syntactic variants (mutants) of the implemented program
+#### The Mutation Graph G = (V, E_M)
+
+- **Nodes (V)**: Programs (your implementation p_impl + all its mutants)
+- **Edges (E_M)**: Connections via mutation operations (one syntactic change)
+- **Subgraph G[ℙ]**: Syntactic variants that pass the test suite
+
+**Key Insight**: Instead of exploring the entire (intractable) program space, yagua explores only the **local neighborhood** around your implementation in this graph.
+
+#### How Yagua Uses the Graph
+
+- **Mutation Testing** generates syntactic variants (mutants) one step away from p_impl
 - **Surviving mutants** represent nearby programs in the microstate space that still pass the tests
 - **Killing mutants** (by adding tests) reduces the local entropy
+- **Graph Structure** reveals fragility:
+  - **Many connected components** → tests are restrictive (good)
+  - **Large connected basin** → tests are permissive (problematic)
 
-The **Software Entropy Density (SED)** metric quantifies this:
+The **Software Entropy Density (SED)** metric quantifies this local reduction:
 
 ```
 SEDₗₒc = (log |M₀| - log |Mₘ|) / Lcode
 ```
 
 Where `M₀` is mutants without tests and `Mₘ` is mutants that survive the full test suite, normalized by code length.
+
+**Why This Works**: The local neighborhood provides an upper-bound proxy for the global entropy. If many mutants survive locally, the global entropy is likely high; if few survive, entropy is constrained.
 
 ### Why This Matters
 

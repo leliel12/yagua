@@ -14,7 +14,7 @@ yagua/
 ├── models.py           # Peewee ORM models (ProjectModel, TestModel, HistoryModel)
 ├── project.py          # Project class - database access layer (DAL)
 ├── project_manager.py  # ProjectManager class - business logic layer
-├── cli.py              # Typer CLI commands (CLIManager with auto-registration)
+├── cli.py              # Typer CLI commands (session-based pipeline pattern)
 ├── io.py               # Import/export operations (read_dir/read_archive return ProjectManager)
 ├── testsuites/         # Test suite handlers (TestSuiteABC, PytestSuite)
 ├── mutationsuites/     # Mutation suite handlers (MutationSuiteABC, CosmicRaySuite)
@@ -26,7 +26,7 @@ yagua/
 - **One Work Directory Per Project**: Each work directory contains yagua.db with one project
 - **Dynamic Model Binding**: Models bound to database at runtime in `Project.__init__()`
 - **Layered Architecture**: `Project` (DAL) handles database operations, `ProjectManager` (business logic) handles pipeline validation and workflows
-- **CLI Auto-Registration**: Methods in `CLIManager` auto-register as commands
+- **Session-Based Pipeline**: CLI implements resumable pipeline pattern with state tracking
 
 ## Commands
 

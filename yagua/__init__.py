@@ -1,15 +1,17 @@
-"""Yagua - Tool for collecting and managing test information.
+"""Yagua - Software entropy analysis through mutation testing.
 
 Yagua is a Python package for collecting and managing test information from
-pytest-based projects. It provides tools to discover tests, collect coverage
-metrics, and analyze test redundancy and uniqueness.
+pytest-based projects. Grounded in statistical mechanics, it approximates
+software entropy by exploring the local neighborhood of the mutation graph—
+the space of syntactic variants (mutants) around your implementation. This
+provides a principled, computationally tractable approach to quantifying
+test suite quality without enumerating all possible programs.
 
 Main Components
 ---------------
 main : function
-    CLI entry point for the yagua command-line tool (original).
-main2 : function
-    CLI entry point for session-based yagua (new pipeline design).
+    CLI entry point for the yagua command-line tool (session-based
+    pipeline design).
 Project : class
     Database access layer for managing project data and test information.
 ProjectManager : class
@@ -27,7 +29,6 @@ read_archive : function
 """
 
 from .cli import main
-from .cli2 import main as main2
 from .io import read_archive, read_dir
 from .project import Project
 from .project_manager import ProjectManager
@@ -35,7 +36,6 @@ from .testsuites import PytestSuite, TestSuiteABC
 
 __all__ = [
     "main",
-    "main2",
     "Project",
     "ProjectManager",
     "PytestSuite",
