@@ -167,7 +167,7 @@ def _make_raise_errors_option(**kwargs):
 # ============================================================================
 
 
-class CLI2Manager:
+class CLIManager:
     """Session-based CLI manager for yagua.
 
     This class implements a resumable pipeline pattern where projects
@@ -910,6 +910,6 @@ def main():
     if len(sys.argv) == 1:
         sys.argv.append("--help")
 
-    cli_manager = CLI2Manager()
+    cli_manager = CLIManager()
     app = _create_app(cli_manager)
     app()
