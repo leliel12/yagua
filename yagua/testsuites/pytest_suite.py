@@ -363,6 +363,7 @@ class PytestSuite(TestSuiteABC):
             dir=self._temp_dir.name,
             suffix=".json",
             prefix="yagua_cov_",
+            delete=False,
         ) as fp:
             cmd = [
                 f"--cov={project_name}",
@@ -432,6 +433,7 @@ class PytestSuite(TestSuiteABC):
             dir=self._temp_dir.name,
             suffix=".json",
             prefix="yagua_ftcov_",
+            delete=False,
         ) as fp:
             tests_ids = self._normalize_test_id_paths(project_path, tests_ids)
             cmd = (tests_ids) + [
