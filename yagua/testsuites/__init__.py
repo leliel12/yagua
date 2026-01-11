@@ -12,6 +12,9 @@ TestSuiteABC : class
 PytestSuite : class
     Concrete implementation for pytest-based projects.
     Uses pytest's collection API and pytest-cov for coverage.
+PytestSuiteSyscall : class
+    Alternative pytest implementation using subprocess system calls.
+    Uses pytest CLI commands and hash-based temporary files.
 
 Design Pattern
 --------------
@@ -43,5 +46,6 @@ Example
 
 from .abc import TestSuiteABC
 from .pytest_suite import PytestSuite
+from .pytest_suite_syscall import PytestSuiteSyscall
 
-__all__ = ["TestSuiteABC", "PytestSuite"]
+__all__ = ["TestSuiteABC", "PytestSuite", "PytestSuiteSyscall"]
