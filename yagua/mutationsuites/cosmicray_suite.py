@@ -127,7 +127,7 @@ class CosmicRaySuite(MutationSuiteABC):
     # Constructor
     # ========================================================================
 
-    def __init__(self, work_path):
+    def __init__(self, work_path, mutation_timeout=None):
         """Initialize CosmicRaySuite with working directory.
 
         Parameters
@@ -135,10 +135,16 @@ class CosmicRaySuite(MutationSuiteABC):
         work_path : str or Path
             Path to the working directory where intermediate files
             (e.g., mutation databases, configuration files) will be stored.
+        mutation_timeout : float, optional
+            Timeout in seconds for each mutation test. Default is None,
+            which uses a default timeout of 50.0 seconds.
         """
         self._verbose = False
         self._work_path = pathlib.Path(work_path) / "yagua_cray"
         self._work_path.mkdir(parents=True, exist_ok=True)
+        self._mutation_timeout = (
+            mutation_timeout if mutation_timeout is not None else 50.0
+        )
 
     # ========================================================================
     # PRIVATE - RUN
@@ -301,14 +307,14 @@ class CosmicRaySuite(MutationSuiteABC):
         -----
         The configuration includes:
         - module-path: Resolved path to the module/package to mutate
-        - timeout: 50 seconds per mutation
+        - timeout: Configured mutation timeout (from self._mutation_timeout)
         - test-command: pytest command with specified test IDs
         - distributor: local execution (no distributed testing)
         """
         module_path = self._resolve_module_path(project_name, project_path)
         config = {
             "module-path": module_path,
-            "timeout": 50.0,
+            "timeout": self._mutation_timeout,
             "excluded-modules": [],
             "test-command": test_command,
             "distributor": {"name": "local"},

@@ -219,7 +219,7 @@ class MutationSuiteABC(ABC):
     CosmicRaySuite : Concrete implementation for cosmic-ray mutation testing.
     """
 
-    def __init__(self, work_path):
+    def __init__(self, work_path, mutation_timeout=None):
         """Initialize mutation suite handler with working directory.
 
         Parameters
@@ -227,6 +227,9 @@ class MutationSuiteABC(ABC):
         work_path : str or Path
             Path to working directory for storing intermediate files
             (e.g., mutation databases, configuration files).
+        mutation_timeout : float, optional
+            Timeout in seconds for each mutation test. Default is None,
+            which means use the suite's default timeout value.
         """
         pass
 

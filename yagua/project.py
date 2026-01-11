@@ -240,10 +240,13 @@ class Project:
         -----
         This property returns a new instance each time it's accessed. The
         suite class is looked up from MUTATION_SUITES dictionary using the
-        project's mutation_suite_name field.
+        project's mutation_suite_name field. The mutation timeout is passed
+        from the project's mutation_timeout field.
         """
         suite_cls = MUTATION_SUITES[self.mutation_suite_name]
-        return suite_cls(self.work_path)
+        return suite_cls(
+            self.work_path, mutation_timeout=self.mutation_timeout
+        )
 
     # ========================================================================
     # Private Methods
