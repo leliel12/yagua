@@ -211,7 +211,8 @@ class ProjectManager:
         self.project.update_pipeline_step(new_step)
 
     def next_step(self):
-        """Get the next method to execute in the pipeline based on current state.
+        """Get the next method to execute in the pipeline based on \
+        current state.
 
         Returns
         -------
@@ -466,7 +467,8 @@ class ProjectManager:
         Tests are evaluated in order of coverage_uniqueness (descending)
         to optimize mutation detection.
 
-        Pipeline step: Updates from 'coverage_collected' to 'mutations_collected'.
+        Pipeline step: Updates from 'coverage_collected' to
+        'mutations_collected'.
 
         Parameters
         ----------
@@ -500,7 +502,7 @@ class ProjectManager:
             raise ValueError(
                 "Coverage data is required before running mutation analysis."
             )
-        
+
         # Phase 1: Initialize mutations and count mutants
         if self.project.mutants_number is None or force:
             self.project.collect_mutants(force=force)

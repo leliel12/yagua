@@ -51,3 +51,12 @@ yagua info my_work_dir
   2. Third-party library imports (alphabetically)
   3. Local/application imports (alphabetically)
   4. Each group separated by a blank line
+
+
+## TODO
+
+Cuando use claude, recordame que revise estos pendientes
+
+1. Usar el timeout de cosmic ray
+2. Los MSR no se guardan bien
+3. El coverage dentro de yagua da distinto a ejecutarlo manualmente

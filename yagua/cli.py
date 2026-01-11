@@ -194,7 +194,8 @@ class CLIManager:
 
     @contextlib.contextmanager
     def _use_project(self, work_dir):
-        """Context manager to validate work directory and provide ProjectManager.
+        """Context manager to validate work directory and provide \
+        ProjectManager.
 
         Parameters
         ----------
@@ -542,7 +543,7 @@ class CLIManager:
                 if total:
                     progress.update(
                         task,
-                        description=f"⚙️ Processing [dim]{current}/{total}[/dim]: {test_id}",
+                        description=f"⚙️ Processing [dim]{current}/{total}[/dim]: {test_id}",  # noqa
                         total=total,
                         completed=current,
                     )
@@ -703,7 +704,7 @@ class CLIManager:
 
             if pm.project.failed_at:
                 info_lines.append(
-                    f"[yellow]⚠️  Last Failure:[/yellow] {pm.project.failed_at}"
+                    f"[yellow]⚠️  Last Failure:[/yellow] {pm.project.failed_at}"  # noqa
                 )
 
             console.print(Panel("\n".join(info_lines), border_style="blue"))
