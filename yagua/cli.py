@@ -444,14 +444,6 @@ class CLIManager:
     def run(
         self,
         work_dir: str = _make_work_dir_argument(),
-        step: str = typer.Option(
-            None,
-            "--step",
-            "-s",
-            help=(
-                "Execute specific step only (tests, coverage, mutations, all)"
-            ),
-        ),
         force: bool = typer.Option(
             False,
             "--force",
@@ -478,10 +470,6 @@ class CLIManager:
         ----------
         work_dir : Path
             Path to existing work directory containing yagua.db.
-        step : str, optional
-            Execute only a specific step: 'tests', 'coverage',
-            'mutations', or 'all'. If not specified, resumes from
-            current pipeline step.
         force : bool
             Force re-execution of steps even if already completed.
 
