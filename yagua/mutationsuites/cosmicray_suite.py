@@ -127,7 +127,7 @@ class CosmicRaySuite(MutationSuiteABC):
     # Constructor
     # ========================================================================
 
-    def __init__(self, work_path, mutation_timeout=None):
+    def __init__(self, work_path, mutation_timeout=50.0):
         """Initialize CosmicRaySuite with working directory.
 
         Parameters
@@ -142,9 +142,7 @@ class CosmicRaySuite(MutationSuiteABC):
         self._verbose = False
         self._work_path = pathlib.Path(work_path) / "yagua_cray"
         self._work_path.mkdir(parents=True, exist_ok=True)
-        self._mutation_timeout = (
-            mutation_timeout if mutation_timeout is not None else 50.0
-        )
+        self._mutation_timeout = float(mutation_timeout)
 
     # ========================================================================
     # PRIVATE - RUN

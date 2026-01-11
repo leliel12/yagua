@@ -305,11 +305,11 @@ class CLIManager:
             help="Project description",
         ),
         mutation_timeout: float = typer.Option(
-            10.0,
+            50.0,
             "-mt",
             "--mutation-timeout",
             metavar="⏱️  SECONDS",
-            help="Timeout in seconds for mutation testing (default: 10)",
+            help="Timeout in seconds for mutation testing",
         ),
         raise_errors: bool = _make_raise_errors_option(),
     ) -> None:
@@ -334,7 +334,6 @@ class CLIManager:
             Project description.
         mutation_timeout : float, optional
             Timeout in seconds for mutation testing execution.
-            Default is 10 seconds.
         raise_errors : bool, optional
             Raise exceptions instead of catching them. Default is False.
 
