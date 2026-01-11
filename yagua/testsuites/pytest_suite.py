@@ -1,22 +1,22 @@
 """Yagua - Pytest Suite Handler.
 
 This module provides a test suite handler for pytest-based projects,
-implementing the TestSuiteABC interface using pytest's built-in APIs
-and pytest-cov for coverage measurement.
+implementing the TestSuiteABC interface using subprocess calls to the
+pytest CLI and pytest-cov for coverage measurement.
 
 Classes
 -------
 PytestSuite : class
-    Main test suite handler for pytest-based projects.
+    Test suite handler for pytest-based projects using system calls.
 
 Implementation Details
 ----------------------
 This implementation uses:
-- pytest.main() API for running pytest programmatically
+- subprocess.run() for executing pytest as an external command
 - --collect-only flag for test discovery
 - pytest-cov plugin for coverage measurement
-- Temporary files for coverage JSON reports
-- Context managers for stdout/stderr redirection
+- Hash-based temporary file naming (similar to Cosmic Ray)
+- No stdout/stderr redirection (direct subprocess capture)
 
 Key Features
 ------------
@@ -24,22 +24,20 @@ Key Features
 - JSON-based coverage reporting for reliable parsing
 - Flexible coverage measurement (total, per-test, and selective)
 - Complete audit trail (captures command, stdout, stderr, and results)
+- Hash-based temporary files for deterministic file naming
 
 Dependencies
 ------------
-- pytest: Test framework
+- pytest: Test framework (installed in the target environment)
 - pytest-cov: Coverage plugin for pytest
 - coverage: Underlying coverage measurement library
 """
 
 import contextlib
-import io
+import hashlib
 import json
-import os
 import pathlib
-import tempfile
-
-import pytest
+import subprocess
 
 from .abc import TestSuiteABC
 
@@ -52,22 +50,24 @@ class PytestSuite(TestSuiteABC):
     """Test suite handler for pytest-based projects.
 
     This class implements the TestSuiteABC interface for pytest-based projects,
-    providing methods to discover tests and collect coverage information using
-    pytest's built-in collection and coverage mechanisms.
+    providing methods to discover tests and collect coverage information by
+    executing pytest as an external command via subprocess.
 
-    The class uses subprocess calls to pytest CLI commands and returns
-    structured data including the executed command, output, and additional
-    metadata for audit logging purposes.
+    This implementation invokes pytest as a system command, making it more
+    isolated from the current Python environment and potentially more stable
+    across different pytest versions.
 
     Attributes
     ----------
-    _temp_dir : tempfile.TemporaryDirectory
-        Temporary directory for storing coverage report files during execution.
+    _work_path : pathlib.Path
+        Working directory for storing coverage report files during execution.
+        Files are named using hashes for deterministic identification.
 
     Notes
     -----
     This implementation requires pytest and pytest-cov to be installed in the
-    environment where the project tests are being collected.
+    environment where the project tests are being collected. The pytest
+    command must be available in the system PATH.
     """
 
     # ========================================================================
@@ -75,7 +75,7 @@ class PytestSuite(TestSuiteABC):
     # ========================================================================
 
     def __init__(self, work_path):
-        """Initialize PytestSuite with working directory for coverage files.
+        """Initialize PytestSuite with working directory.
 
         Parameters
         ----------
@@ -84,53 +84,58 @@ class PytestSuite(TestSuiteABC):
             (e.g., coverage reports) will be stored.
         """
         self._verbose = False
-        self._temp_dir = tempfile.TemporaryDirectory(
-            dir=self._base_temp_dir(work_path),
-            delete=False,
-        )
+        self._work_path = pathlib.Path(work_path) / "yagua_pytest"
+        self._work_path.mkdir(parents=True, exist_ok=True)
 
     # ========================================================================
     # Private Methods
     # ========================================================================
 
-    def _base_temp_dir(self, work_path):
-        """Create and return base temporary directory for pytest files.
+    def _hash_tag(self, tag):
+        """Generate MD5 hash from a tag string.
+
+        This method creates a unique hash for a tag, useful for generating
+        unique file identifiers when running pytest with different
+        configurations.
 
         Parameters
         ----------
-        work_path : str or Path
-            Path to the working directory.
+        tag : str
+            Tag string to hash.
 
         Returns
         -------
         str
-            Path to the base temporary directory for pytest files.
+            Hexadecimal digest of the MD5 hash.
+
+        Notes
+        -----
+        This is similar to the hash_tests_ids method used in CosmicRaySuite.
         """
-        base_temp_dir = os.path.join(work_path, "yagua_pytest_temp")
-        os.makedirs(base_temp_dir, exist_ok=True)
-        return base_temp_dir
+        md5 = hashlib.md5(tag.encode("utf8"))
+        return md5.hexdigest()
 
-    def _run(self, cmd, project_path, plugins=None):
-        """Run pytest command using pytest.main() API.
+    def _run(self, cmd, project_path):
+        """Run pytest command using subprocess.
 
-        This internal method executes pytest programmatically, redirecting
-        output to string buffers and changing to the project directory.
+        This internal method executes pytest as an external command,
+        capturing output and changing to the project directory.
 
         Parameters
         ----------
         cmd : list[str]
-            Command arguments to pass to pytest.main()
-            (e.g., ['--collect-only', '-q']).
+            Command arguments to pass to pytest
+            (e.g., ['pytest', '--collect-only', '-q']).
         project_path : str or Path
             Working directory for pytest execution. Pytest will run as if
             executed from this directory.
-        plugins : list, optional
-            List of plugin instances to register with pytest. Default is None.
 
         Returns
         -------
         command : str
             Space-joined command string for audit logging.
+        status_code : int
+            Exit status code from pytest execution.
         stdout : str
             Captured standard output from pytest execution.
         stderr : str
@@ -138,28 +143,23 @@ class PytestSuite(TestSuiteABC):
 
         Notes
         -----
-        This method uses context managers to:
-        1. Change to the project directory (contextlib.chdir)
-        2. Redirect stdout to a StringIO buffer
-        3. Redirect stderr to a StringIO buffer
-
-        All context changes are automatically reverted when the method returns.
+        This method uses subprocess.run() to execute the command with:
+        1. cwd set to the project directory
+        2. stdout and stderr captured as text
+        3. Shell disabled for security
         """
         full_cmd = " ".join(cmd)
-        stdout, stderr = io.StringIO(), io.StringIO()
         if self._verbose:
             print(f"[RUN] {project_path} >> {full_cmd!r}")
-        with (
-            contextlib.chdir(project_path),
-            contextlib.redirect_stdout(stdout),
-            contextlib.redirect_stderr(stderr),
-        ):
-            status = pytest.main(cmd, plugins=plugins)
 
-        stdout.flush()
-        stderr.flush()
+        result = subprocess.run(
+            cmd,
+            cwd=project_path,
+            capture_output=True,
+            text=True,
+        )
 
-        return (full_cmd, status, stdout.getvalue(), stderr.getvalue())
+        return (full_cmd, result.returncode, result.stdout, result.stderr)
 
     def _parse_test_line(
         self, line: str
@@ -271,6 +271,33 @@ class PytestSuite(TestSuiteABC):
 
         return normalized
 
+    def _hash_tests_ids(self, tests_ids):
+        """Generate MD5 hash from sorted test IDs.
+
+        This method creates a unique hash for a set of test IDs, useful for
+        generating unique file identifiers when running coverage with
+        specific test subsets.
+
+        Parameters
+        ----------
+        tests_ids : list[str]
+            List of test identifiers to hash.
+
+        Returns
+        -------
+        str
+            Hexadecimal digest of the MD5 hash for the concatenated, sorted
+            test IDs.
+
+        Notes
+        -----
+        Test IDs are sorted before hashing to ensure consistent hashes
+        regardless of input order.
+        """
+        all_ids = "".join(sorted(tests_ids))
+        md5 = hashlib.md5(all_ids.encode("utf8"))
+        return md5.hexdigest()
+
     # ========================================================================
     # Public Methods
     # ========================================================================
@@ -279,8 +306,8 @@ class PytestSuite(TestSuiteABC):
         """Collect all tests from a pytest project.
 
         Executes pytest with the --collect-only flag to discover all tests
-        without running them using pytest.main() API. Parses the output to
-        extract test information in a structured format.
+        without running them using subprocess. Parses the output to extract
+        test information in a structured format.
 
         Parameters
         ----------
@@ -300,7 +327,7 @@ class PytestSuite(TestSuiteABC):
             - result: str - Additional data (stdout copy)
         """
         command, status, stdout, stderr = self._run(
-            ["--collect-only", "-q"],
+            ["pytest", "--collect-only", "-q"],
             project_path,
         )
 
@@ -323,9 +350,9 @@ class PytestSuite(TestSuiteABC):
         """Run pytest with coverage and return the total coverage percentage.
 
         Executes pytest with pytest-cov to run all tests and measure code
-        coverage. Uses pytest.main() API for better integration.
-        Generates a JSON coverage report in a temporary file and extracts the
-        total coverage percentage from it.
+        coverage. Uses subprocess to call pytest as an external command.
+        Generates a JSON coverage report in a hash-named file and extracts
+        the total coverage percentage from it.
 
         Parameters
         ----------
@@ -354,20 +381,23 @@ class PytestSuite(TestSuiteABC):
         Notes
         -----
         This method requires pytest-cov to be installed in the environment.
-        The coverage report is generated in a temporary file that is
-        automatically cleaned up after parsing.
+        The coverage report is generated in a hash-named file in the work
+        directory for deterministic identification.
         """
-        with tempfile.NamedTemporaryFile(
-            dir=self._temp_dir.name,
-            suffix=".json",
-            prefix="yagua_cov_",
-            delete=False,
-        ) as fp:
-            cmd = [
-                f"--cov={project_name}",
-                f"--cov-report=json:{fp.name}",
-            ]
-            command, status, stdout, stderr = self._run(cmd, project_path)
+        # Generate hash-based filename for coverage report
+        tag = f"get_coverage_{project_name}"
+        file_hash = self._hash_tag(tag)
+        cov_file = self._work_path / f"cov_{file_hash}.json"
+
+        cmd = [
+            "pytest",
+            f"--cov={project_name}",
+            f"--cov-report=json:{cov_file}",
+        ]
+        command, status, stdout, stderr = self._run(cmd, project_path)
+
+        # Read and parse the coverage JSON file
+        with open(cov_file, "r") as fp:
             json_src = fp.read()
             data = json.loads(json_src)
 
@@ -386,9 +416,9 @@ class PytestSuite(TestSuiteABC):
         """Run specific test(s) with coverage and return coverage percentage.
 
         Executes pytest with pytest-cov to run only the specified tests and
-        measure code coverage. Uses pytest.main() API for better integration.
-        Generates a JSON coverage report in a temporary file and extracts the
-        total coverage percentage from it.
+        measure code coverage. Uses subprocess to call pytest as an external
+        command. Generates a JSON coverage report in a hash-named file based
+        on the test IDs and extracts the total coverage percentage from it.
 
         Parameters
         ----------
@@ -426,20 +456,27 @@ class PytestSuite(TestSuiteABC):
 
         This flexibility allows for both coverage_alone (single test) and
         coverage_without (all tests except one) metrics.
-        """
-        with tempfile.NamedTemporaryFile(
-            dir=self._temp_dir.name,
-            suffix=".json",
-            prefix="yagua_ftcov_",
-            delete=False,
-        ) as fp:
-            tests_ids = self._normalize_test_id_paths(project_path, tests_ids)
-            cmd = (tests_ids) + [
-                f"--cov={project_name}",
-                f"--cov-report=json:{fp.name}",
-            ]
-            command, status, stdout, stderr = self._run(cmd, project_path)
 
+        The coverage report filename is based on a hash of the sorted test
+        IDs, ensuring deterministic naming for the same test combinations.
+        """
+        # Generate hash-based filename for coverage report
+        tests_hash = self._hash_tests_ids(tests_ids)
+        cov_file = self._work_path / f"ftcov_{tests_hash}.json"
+
+        tests_ids = self._normalize_test_id_paths(project_path, tests_ids)
+        cmd = (
+            ["pytest"]
+            + tests_ids
+            + [
+                f"--cov={project_name}",
+                f"--cov-report=json:{cov_file}",
+            ]
+        )
+        command, status, stdout, stderr = self._run(cmd, project_path)
+
+        # Read and parse the coverage JSON file
+        with open(cov_file, "r") as fp:
             json_src = fp.read()
             data = json.loads(json_src)
 
