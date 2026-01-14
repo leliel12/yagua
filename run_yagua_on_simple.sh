@@ -10,30 +10,23 @@ if [ -d "$WORK_DIR" ]; then
     rm -rf "$WORK_DIR"
 fi
 
-# Create project
-echo "Creating project..."
-yagua create-project simple_proj "$WORK_DIR" \
+# Initialize project
+echo "Initializing project..."
+yagua init simple_proj "$WORK_DIR" \
     --name "simple" \
-    --description "A simple project with basic arithmetic operations"
+    --description "A simple project with basic arithmetic operations" \
+    --mutation-timeout 50.0
 
-# Collect tests
-echo "Collecting tests..."
-yagua collect-tests "$WORK_DIR"
+# Run the pipeline (collects tests, coverage, and mutations)
+echo "Running pipeline..."
+yagua run "$WORK_DIR" -r
 
-# Collect coverage
-echo "Collecting coverage..."
-yagua collect-coverage "$WORK_DIR"
+# Show project status
+echo "Showing project status..."
+yagua status "$WORK_DIR"
 
-# Collect mutations
-echo "Collecting mutations..."
-yagua collect-mutations "$WORK_DIR"
-
-# List tests
-echo "Listing tests..."
-yagua list-tests "$WORK_DIR" --long
-
-# Show info
-echo "Showing project info..."
-yagua info "$WORK_DIR"
+# Show project report
+echo "Showing project report..."
+yagua report "$WORK_DIR"
 
 echo "Done!"

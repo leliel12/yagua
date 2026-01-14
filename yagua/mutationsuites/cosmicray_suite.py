@@ -1,126 +1,70 @@
 """Yagua - Cosmic Ray Suite Handler.
 
 This module provides a mutation suite handler for cosmic-ray-based projects,
-implementing the MutationSuiteABC interface using cosmic-ray's CLI.
+implementing the MutationSuiteABC interface using subprocess calls to the
+cosmic-ray CLI commands.
 
 Classes
 -------
 CosmicRaySuite : class
-    Main mutation suite handler for cosmic-ray-based mutation testing.
+    Mutation suite handler using cosmic-ray CLI via subprocess.
 
 Implementation Details
 ----------------------
 This implementation uses:
-- cosmic-ray CLI for running mutation testing
+- subprocess.run() for executing cosmic-ray CLI commands
 - SQLite database for mutation results storage
-- Temporary files for mutation configuration and results
+- Hash-based temporary file naming for deterministic identification
+- Direct command execution without Python API imports
 
 Key Features
 ------------
-- Configurable mutation operators
-- Per-test mutation score calculation
+- Better isolation from cosmic-ray API changes
+- Command-line based execution (more stable)
+- Hash-based file naming for session management
 - Complete audit trail (captures command, stdout, stderr, and results)
 
 Dependencies
 ------------
-- cosmic-ray: Mutation testing framework for Python
+- cosmic-ray: Must be installed and available in system PATH
 """
 
-import contextlib
 import hashlib
-import io
 import pathlib
+import subprocess
 import xml.etree.ElementTree as ET
 
-from cosmic_ray import cli as cray_cli
-from cosmic_ray import config as cray_config
-from cosmic_ray.tools import survival_rate as cr_rate, xml as cr_xml
-
 from .abc import MutationSuiteABC
-
 
 # ============================================================================
 # COSMIC RAY SUITE
 # ============================================================================
 
 
-class BytesAndStringIO(io.StringIO):
-    """StringIO that accepts both bytes and strings for writing.
-
-    This class extends io.StringIO to handle both bytes and string inputs,
-    automatically decoding bytes to UTF-8 strings. It also provides a
-    buffer property that returns self, making it compatible with APIs
-    that expect a file-like object with a buffer attribute.
-
-    Notes
-    -----
-    This is useful for redirecting stdout/stderr when working with
-    libraries that may write either bytes or strings to output streams.
-    """
-
-    @property
-    def buffer(self):
-        """Return self as the buffer.
-
-        Returns
-        -------
-        BytesAndStringIO
-            Returns the instance itself to satisfy buffer attribute access.
-        """
-        return self
-
-    def write(self, s, /):
-        """Write string or bytes to the stream.
-
-        Parameters
-        ----------
-        s : str or bytes
-            String or bytes to write. Bytes are automatically decoded
-            to UTF-8 before writing.
-
-        Returns
-        -------
-        int
-            Number of bytes written (before decoding if bytes input).
-        """
-        rv = len(s)
-        if isinstance(s, bytes):
-            s = s.decode("utf-8")
-        super().write(s)
-        return rv
-
-
-class ExitCalled(Exception):
-    """Exception raised when SystemExit is caught during command execution.
-
-    This exception is used internally to handle cases where cosmic-ray
-    commands call sys.exit(), converting them into catchable exceptions
-    that can be processed for exit code extraction.
-    """
-
-    pass
-
-
 class CosmicRaySuite(MutationSuiteABC):
     """Mutation suite handler for cosmic-ray-based projects.
 
     This class implements the MutationSuiteABC interface for projects using
-    cosmic-ray for mutation testing, providing methods to run mutations and
-    calculate mutation scores.
+    cosmic-ray for mutation testing, executing cosmic-ray as an external
+    command via subprocess rather than using its Python API.
 
-    The class uses subprocess calls to cosmic-ray CLI commands and returns
-    structured data including the executed command, output, and additional
-    metadata for audit logging purposes.
+    This implementation invokes cosmic-ray as a system command, making it
+    more isolated from cosmic-ray internal API changes and potentially more
+    stable across different cosmic-ray versions.
 
     Attributes
     ----------
-    _temp_dir : tempfile.TemporaryDirectory
-        Temporary directory for storing mutation databases and config files.
+    _work_path : pathlib.Path
+        Working directory for storing mutation databases and config files.
+        Files are named using hashes for deterministic identification.
+    _mutation_timeout : float
+        Timeout in seconds for each mutation test.
 
     Notes
     -----
     This implementation requires cosmic-ray to be installed in the
-    environment where the project mutations are being tested.
+    environment and the 'cosmic-ray' command must be available in the
+    system PATH.
     """
 
     # ========================================================================
@@ -136,8 +80,7 @@ class CosmicRaySuite(MutationSuiteABC):
             Path to the working directory where intermediate files
             (e.g., mutation databases, configuration files) will be stored.
         mutation_timeout : float, optional
-            Timeout in seconds for each mutation test. Default is None,
-            which uses a default timeout of 50.0 seconds.
+            Timeout in seconds for each mutation test. Default is 50.0.
         """
         self._verbose = False
         self._work_path = pathlib.Path(work_path) / "yagua_cray"
@@ -145,102 +88,54 @@ class CosmicRaySuite(MutationSuiteABC):
         self._mutation_timeout = float(mutation_timeout)
 
     # ========================================================================
-    # PRIVATE - RUN
+    # Private Methods
     # ========================================================================
 
-    def _render_full_cmd(self, func, args, kwargs):
-        """Render a function call as a string for logging.
+    def _run(self, cmd, project_path):
+        """Run cosmic-ray command using subprocess.
+
+        This internal method executes cosmic-ray as an external command,
+        capturing output and changing to the project directory.
 
         Parameters
         ----------
-        func : callable
-            Function whose call will be rendered.
-        args : tuple
-            Positional arguments to the function.
-        kwargs : dict
-            Keyword arguments to the function.
-
-        Returns
-        -------
-        str
-            String representation of the function call
-            (e.g., "func_name(arg1, arg2, key=value)").
-        """
-        func = func.__name__
-        args = ", ".join(map(repr, args))
-        kwargs = ", ".join(f"{k}={v!r}" for k, v in kwargs.items())
-        kwargs = f", {kwargs}" if kwargs else ""
-        return f"{func}({args}, {kwargs})"
-
-    def _run(self, project_path, func, args=None, kwargs=None):
-        """Run a cosmic-ray function with captured output.
-
-        This internal method executes cosmic-ray functions programmatically,
-        redirecting output to string buffers and changing to the project
-        directory.
-
-        Parameters
-        ----------
+        cmd : list[str]
+            Command arguments to pass to cosmic-ray
+            (e.g., ['cosmic-ray', 'init', 'config.toml', 'session.sqlite']).
         project_path : str or Path
-            Working directory for cosmic-ray execution.
-        func : callable
-            Cosmic-ray function to execute (e.g., cray_cli.init.callback).
-        args : tuple, optional
-            Positional arguments to pass to func. Default is None (empty
-            tuple).
-        kwargs : dict, optional
-            Keyword arguments to pass to func. Default is None (empty dict).
+            Working directory for cosmic-ray execution. Cosmic-ray will run
+            as if executed from this directory.
 
         Returns
         -------
         command : str
-            String representation of the function call for audit logging.
-        status : int
-            Exit status code (0 = success, non-zero from SystemExit).
+            Space-joined command string for audit logging.
+        status_code : int
+            Exit status code from cosmic-ray execution.
         stdout : str
-            Captured standard output from function execution.
+            Captured standard output from cosmic-ray execution.
         stderr : str
-            Captured standard error from function execution.
+            Captured standard error from cosmic-ray execution.
 
         Notes
         -----
-        This method uses context managers to:
-        1. Change to the project directory (contextlib.chdir)
-        2. Redirect stdout to a BytesAndStringIO buffer
-        3. Redirect stderr to a BytesAndStringIO buffer
-        4. Catch SystemExit and extract the exit code
-
-        All context changes are automatically reverted when the method
-        returns.
+        This method uses subprocess.run() to execute the command with:
+        1. cwd set to the project directory
+        2. stdout and stderr captured as text
+        3. Shell disabled for security
         """
-        args = args or ()
-        kwargs = kwargs or {}
-        stdout, stderr = BytesAndStringIO(), BytesAndStringIO()
-        full_cmd = self._render_full_cmd(func, args, kwargs)
-
-        status = 0
-
+        full_cmd = " ".join(cmd)
         if self._verbose:
             print(f"[RUN] {project_path} >> {full_cmd!r}")
 
-        try:
-            with (
-                contextlib.chdir(project_path),
-                contextlib.redirect_stdout(stdout),
-                contextlib.redirect_stderr(stderr),
-            ):
-                func(*args, **kwargs)
-        except SystemExit as exit:
-            status = exit.code
+        result = subprocess.run(
+            cmd,
+            cwd=project_path,
+            capture_output=True,
+            text=True,
+        )
 
-        stdout.flush()
-        stderr.flush()
-
-        return (full_cmd, status, stdout.getvalue(), stderr.getvalue())
-
-    # =========================================================================
-    # PRIVATE INIT SUITE
-    # =========================================================================
+        return (full_cmd, result.returncode, result.stdout, result.stderr)
 
     def _resolve_module_path(self, project_name, project_path):
         """Resolve project name to a valid module path for cosmic-ray.
@@ -269,18 +164,20 @@ class CosmicRaySuite(MutationSuiteABC):
             If project_name doesn't correspond to either a package directory
             or a module file within project_path.
         """
-        # lets try if this is a package
+        # Try if this is a package
         full_path = pathlib.Path(project_path) / project_name
         if full_path.is_dir():
             return project_name
 
-        # try as a module
+        # Try as a module
         full_path = full_path.with_suffix(".py")
         if full_path.is_file():
             return full_path.name
 
-        # fail
-        raise ValueError(f"{project_name!r} can't be configure for cosmic-ray")
+        # Fail
+        raise ValueError(
+            f"{project_name!r} can't be configured for cosmic-ray"
+        )
 
     def _write_conf(
         self, project_name, project_path, test_command, config_file
@@ -288,7 +185,7 @@ class CosmicRaySuite(MutationSuiteABC):
         """Write cosmic-ray configuration file for mutation testing.
 
         This method creates a TOML configuration file for cosmic-ray with
-        the specified module path, test command, and other settings.
+        the specified module path, test command, and timeout settings.
 
         Parameters
         ----------
@@ -296,8 +193,8 @@ class CosmicRaySuite(MutationSuiteABC):
             Name of the project/package to mutate.
         project_path : str or Path
             Path to the project directory.
-        test_ids : list[str]
-            List of test IDs to run. If empty, all tests will be run.
+        test_command : str
+            Test command to run (e.g., "pytest" or "pytest test_file.py").
         config_file : str or Path
             Path where the configuration file should be written.
 
@@ -305,25 +202,55 @@ class CosmicRaySuite(MutationSuiteABC):
         -----
         The configuration includes:
         - module-path: Resolved path to the module/package to mutate
-        - timeout: Configured mutation timeout (from self._mutation_timeout)
-        - test-command: pytest command with specified test IDs
+        - timeout: Configured mutation timeout
+        - test-command: Command to run tests
         - distributor: local execution (no distributed testing)
+
+        The TOML file is written manually to avoid dependency on
+        cosmic-ray's config module.
         """
         module_path = self._resolve_module_path(project_name, project_path)
-        config = {
-            "module-path": module_path,
-            "timeout": self._mutation_timeout,
-            "excluded-modules": [],
-            "test-command": test_command,
-            "distributor": {"name": "local"},
-        }
-        config_str = cray_config.serialize_config(config)
+
+        # Write TOML config manually
+        config_content = f"""[cosmic-ray]
+module-path = "{module_path}"
+timeout = {self._mutation_timeout}
+excluded-modules = []
+test-command = "{test_command}"
+
+[cosmic-ray.distributor]
+name = "local"
+"""
         with open(config_file, "w") as fp:
-            fp.write(config_str)
+            fp.write(config_content)
 
     def _init_suite(
         self, *, project_path, project_name, tag, test_command, force
     ):
+        """Initialize cosmic-ray session with config and database files.
+
+        Parameters
+        ----------
+        project_path : str or Path
+            Path to the project directory.
+        project_name : str
+            Name of the project/package to mutate.
+        tag : str
+            Unique tag for this session (used in filenames).
+        test_command : str
+            Test command to run.
+        force : bool
+            Force re-initialization even if files exist.
+
+        Returns
+        -------
+        config_file : pathlib.Path
+            Path to the configuration file.
+        session_file : pathlib.Path
+            Path to the session database file.
+        init_output : tuple
+            Tuple of (command, status, stdout, stderr) from init command.
+        """
         config_file = self._work_path / f"{tag}.toml"
         session_file = self._work_path / f"{tag}.sqlite"
 
@@ -333,15 +260,44 @@ class CosmicRaySuite(MutationSuiteABC):
             )
 
         if force or not session_file.exists():
-            cmd, status, stdout, stderr = self._run(
-                project_path,
-                func=cray_cli.init.callback,
-                args=(config_file, session_file, force),
-            )
+            cmd = [
+                "cosmic-ray",
+                "init",
+                str(config_file),
+                str(session_file),
+            ]
+            init_output = self._run(cmd, project_path)
         else:
-            cmd, status, stdout, stderr = "", 0, "", ""
+            init_output = ("", 0, "", "")
 
-        return config_file, session_file, (cmd, status, stdout, stderr)
+        return config_file, session_file, init_output
+
+    def hash_tests_ids(self, tests_ids):
+        """Generate MD5 hash from sorted test IDs.
+
+        This method creates a unique hash for a set of test IDs, useful for
+        generating unique session identifiers when running mutations with
+        specific test subsets.
+
+        Parameters
+        ----------
+        tests_ids : list[str]
+            List of test identifiers to hash.
+
+        Returns
+        -------
+        str
+            Hexadecimal digest of the MD5 hash for the concatenated, sorted
+            test IDs.
+
+        Notes
+        -----
+        Test IDs are sorted before hashing to ensure consistent hashes
+        regardless of input order.
+        """
+        all_ids = "".join(sorted(tests_ids))
+        md5 = hashlib.md5(all_ids.encode("utf8"))
+        return md5.hexdigest()
 
     # ========================================================================
     # Public Methods
@@ -359,6 +315,8 @@ class CosmicRaySuite(MutationSuiteABC):
             Path to the project directory to run mutation testing on.
         project_name : str
             Name of the project/package to mutate.
+        force : bool
+            Force re-initialization even if session exists.
 
         Returns
         -------
@@ -371,9 +329,7 @@ class CosmicRaySuite(MutationSuiteABC):
             - stderr: str - Standard error from cosmic-ray
             - result: str - XML report with mutation data
         """
-
-        # INIT SUITE ==========================================================
-
+        # INIT SUITE
         _, session_file, init_output = self._init_suite(
             project_path=project_path,
             project_name=project_name,
@@ -383,21 +339,23 @@ class CosmicRaySuite(MutationSuiteABC):
         )
         init_cmd, init_status, init_stdout, init_stderr = init_output
 
-        # COLLECT THE NUMBER OF MUTATIONS =====================================
-
-        xml_cmd, xml_status, xml_stdout, xml_stderr = self._run(
-            project_path,
-            func=cr_xml.report_xml.callback,
-            args=(session_file,),
+        # GET MUTATION COUNT FROM XML REPORT
+        xml_cmd = ["cr-xml", str(session_file)]
+        xml_cmd_str, xml_status, xml_stdout, xml_stderr = self._run(
+            xml_cmd, project_path
         )
 
-        mutations = int(ET.fromstring(xml_stdout).get("tests"))
+        # Parse XML to get mutation count
+        # cosmic-ray report outputs XML with test count
+        try:
+            mutations = int(ET.fromstring(xml_stdout).get("tests", 0))
+        except (ET.ParseError, ValueError, TypeError):
+            mutations = 0
 
-        # THE RETURN ==========================================================
-
+        # THE RETURN
         return self.pkg_result(
             value=mutations,
-            command="\n\n".join([init_cmd, xml_cmd]),
+            command="\n\n".join([init_cmd, xml_cmd_str]),
             status_code=init_status + xml_status,
             stdout="\n\n".join([init_stdout, xml_stdout]),
             stderr="\n\n".join([init_stderr, xml_stderr]),
@@ -437,9 +395,7 @@ class CosmicRaySuite(MutationSuiteABC):
         2. Execute all mutations against the test suite
         3. Calculate and return the survival rate
         """
-
-        # INIT SUITE ==========================================================
-
+        # INIT SUITE
         config_file, session_file, init_output = self._init_suite(
             project_path=project_path,
             project_name=project_name,
@@ -449,65 +405,33 @@ class CosmicRaySuite(MutationSuiteABC):
         )
         init_cmd, init_status, init_stdout, init_stderr = init_output
 
-        # RUN TESTS ===========================================================
-
-        exec_cmd, exec_status, exec_stdout, exec_stderr = self._run(
-            project_path,
-            func=cray_cli.handle_exec.callback,
-            args=(config_file, session_file),
+        # EXECUTE MUTATIONS
+        exec_cmd = ["cosmic-ray", "exec", str(config_file), str(session_file)]
+        (exec_cmd_str, exec_status, exec_stdout, exec_stderr) = self._run(
+            exec_cmd, project_path
         )
 
-        # GET SURVIVAL RATE ===================================================
-
-        sr_cmd, sr_status, sr_stdout, sr_stderr = self._run(
-            project_path,
-            func=cr_rate.format_survival_rate.callback,
-            kwargs={
-                "estimate": False,  # this is not used
-                "confidence": 95.0,  # this is not used (estimate False)
-                "fail_over": None,  # this is not used
-                "session_file": session_file,
-            },
+        # GET SURVIVAL RATE
+        sr_cmd = ["cr-rate", str(session_file)]
+        sr_cmd_str, sr_status, sr_stdout, sr_stderr = self._run(
+            sr_cmd, project_path
         )
 
-        survival_rate = float(sr_stdout)
+        # Parse survival rate from output
+        try:
+            survival_rate = float(sr_stdout.strip())
+        except (ValueError, AttributeError):
+            survival_rate = 0.0
 
-        # THE RETURN ==========================================================
-
+        # THE RETURN
         return self.pkg_result(
             value=survival_rate,
-            command="\n\n".join([init_cmd, exec_cmd, sr_cmd]),
+            command="\n\n".join([init_cmd, exec_cmd_str, sr_cmd_str]),
             status_code=init_status + exec_status + sr_status,
             stdout="\n\n".join([init_stdout, exec_stdout, sr_stdout]),
             stderr="\n\n".join([init_stderr, exec_stderr, sr_stderr]),
             result=sr_stdout,
         )
-
-    def hash_tests_ids(self, tests_ids):
-        """Generate MD5 hash from sorted test IDs.
-
-        This method creates a unique hash for a set of test IDs, useful for
-        generating unique session identifiers when running mutations with
-        specific test subsets.
-
-        Parameters
-        ----------
-        tests_ids : list[str]
-            List of test identifiers to hash.
-
-        Returns
-        -------
-        hashlib._hashlib.HASH
-            MD5 hash object for the concatenated, sorted test IDs.
-
-        Notes
-        -----
-        Test IDs are sorted before hashing to ensure consistent hashes
-        regardless of input order.
-        """
-        all_ids = "".join(sorted(tests_ids))
-        md5 = hashlib.md5(all_ids.encode("utf8"))
-        return md5
 
     def get_survival_rate_for_tests(
         self, project_path, project_name, tests_ids, force
@@ -553,44 +477,41 @@ class CosmicRaySuite(MutationSuiteABC):
         The test_ids are used to configure cosmic-ray to run only those
         specific tests, enabling per-test or subset mutation analysis.
         """
-        # INIT SUITE ==========================================================
+        # INIT SUITE
         tests_hash = self.hash_tests_ids(tests_ids)
+        test_command = "pytest " + " ".join(tests_ids)
 
         config_file, session_file, init_output = self._init_suite(
             project_path=project_path,
             project_name=project_name,
-            tag=f"get_survival_rate_for_tests_{tests_hash.hexdigest()}",
-            test_command="pytest " + " ".join(tests_ids),
+            tag=f"get_survival_rate_for_tests_{tests_hash}",
+            test_command=test_command,
             force=force,
         )
         init_cmd, init_status, init_stdout, init_stderr = init_output
 
-        # RUN TESTS ===========================================================
-
-        exec_cmd, exec_status, exec_stdout, exec_stderr = self._run(
-            project_path,
-            func=cray_cli.handle_exec.callback,
-            args=(config_file, session_file),
+        # EXECUTE MUTATIONS
+        exec_cmd = ["cosmic-ray", "exec", str(config_file), str(session_file)]
+        (exec_cmd_str, exec_status, exec_stdout, exec_stderr) = self._run(
+            exec_cmd, project_path
         )
 
-        # GET SURVIVAL RATE ===================================================
-
-        sr_cmd, sr_status, sr_stdout, sr_stderr = self._run(
-            project_path,
-            func=cr_rate.format_survival_rate.callback,
-            kwargs={
-                "estimate": False,  # this is not used
-                "confidence": 95.0,  # this is not used (estimate False)
-                "fail_over": None,  # this is not used
-                "session_file": session_file,
-            },
+        # GET SURVIVAL RATE
+        sr_cmd = ["cr-rate", str(session_file)]
+        sr_cmd_str, sr_status, sr_stdout, sr_stderr = self._run(
+            sr_cmd, project_path
         )
 
-        survival_rate = float(sr_stdout)
+        # Parse survival rate from output
+        try:
+            survival_rate = float(sr_stdout.strip())
+        except (ValueError, AttributeError):
+            survival_rate = 0.0
 
+        # THE RETURN
         return self.pkg_result(
             value=survival_rate,
-            command="\n\n".join([init_cmd, exec_cmd, sr_cmd]),
+            command="\n\n".join([init_cmd, exec_cmd_str, sr_cmd_str]),
             status_code=init_status + exec_status + sr_status,
             stdout="\n\n".join([init_stdout, exec_stdout, sr_stdout]),
             stderr="\n\n".join([init_stderr, exec_stderr, sr_stderr]),

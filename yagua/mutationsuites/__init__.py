@@ -12,7 +12,7 @@ MutationSuiteABC : class
     Extend this class to add support for new mutation testing frameworks.
 CosmicRaySuite : class
     Concrete implementation for cosmic-ray-based projects.
-    Uses cosmic-ray's CLI for mutation testing.
+    Uses subprocess calls to cosmic-ray CLI for better isolation.
 
 Design Pattern
 --------------
