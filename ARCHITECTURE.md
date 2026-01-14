@@ -7,25 +7,33 @@ This document explains the global architecture of Yagua, a tool for collecting a
 Yagua follows a layered architecture with clear separation of concerns:
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                    CLI Layer                        │
-│              (cli.py - CLIManager)                  │
-│           Command-line interface & routing          │
-└────────────────────┬────────────────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────────┐
-│                 Business Logic                      │
-│              (project.py - Project)                 │
-│        Database management & orchestration          │
-└────────┬─────────────────────────────┬──────────────┘
-         │                             │
-         ▼                             ▼
-┌──────────────────────┐    ┌──────────────────────────┐
-│   Test Collection    │    │     Data Persistence     │
-│  (testsuites/*)      │    │    (models.py - ORM)     │
-│  Framework adapters  │    │   Database schema        │
-└──────────────────────┘    └──────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                         CLI Layer                               │
+│                   (cli.py - CLIManager)                         │
+│          Command routing & session-based pipeline               │
+└───────────────────────────┬─────────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    Business Logic Layer                         │
+│              (project_manager.py - ProjectManager)              │
+│         Pipeline validation, state tracking, workflows          │
+└───────────────────────────┬─────────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                   Data Access Layer                             │
+│                  (project.py - Project)                         │
+│           Database operations & suite orchestration             │
+└────────┬──────────────────┬──────────────────┬──────────────────┘
+         │                  │                  │
+         ▼                  ▼                  ▼
+┌────────────────┐  ┌────────────────┐  ┌──────────────────────┐
+│ Test Suites    │  │ Mutation Suite │  │  Data Persistence    │
+│ (testsuites/*) │  │(mutationsuites)│  │  (models.py - ORM)   │
+│ subprocess-    │  │ subprocess-    │  │  Database schema     │
+│ based adapters │  │ based adapters │  │                      │
+└────────────────┘  └────────────────┘  └──────────────────────┘
 ```
 
 ## Core Components
@@ -36,28 +44,30 @@ Yagua follows a layered architecture with clear separation of concerns:
 
 **Key Classes**:
 - `CLIManager`: Contains all CLI commands as public methods
-  - `create_project()`: Initialize new project work directory with yagua.db
-  - `collect_tests()`: Collect tests from a project (with --force option)
-  - `collect_coverage()`: Run coverage analysis for project and individual tests (with --force option)
-  - `collect_mutations()`: Run mutation testing analysis (with --force option)
-  - `info()`: Display project information
-  - `list_tests()`: Show all tests (with --long option for full details)
+  - `init()`: Initialize new project work directory with yagua.db
+  - `run()`: Execute complete pipeline (tests, coverage, mutations) with --rerun/-r option
+  - `status()`: Display pipeline execution status
+  - `report()`: Show comprehensive results report
+  - `export()`: Export project data to archive file
 
-**Design Pattern**: Command Pattern with introspection
+**Design Pattern**: Command Pattern with session-based pipeline
 - Methods are auto-registered as CLI commands via `_create_app()`
-- Method names with underscores become hyphenated commands (e.g., `list_tests` → `list-tests`)
+- Method names with underscores become hyphenated commands
 - Uses Typer for argument parsing and validation
+- Pipeline pattern with state tracking and resumability
 
 **Dependencies**:
-- `Project` (business logic)
-- `PytestSuite` (test collection)
+- `ProjectManager` (business logic with pipeline validation)
+- `Project` (database access layer)
 
-### 2. Business Logic (`project.py`)
+### 2. Business Logic (`project.py` and `project_manager.py`)
 
-**Purpose**: Central orchestrator for project management
+**Purpose**: Layered architecture for project management
 
 **Key Classes**:
-- `Project`: Main class managing database connection and operations
+
+**`Project` (Database Access Layer)**:
+- Manages database connection and low-level operations
 
 **Constructors**:
 ```python
@@ -69,7 +79,8 @@ Project.from_project_info(
     name="project_name",
     path="/path/to/project",
     work_dir="/path/to/work_dir",
-    description="description"
+    description="description",
+    mutation_timeout=50.0
 )
 ```
 
@@ -80,25 +91,37 @@ Project.from_project_info(
    - Binds ORM models to database at runtime
 
 2. **Test Management**:
-   - `collect_tests()`: Orchestrates test collection via suite handlers (returns tuple of saved and updated counts)
+   - `collect_tests()`: Orchestrates test collection via suite handlers
    - `add_test()`: Add/update individual test records
    - `get_tests_dataframe()`: Query tests as pandas DataFrame
-   - `get_test(test_id)`: Get specific test by test_id (returns TestModel with calculated properties)
+   - `get_test(test_id)`: Get specific test by test_id (returns TestModel)
    - `count_tests()`: Get test count
 
 3. **Coverage Management**:
    - `collect_coverage()`: Run and store project-level coverage data
-   - `collect_coverage_for_test(test_id)`: Run and store coverage for individual test in isolation
-   - `collect_coverage_without_test(test_id)`: Run and store coverage excluding a specific test
+   - `collect_coverage_for_test(test_id)`: Run and store coverage for individual test
+   - `collect_coverage_without_test(test_id)`: Run and store coverage excluding a test
 
-4. **Project Information**:
+4. **Mutation Management**:
+   - `collect_mutations()`: Run and store mutation testing data
+   - `collect_mutations_for_test(test_id)`: Run mutations for individual test
+   - `collect_mutations_without_test(test_id)`: Run mutations excluding a test
+
+5. **Project Information**:
    - `store_project_info()`: Update project metadata
    - Magic methods (`__getattr__`, `__dir__`) provide dynamic access to project fields
+
+**`ProjectManager` (Business Logic Layer)**:
+- Wraps Project to provide pipeline validation and workflow management
+- `run_pipeline()`: Executes complete pipeline with state tracking
+- `get_pipeline_status()`: Returns execution status for each stage
+- Validates pipeline dependencies and resumability
 
 **Design Patterns**:
 - Context Manager: Auto-closes database connection
 - Transaction Management: All DB operations wrapped in transactions
 - Dynamic Attribute Access: Exposes ProjectModel fields via `__getattr__`
+- Layered Architecture: DAL (Project) + Business Logic (ProjectManager)
 
 ### 3. Test Collection (`testsuites/`)
 
@@ -121,19 +144,55 @@ testsuites/
   - `get_coverage_for_tests(project_path, project_name, test_ids)`: Run coverage for specific test(s)
 
 **`PytestSuite`** (Concrete Implementation):
-- Implements TestSuiteABC for pytest
+- Implements TestSuiteABC for pytest using subprocess
+- Uses subprocess.run() for executing pytest as external command
 - Uses `pytest --collect-only` for test discovery
 - Uses `pytest --cov` with JSON output for project coverage
-- Uses `pytest <test_id1> <test_id2> ... --cov` for running specific test(s) with coverage
+- Uses `pytest <test_id1> <test_id2> ... --cov` for specific test(s) with coverage
+- Hash-based temporary file naming for deterministic identification
 - Supports both single test and multiple tests in one execution
 - Parses pytest output to extract test information
 - Returns command, stdout, stderr, and result for history tracking
-- Manages temporary directory for JSON coverage reports
 
 **Extensibility**:
 New test frameworks can be added by implementing TestSuiteABC (e.g., `UnittestSuite`, `NoseSuite`)
 
-### 4. Data Persistence (`models.py`)
+### 4. Mutation Collection (`mutationsuites/`)
+
+**Purpose**: Abstract mutation testing framework interaction
+
+**Architecture**:
+```
+mutationsuites/
+├── abc.py                  # MutationSuiteABC (abstract interface)
+└── cosmicray_suite.py      # CosmicRaySuite (concrete implementation)
+```
+
+**Key Classes**:
+
+**`MutationSuiteABC`** (Abstract Base Class):
+- Defines interface for all mutation suite handlers
+- Abstract methods:
+  - `get_mutants(project_path, project_name, force)`: Count total mutants
+  - `get_survival_rate(project_path, project_name, force)`: Run full mutation testing
+  - `get_survival_rate_for_tests(project_path, project_name, test_ids, force)`: Run mutations for specific test(s)
+
+**`CosmicRaySuite`** (Concrete Implementation):
+- Implements MutationSuiteABC for cosmic-ray using subprocess
+- Uses subprocess.run() for executing cosmic-ray CLI commands
+- Uses `cosmic-ray init` for session initialization
+- Uses `cosmic-ray exec` for mutation execution
+- Uses `cr-xml` for getting mutant count
+- Uses `cr-rate` for calculating survival rate
+- Manual TOML configuration writing for better isolation
+- Hash-based session file naming for deterministic identification
+- Respects mutation_timeout parameter from project configuration
+- Returns command, stdout, stderr, and result for history tracking
+
+**Extensibility**:
+New mutation frameworks can be added by implementing MutationSuiteABC (e.g., `MutmutSuite`, `PITSuite`)
+
+### 5. Data Persistence (`models.py`)
 
 **Purpose**: ORM layer for database schema
 
@@ -197,98 +256,118 @@ New test frameworks can be added by implementing TestSuiteABC (e.g., `UnittestSu
 
 ## Data Flow
 
-### Test Collection Flow
+### Pipeline Execution Flow
 
 ```
-1. User: yagua collect-tests my_work_dir
+1. User: yagua run my_work_dir
          ↓
-2. CLI: CLIManager.collect_tests()
-   - Validates work directory exists
-   - Creates Project instance
+2. CLI: CLIManager.run()
+   - Opens project via read_dir() (returns ProjectManager)
+   - Calls ProjectManager.run_pipeline()
          ↓
-3. Project: collect_tests()
-   - Uses internal test suite handler
-   - Calls suite.get_tests(project_path)
+3. ProjectManager: run_pipeline()
+   - Checks pipeline status (resumability)
+   - Executes stages in order:
+     a) Test collection (if not done or rerun=True)
+     b) Coverage collection (if not done or rerun=True)
+     c) Mutation collection (if not done or rerun=True)
          ↓
-4. PytestSuite: get_tests()
-   - Runs: pytest --collect-only -q
-   - Parses output
-   - Returns: [(file, suite, test), ...]
+4a. Test Collection Stage:
+    Project: collect_tests()
+    - Uses internal test suite handler (PytestSuite)
+    - Calls suite.get_tests(project_path)
+    - PytestSuite runs: pytest --collect-only -q (via subprocess)
+    - Parses output and returns test list
+    - Creates/updates TestModel records
+    - Stores execution history in HistoryModel
          ↓
-5. Project: Iterates test list
-   - For each test: add_test(...)
-   - Creates/updates TestModel records
+4b. Coverage Collection Stage:
+    Project: collect_coverage()
+    - Calls suite.get_coverage() for total coverage
+    - PytestSuite runs: pytest --cov=<name> --cov-report=json (via subprocess)
+    - Updates ProjectModel.coverage
+    - For each test:
+      * collect_coverage_for_test(): runs test alone
+      * collect_coverage_without_test(): runs all tests except one
+    - Updates TestModel.coverage_alone and coverage_without
+    - Calculated properties auto-computed (impact, overlap, uniqueness, redundancy)
+    - Stores execution history for each operation
          ↓
-6. Database: Tests persisted to work_dir/yagua.db
+4c. Mutation Collection Stage:
+    Project: collect_mutations()
+    - Uses internal mutation suite handler (CosmicRaySuite)
+    - Calls suite.get_mutants() to count mutants
+    - CosmicRaySuite runs: cosmic-ray init, cr-xml (via subprocess)
+    - Calls suite.get_survival_rate() for total MSR
+    - CosmicRaySuite runs: cosmic-ray exec, cr-rate (via subprocess)
+    - Updates ProjectModel.mutants_number and msr
+    - For each test:
+      * collect_mutations_for_test(): runs mutations with test alone
+      * collect_mutations_without_test(): runs mutations without test
+    - Updates TestModel.msr_alone and msr_without
+    - Calculated properties auto-computed (impact, overlap, uniqueness, redundancy)
+    - Stores execution history for each operation
          ↓
-7. CLI: Displays summary to user
+5. Database: All data persisted in work_dir/yagua.db
+         ↓
+6. CLI: Displays pipeline completion status
 ```
 
-### Coverage Collection Flow
+### Status and Report Flow
 
 ```
-1. User: yagua collect-coverage my_work_dir
+1. User: yagua status my_work_dir
          ↓
-2. CLI: CLIManager.collect_coverage()
-         ↓
-3. Project: collect_coverage()
-   - Uses internal test suite handler
-   - Calls suite.get_coverage(path, name)
-         ↓
-4. PytestSuite: get_coverage()
-   - Runs: pytest --cov=<name> --cov-report=json
-   - Parses JSON output
-   - Returns: coverage percentage
-         ↓
-5. Project: Updates ProjectModel.coverage
-   - Stores execution history in HistoryModel
-         ↓
-6. For each test (coverage_alone):
-   Project: collect_coverage_for_test(test_id)
-   - Calls suite.get_coverage_for_tests(path, name, [test_id])
-   - Updates TestModel.coverage_alone
-   - Stores execution history in HistoryModel with tag 'collect_coverage_for_test::{test_id}'
-         ↓
-7. For each test (coverage_without):
-   Project: collect_coverage_without_test(test_id)
-   - Queries all test IDs except the target test
-   - Calls suite.get_coverage_for_tests(path, name, all_other_test_ids)
-   - Updates TestModel.coverage_without
-   - Stores execution history in HistoryModel with tag 'collect_coverage_without_test::{test_id}'
-         ↓
-8. Database: All coverage data persisted in work_dir/yagua.db (project, alone, without)
-         ↓
-9. CLI: Displays coverage summary with hierarchical output per test [X/N]
+2. CLI: CLIManager.status()
+   - Opens project via read_dir()
+   - Calls ProjectManager.get_pipeline_status()
+   - Displays: tests collected, coverage collected, mutations collected
 ```
 
 ## Architectural Patterns
 
 ### 1. Separation of Concerns
-- **CLI**: User interface only, no business logic
-- **Project**: Business logic and orchestration
-- **TestSuites**: Test framework abstraction
+- **CLI**: User interface and command routing
+- **ProjectManager**: Business logic with pipeline validation
+- **Project**: Database access layer
+- **TestSuites**: Test framework abstraction (subprocess-based)
+- **MutationSuites**: Mutation framework abstraction (subprocess-based)
 - **Models**: Data structure and persistence
 
-### 2. Dependency Injection
+### 2. Layered Architecture
+- **Presentation Layer**: CLI commands
+- **Business Logic Layer**: ProjectManager (pipeline validation, state tracking)
+- **Data Access Layer**: Project (database operations)
+- **Framework Adapters**: TestSuiteABC/MutationSuiteABC implementations
+- **Data Layer**: Peewee ORM models
+
+### 3. Dependency Injection
 - Project manages internal suite handlers
 - Suite handlers abstracted behind interfaces (TestSuiteABC, MutationSuiteABC)
+- Subprocess-based execution for better isolation
 
-### 3. Abstract Factory
-- TestSuiteABC defines interface
-- Concrete implementations (PytestSuite) provide framework-specific logic
+### 4. Abstract Factory
+- TestSuiteABC and MutationSuiteABC define interfaces
+- Concrete implementations (PytestSuite, CosmicRaySuite) provide framework-specific logic
 - Easy to add new frameworks without changing Project
 
-### 4. Single Responsibility
+### 5. Single Responsibility
 - Each class has one clear purpose
-- CLI handles user interaction
-- Project handles business rules
-- Suites handle test framework specifics
+- CLI handles user interaction and routing
+- ProjectManager handles pipeline workflows
+- Project handles database operations
+- Suites handle framework-specific execution via subprocess
 - Models handle data structure
 
-### 5. Context Manager
+### 6. Context Manager
 - Project implements `__enter__` and `__exit__`
 - Ensures database connections are properly closed
 - Provides clean resource management
+
+### 7. Session-Based Pipeline
+- State tracking for resumability
+- Each stage can be resumed independently
+- Force re-execution via --rerun flag
 
 ## Database Architecture
 
@@ -320,14 +399,32 @@ with project.transaction():
 1. Create new class in `testsuites/`:
 ```python
 from .abc import TestSuiteABC
+import subprocess
 
 class UnittestSuite(TestSuiteABC):
+    def __init__(self, work_path):
+        self._work_path = pathlib.Path(work_path) / "yagua_unittest"
+        self._work_path.mkdir(parents=True, exist_ok=True)
+
+    def _run(self, cmd, project_path):
+        result = subprocess.run(
+            cmd, cwd=project_path, capture_output=True, text=True
+        )
+        return (" ".join(cmd), result.returncode, result.stdout, result.stderr)
+
     def get_tests(self, project_path):
-        # Implement unittest discovery
+        # Implement unittest discovery via subprocess
+        cmd = ["python", "-m", "unittest", "discover", "-v"]
+        command, status, stdout, stderr = self._run(cmd, project_path)
+        # Parse and return tests
         pass
 
     def get_coverage(self, project_path, project_name):
-        # Implement unittest coverage
+        # Implement unittest coverage via subprocess
+        pass
+
+    def get_coverage_for_tests(self, project_path, project_name, test_ids):
+        # Implement coverage for specific tests
         pass
 ```
 
@@ -337,12 +434,46 @@ from .unittest_suite import UnittestSuite
 __all__ = ["TestSuiteABC", "PytestSuite", "UnittestSuite"]
 ```
 
-3. Use in CLI or programmatically:
+3. Use programmatically:
 ```python
-suite = UnittestSuite()
-project._init_suite(test_suite=suite)
-project.collect_tests()
+from yagua.testsuites import UnittestSuite
+
+proj = Project(work_dir)
+proj._test_suite = UnittestSuite(proj.work_path)
+proj.collect_tests()
 ```
+
+### Adding New Mutation Frameworks
+
+1. Create new class in `mutationsuites/`:
+```python
+from .abc import MutationSuiteABC
+import subprocess
+
+class MutmutSuite(MutationSuiteABC):
+    def __init__(self, work_path, mutation_timeout=50.0):
+        self._work_path = pathlib.Path(work_path) / "yagua_mutmut"
+        self._work_path.mkdir(parents=True, exist_ok=True)
+        self._mutation_timeout = float(mutation_timeout)
+
+    def _run(self, cmd, project_path):
+        # Implement subprocess execution
+        pass
+
+    def get_mutants(self, project_path, project_name, force):
+        # Run mutmut via subprocess to count mutants
+        pass
+
+    def get_survival_rate(self, project_path, project_name, force):
+        # Run full mutation testing
+        pass
+
+    def get_survival_rate_for_tests(self, project_path, project_name, test_ids, force):
+        # Run mutations for specific tests
+        pass
+```
+
+2. Export and configure in project
 
 ### Adding New CLI Commands
 
@@ -353,9 +484,9 @@ def my_command(
     work_dir: str = _make_work_dir_argument(),
 ) -> None:
     """Command description for help."""
-    with self._use_project(work_dir) as proj:
-        # Implementation
-        pass
+    pm = read_dir(work_dir)
+    # Implementation using ProjectManager
+    pass
 ```
 
 Auto-registered as: `yagua my-command`

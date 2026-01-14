@@ -136,20 +136,23 @@ After installation, the `yagua` command will be available globally.
 ## 🚀 Quick Start
 
 ```bash
-# Create a new yagua project (creates work directory with yagua.db)
-yagua create-project /path/to/project _yagua_work_
+# Initialize a new yagua project (creates work directory with yagua.db)
+yagua init /path/to/project _yagua_work_ \
+    --name "Project" \
+    --description "Project description" \
+    --mutation-timeout 50.0
 
-# Collect tests from the project
-yagua collect-tests _yagua_work_
+# Run the complete pipeline (collects tests, coverage, and mutations)
+yagua run _yagua_work_
 
-# Show project information
-yagua info _yagua_work_
+# Check pipeline status
+yagua status _yagua_work_
 
-# List all tests with coverage metrics
-yagua list-tests _yagua_work_
+# View results report
+yagua report _yagua_work_
 
-# Collect comprehensive coverage data
-yagua collect-coverage _yagua_work_
+# Export project data
+yagua export _yagua_work_ backup.tar.gz
 ```
 
 ---
@@ -158,55 +161,41 @@ yagua collect-coverage _yagua_work_
 
 ### 🖥️ CLI Commands
 
-#### Project Management
+#### Project Initialization
 
 ```bash
 # Show all available commands
 yagua --help
 
-# Create new project with custom work directory
-yagua create-project /path/to/project my_work_dir \
+# Initialize a new project
+yagua init /path/to/project my_work_dir \
   --name "My Project" \
-  --description "Project description"
-
-# Display project information
-yagua info my_work_dir
+  --description "Project description" \
+  --mutation-timeout 50.0
 ```
 
-#### Test Collection
+#### Pipeline Execution
 
 ```bash
-# Collect tests (cached after first run)
-yagua collect-tests my_work_dir
+# Run the complete pipeline (tests, coverage, mutations)
+yagua run my_work_dir
 
-# Force recollection of tests
-yagua collect-tests my_work_dir --force
-yagua collect-tests my_work_dir -f  # Short form
+# Force re-run the entire pipeline (ignores cache)
+yagua run my_work_dir --rerun
+yagua run my_work_dir -r  # Short form
 ```
 
-#### Test Listing
+**Note**: The pipeline execution can be time-consuming for large test suites. For N tests, coverage collection runs approximately 2N+1 test executions (total coverage + each test alone + all tests without each one). Mutation testing can take significantly longer depending on the number of mutants.
+
+#### Status and Reporting
 
 ```bash
-# List tests (compact view)
-yagua list-tests my_work_dir
+# Check pipeline execution status
+yagua status my_work_dir
 
-# Show all columns including IDs and timestamps
-yagua list-tests my_work_dir --long
-yagua list-tests my_work_dir -l  # Short form
+# View comprehensive results report
+yagua report my_work_dir
 ```
-
-#### Coverage Collection
-
-```bash
-# Collect project + per-test coverage (cached)
-yagua collect-coverage my_work_dir
-
-# Force recalculation of all coverage metrics
-yagua collect-coverage my_work_dir --force
-yagua collect-coverage my_work_dir -f  # Short form
-```
-
-**Note**: Coverage collection can be time-consuming for large test suites as it runs each test individually and then all tests except each one. For N tests, this results in approximately 2N+1 test runs.
 
 #### Export and Import
 
@@ -232,39 +221,45 @@ proj = Project.from_project_info(
     name="my_project",
     path="/path/to/project",
     work_dir="my_work_dir",
-    description="Optional description"
+    description="Optional description",
+    mutation_timeout=50.0
 )
 # Wrap in ProjectManager for business logic operations
 pm = ProjectManager(proj)
 
-# Open existing project (returns ProjectManager)
+# Open existing project from work directory (returns ProjectManager)
 pm = read_dir("my_work_dir")
 
 # Open project from an archive file (returns ProjectManager)
 pm = read_archive("my_project.zip")
 
-# Collect tests with pipeline validation
-result = pm.collect_tests()
-print(f"Tests collected: {result['total_tests']}")
+# Run the complete pipeline with progress tracking
+def progress(current, total, test_id):
+    print(f"Processing {current}/{total}: {test_id}")
+
+result = pm.run_pipeline(
+    rerun=False,  # Set to True to force re-execution
+    progress_callback=progress
+)
+
+# Check pipeline status
+status = pm.get_pipeline_status()
+print(f"Tests collected: {status['tests_collected']}")
+print(f"Coverage collected: {status['coverage_collected']}")
+print(f"Mutations collected: {status['mutations_collected']}")
 
 # Get tests as DataFrame
 info = pm.get_tests_info()
 tests_df = info['tests_df']
 
-# Collect coverage with progress tracking
-def progress(current, total, test_id):
-    print(f"Processing {current}/{total}: {test_id}")
-
-result = pm.collect_coverage(progress_callback=progress)
-print(f"Total coverage: {result['coverage']}%")
-
-# Access project properties through ProjectManager
+# Access project properties
 project_info = pm.get_project_info()
 print(f"Name: {project_info['name']}")
 print(f"Path: {project_info['path']}")
 print(f"Work Dir: {project_info['work_dir']}")
 print(f"Database: {project_info['db_path']}")
 print(f"Coverage: {project_info['coverage']}")
+print(f"Total MSR: {project_info['msr']}")
 
 # Close when done
 pm.project.close()
