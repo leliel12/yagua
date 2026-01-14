@@ -31,12 +31,20 @@ yagua/
 ## Commands
 
 ```bash
-yagua create-project /path/to/project my_work_dir --name "Project"
-yagua collect-tests my_work_dir
-yagua collect-coverage my_work_dir
-yagua collect-mutations my_work_dir
-yagua list-tests my_work_dir --long
-yagua info my_work_dir
+# Initialize a new project
+yagua init /path/to/project my_work_dir --name "Project" --mutation-timeout 50.0
+
+# Run the complete pipeline (tests, coverage, mutations)
+yagua run my_work_dir
+
+# Check pipeline status
+yagua status my_work_dir
+
+# View results report
+yagua report my_work_dir
+
+# Export project data
+yagua export my_work_dir output.tar.gz
 ```
 
 ## Code Style
@@ -57,6 +65,6 @@ yagua info my_work_dir
 
 Cuando use claude, recordame que revise estos pendientes
 
-1. Usar el timeout de cosmic ray
+1. ~~Usar el timeout de cosmic ray~~ ✅ (Completado)
 2. Los MSR no se guardan bien
-3. El coverage dentro de yagua da distinto a ejecutarlo manualmente
+3. ~~El coverage dentro de yagua da distinto a ejecutarlo manualmente~~ ✅ (Completado)
