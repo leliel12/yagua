@@ -1,0 +1,8 @@
+[cosmic-ray]
+module-path = "astroalign.py"
+timeout = 60.0
+excluded-modules = []
+test-command = "pytest tests/test_align.py::TestFewSources::test_find_transform_fivesources"
+
+[cosmic-ray.distributor]
+name = "local"
