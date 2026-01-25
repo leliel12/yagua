@@ -1,15 +1,19 @@
-"""Yagua - Project Class.
+"""Yagua - Project Class (Data Access Layer).
 
-This module provides the Project class, which serves as the main
-interface for managing project databases, tests, and coverage
-information. Each Project instance represents a single SQLite database
-file containing one project's test data.
+This module provides the Project class, which serves as the data
+access layer (DAL) for managing project databases, tests, and
+history records. Each Project instance represents a single SQLite
+database file containing one project's data.
+
+The Project class is responsible exclusively for CRUD operations
+and transactions. All business logic, suite execution, and pipeline
+management are handled by ProjectManager.
 
 Classes
 -------
 Project : class
-    Main project manager for QA testing, providing methods to collect tests,
-    measure coverage, and query test information.
+    Data access layer for project database operations, providing
+    methods to save/query tests, coverage, mutations, and history.
 
 Architecture
 ------------
@@ -28,6 +32,8 @@ Key Patterns
    at runtime
 3. **Transaction Management**: All DB operations use atomic
    transactions
+4. **Pure DAL**: No suite execution or business logic; only
+   database read/write operations
 """
 
 import contextlib
@@ -38,8 +44,6 @@ from peewee import SqliteDatabase
 
 from . import io as yagua_io
 from .models import BaseModel, HistoryModel, ProjectModel, TestModel
-from .mutationsuites import CosmicRaySuite
-from .testsuites import PytestSuite
 
 
 # ============================================================================
@@ -56,32 +60,21 @@ MODELS_TO_CREATE = [ProjectModel, TestModel, HistoryModel]
 #: the binding needs to propagate through the inheritance chain.
 ALL_MODELS = [BaseModel] + MODELS_TO_CREATE
 
-#: Available test suite handlers mapped by name.
-#: Use these names in Project.from_project_info() to specify which
-#: test framework the project uses.
-TEST_SUITES = {
-    "pytest": PytestSuite,
-}
-
-#: Available mutation suite handlers mapped by name.
-#: Use these names in Project.from_project_info() to specify which
-#: mutation testing framework the project uses.
-MUTATION_SUITES = {
-    "cosmic-ray": CosmicRaySuite,
-}
-
 # ============================================================================
 # PROJECT CLASS
 # ============================================================================
 
 
 class Project:
-    """Project manager for QA testing.
+    """Data access layer for project database operations.
 
     This class manages the database connection and provides methods to
-    interact with projects, tests, and execution history. The database
-    instance is created per-project and models are dynamically bound to it.
-    Each work directory represents a single project.
+    save and query projects, tests, and execution history. The database
+    instance is created per-project and models are dynamically bound
+    to it. Each work directory represents a single project.
+
+    All suite execution and business logic is handled by
+    ProjectManager; this class only performs database operations.
 
     Parameters
     ----------
@@ -204,51 +197,6 @@ class Project:
         return project
 
     # ========================================================================
-    # Properties
-    # ========================================================================
-
-    @property
-    def test_suite(self):
-        """Get test suite handler instance for this project.
-
-        Returns
-        -------
-        TestSuiteABC
-            Instantiated test suite handler (e.g., PytestSuite) based on the
-            project's test_suite_name configuration.
-
-        Notes
-        -----
-        This property returns a new instance each time it's accessed. The
-        suite class is looked up from TEST_SUITES dictionary using the
-        project's test_suite_name field.
-        """
-        suite_cls = TEST_SUITES[self.test_suite_name]
-        return suite_cls(self.work_path)
-
-    @property
-    def mutation_suite(self):
-        """Get mutation testing suite handler instance for this project.
-
-        Returns
-        -------
-        MutationSuiteABC
-            Instantiated mutation suite handler based on the project's
-            mutation_suite_name configuration.
-
-        Notes
-        -----
-        This property returns a new instance each time it's accessed. The
-        suite class is looked up from MUTATION_SUITES dictionary using the
-        project's mutation_suite_name field. The mutation timeout is passed
-        from the project's mutation_timeout field.
-        """
-        suite_cls = MUTATION_SUITES[self.mutation_suite_name]
-        return suite_cls(
-            self.work_path, mutation_timeout=self.mutation_timeout
-        )
-
-    # ========================================================================
     # Private Methods
     # ========================================================================
 
@@ -294,66 +242,6 @@ class Project:
     # Public Methods - Test Management
     # ========================================================================
 
-    def collect_tests(self) -> tuple[int, int]:
-        """Collect tests from a test suite and save them to the database.
-
-        This method runs the suite's get_tests() method to discover all
-        tests, saves them to the database, and logs the execution in the
-        history table.
-
-        Parameters
-        ----------
-        suite : TestSuiteABC
-            Test suite handler with a get_tests() method (e.g., PytestSuite).
-
-        Returns
-        -------
-        tuple[int, int]
-            Tuple of (saved_count, updated_count) indicating the number
-            of new tests saved and existing tests updated.
-
-        Notes
-        -----
-        Creates a HistoryModel record with tag='collect_tests' containing
-        the command executed and its output for audit purposes.
-        """
-
-        suite = self.test_suite
-        result = suite.get_tests(self.path)
-
-        saved_count = 0
-        updated_count = 0
-        with self.transaction():
-            if not result.error:
-                project = self._get_project_model()
-                for test_id, file, suite_name, test in result.value:
-                    _, created = self.add_test(
-                        project=project,
-                        test_id=test_id,
-                        file=file,
-                        suite=suite_name,
-                        test=test,
-                    )
-
-                    if created:
-                        saved_count += 1
-                    else:
-                        updated_count += 1
-
-            HistoryModel.create(
-                project=project,
-                tag="collect_tests",
-                command=result.command,
-                status_code=result.status_code,
-                stdout=result.stdout,
-                stderr=result.stderr,
-                result=result.result,
-            )
-
-        result.raise_if_error()
-
-        return saved_count, updated_count
-
     def add_test(
         self,
         project,
@@ -386,8 +274,8 @@ class Project:
         Notes
         -----
         Coverage information (coverage_alone, coverage_without) should be
-        updated separately using collect_coverage_for_test() and
-        collect_coverage_without_test() methods.
+        updated separately using save_test_coverage_alone() and
+        save_test_coverage_without() methods.
         """
         with self.transaction():
             test_obj, created = TestModel.get_or_create(
@@ -515,332 +403,299 @@ class Project:
             result=result.result,
         )
 
-    # ========================================================================
-    # Public Methods - Coverage Management
-    # ========================================================================
-
-    def collect_coverage(self):
-        """Collect and store coverage information for the project.
-
-        This method runs the suite's get_coverage() method to execute tests
-        with coverage enabled, stores the total coverage percentage in the
-        ProjectModel, and logs the execution in the history table.
+    def write_history(self, tag, result, project=None):
+        """Write a history entry to the database.
 
         Parameters
         ----------
-        suite : TestSuiteABC
-            Test suite handler with a get_coverage() method
-            (e.g., PytestSuite).
+        tag : str
+            History tag identifying the operation.
+        result : object
+            Result object with command, status_code, stdout, stderr,
+            and result attributes.
+        project : ProjectModel, optional
+            Project model instance. If None, fetches from database.
 
         Returns
         -------
-        float
-            Total coverage percentage (0-100).
-
-        Notes
-        -----
-        Creates a HistoryModel record with tag='collect_coverage'
-        containing the command executed and its output for audit purposes.
+        HistoryModel
+            Created history model instance.
         """
-        suite = self.test_suite
-        result = suite.get_coverage(self.path, self.name)
-
         with self.transaction():
-            if not result.error:
+            if project is None:
                 project = self._get_project_model()
-                project.coverage = result.value
-                project.save()
+            return self._write_history(project, tag, result)
 
-            self._write_history(
-                project=project, tag="collect_coverage", result=result
-            )
-
-        result.raise_if_error()
-
-        return result.value
-
-    def collect_coverage_for_test(self, test_id):
-        """Collect and store coverage for a single test in isolation.
-
-        This method runs a specific test alone to measure its isolated
-        coverage contribution. The result is stored in
-        TestModel.coverage_alone.
+    def get_test_ids_except(self, excluded_test_id):
+        """Get all test IDs except the specified one.
 
         Parameters
         ----------
-        suite : TestSuiteABC
-            Test suite handler with a get_coverage_for_tests() method.
-        test_id : str
-            Unique test identifier (e.g., pytest node ID).
+        excluded_test_id : str
+            Test ID to exclude from the results.
 
         Returns
         -------
-        float
-            Coverage percentage (0-100) for this test in isolation.
-
-        Notes
-        -----
-        Creates a HistoryModel record with
-        tag='collect_coverage_for_test::{test_id}' for tracking execution
-        history per test.
-
+        list[str]
+            List of test IDs excluding the specified one.
         """
-        suite = self.test_suite
-        result = suite.get_coverage_for_tests(self.path, self.name, [test_id])
-
-        with self.transaction():
-
-            if not result.error:
-                test = TestModel.get(TestModel.test_id == test_id)
-                test.coverage_alone = result.value
-                test.save()
-
-            self._write_history(
-                project=test.project,
-                tag=f"collect_coverage_for_test::{test_id}",
-                result=result,
-            )
-
-        result.raise_if_error()
-
-        return result.value
-
-    def collect_coverage_without_test(self, test_id):
-        """Collect and store coverage when excluding a specific test.
-
-        This method runs all tests except the specified one to measure
-        coverage without that test's contribution. Useful for identifying
-        test redundancy and dependencies. The result is stored in
-        TestModel.coverage_without.
-
-        Parameters
-        ----------
-        suite : TestSuiteABC
-            Test suite handler with a get_coverage_for_tests() method.
-        test_id : str
-            Unique test identifier to exclude (e.g., pytest node ID).
-
-        Returns
-        -------
-        float
-            Coverage percentage (0-100) when running all tests except this one.
-
-        Notes
-        -----
-        Creates a HistoryModel record with
-        tag='collect_coverage_without_test::{test_id}'
-        for tracking execution history. Queries all test IDs except the target
-        and runs them together to measure combined coverage.
-        """
-        suite = self.test_suite
         with self.transaction():
             query = TestModel.select(TestModel.test_id).where(
-                TestModel.test_id != test_id
+                TestModel.test_id != excluded_test_id
             )
-            tids_to_run = [test.test_id for test in query]
+            return [test.test_id for test in query]
 
-            result = suite.get_coverage_for_tests(
-                self.path, self.name, tids_to_run
-            )
+    # ========================================================================
+    # Public Methods - Save Operations (DAL)
+    # ========================================================================
 
+    def save_tests(self, tests_data, result):
+        """Save collected tests and write history in a transaction.
+
+        Parameters
+        ----------
+        tests_data : list[tuple]
+            List of (test_id, file, suite_name, test) tuples.
+        result : object
+            Result object from the test suite execution.
+
+        Returns
+        -------
+        tuple[int, int]
+            Tuple of (saved_count, updated_count).
+        """
+        saved_count = 0
+        updated_count = 0
+        with self.transaction():
+            project = self._get_project_model()
+            if not result.error:
+                for test_id, file, suite_name, test in tests_data:
+                    _, created = self.add_test(
+                        project=project,
+                        test_id=test_id,
+                        file=file,
+                        suite=suite_name,
+                        test=test,
+                    )
+                    if created:
+                        saved_count += 1
+                    else:
+                        updated_count += 1
+
+            self._write_history(project, "collect_tests", result)
+
+        result.raise_if_error()
+        return saved_count, updated_count
+
+    def save_coverage(self, value, result):
+        """Save project coverage value and write history.
+
+        Parameters
+        ----------
+        value : float
+            Coverage percentage to store.
+        result : object
+            Result object from the test suite execution.
+
+        Returns
+        -------
+        float
+            The coverage value.
+        """
+        with self.transaction():
+            project = self._get_project_model()
+            if not result.error:
+                project.coverage = value
+                project.save()
+
+            self._write_history(project, "collect_coverage", result)
+
+        result.raise_if_error()
+        return value
+
+    def save_test_coverage_alone(self, test_id, value, result):
+        """Save isolated coverage for a single test and write history.
+
+        Parameters
+        ----------
+        test_id : str
+            Unique test identifier.
+        value : float
+            Coverage percentage when running only this test.
+        result : object
+            Result object from the test suite execution.
+
+        Returns
+        -------
+        float
+            The coverage value.
+        """
+        with self.transaction():
+            project = self._get_project_model()
             if not result.error:
                 test = TestModel.get(TestModel.test_id == test_id)
-                test.coverage_without = result.value
+                test.coverage_alone = value
                 test.save()
 
             self._write_history(
-                project=test.project,
-                tag=f"collect_coverage_without_test::{test_id}",
-                result=result,
+                project,
+                f"collect_coverage_for_test::{test_id}",
+                result,
             )
 
         result.raise_if_error()
+        return value
 
-        return result.value
+    def save_test_coverage_without(self, test_id, value, result):
+        """Save coverage-without for a single test and write history.
 
-    # ========================================================================
-    # Public Methods - Mutations Management
-    # ========================================================================
+        Parameters
+        ----------
+        test_id : str
+            Unique test identifier to exclude.
+        value : float
+            Coverage percentage when running all tests except this one.
+        result : object
+            Result object from the test suite execution.
 
-    def collect_mutants(self, force=False):
-        """Collect and store the number of mutants for the project.
+        Returns
+        -------
+        float
+            The coverage value.
+        """
+        with self.transaction():
+            project = self._get_project_model()
+            if not result.error:
+                test = TestModel.get(TestModel.test_id == test_id)
+                test.coverage_without = value
+                test.save()
 
-        This method runs the mutation suite's get_mutants() method to
-        initialize the mutation session and count the total number of
-        mutants that will be generated. The result is stored in
-        ProjectModel.mutants_number.
+            self._write_history(
+                project,
+                f"collect_coverage_without_test::{test_id}",
+                result,
+            )
+
+        result.raise_if_error()
+        return value
+
+    def save_mutants_number(self, value, result):
+        """Save project mutants number and write history.
+
+        Parameters
+        ----------
+        value : int
+            Number of mutants generated.
+        result : object
+            Result object from the mutation suite execution.
 
         Returns
         -------
         int
-            Number of mutants generated for the project.
-
-        Notes
-        -----
-        Creates a HistoryModel record with tag='collect_mutants'
-        containing the command executed and its output for audit purposes.
+            The mutants number.
         """
-        suite = self.mutation_suite
-        result = suite.get_mutants(self.path, self.name, force=force)
-
         with self.transaction():
+            project = self._get_project_model()
             if not result.error:
-                project = self._get_project_model()
-                project.mutants_number = result.value
+                project.mutants_number = value
                 project.save()
 
-            self._write_history(
-                project=project, tag="collect_mutants", result=result
-            )
+            self._write_history(project, "collect_mutants", result)
 
         result.raise_if_error()
+        return value
 
-        return result.value
-
-    def collect_survival_rate(self, force=False):
-        """Execute mutation testing and calculate survival rate.
-
-        This method runs all mutation tests against the test suite and
-        calculates the mutation survival rate (percentage of mutants that
-        survived). The result is stored in ProjectModel.msr.
+    def save_msr(self, value, result):
+        """Save project mutation survival rate and write history.
 
         Parameters
         ----------
-        force : bool, optional
-            Force re-execution of mutations even if already run.
-            Default is False.
+        value : float
+            Mutation survival rate percentage.
+        result : object
+            Result object from the mutation suite execution.
 
         Returns
         -------
         float
-            Mutation survival rate percentage (0-100).
-
-        Notes
-        -----
-        Creates a HistoryModel record with tag='get_survival_rate'
-        containing the command executed and its output for audit purposes.
-        A lower survival rate indicates a more effective test suite.
-        The mutation score can be calculated as: 100 - survival_rate
+            The MSR value.
         """
-        suite = self.mutation_suite
-        result = suite.get_survival_rate(self.path, self.name, force)
-
         with self.transaction():
+            project = self._get_project_model()
             if not result.error:
-                project = self._get_project_model()
-                project.msr = result.value
+                project.msr = value
                 project.save()
 
-            self._write_history(
-                project=project, tag="get_survival_rate", result=result
-            )
+            self._write_history(project, "get_survival_rate", result)
 
         result.raise_if_error()
+        return value
 
-        return result.value
-
-    def collect_survival_rate_for_test(self, test_id, force=False):
-        """Collect and store survival rate for a single test in isolation.
-
-        This method runs a specific test alone to measure its isolated
-        mutation detection capability. The result is stored in
-        TestModel.msr_alone.
+    def save_test_msr_alone(self, test_id, value, result):
+        """Save isolated MSR for a single test and write history.
 
         Parameters
         ----------
         test_id : str
-            Unique test identifier (e.g., pytest node ID).
-        force : bool, optional
-            Force re-execution of mutations even if already run.
-            Default is False.
+            Unique test identifier.
+        value : float
+            MSR percentage when running only this test.
+        result : object
+            Result object from the mutation suite execution.
 
         Returns
         -------
         float
-            Mutation survival rate percentage (0-100) for this test alone.
-
-        Notes
-        -----
-        Creates a HistoryModel record with
-        tag='collect_survival_rate_for_test::{test_id}' for tracking
-        execution history per test.
+            The MSR value.
         """
-        suite = self.mutation_suite
-        result = suite.get_survival_rate_for_tests(
-            self.path, self.name, [test_id], force
-        )
-
         with self.transaction():
-
+            project = self._get_project_model()
             if not result.error:
                 test = TestModel.get(TestModel.test_id == test_id)
-                test.msr_alone = result.value
+                test.msr_alone = value
                 test.save()
 
             self._write_history(
-                project=test.project,
-                tag=f"collect_survival_rate_for_test::{test_id}",
-                result=result,
+                project,
+                f"collect_survival_rate_for_test::{test_id}",
+                result,
             )
 
         result.raise_if_error()
+        return value
 
-        return result.value
-
-    def collect_survival_rate_without_test(self, test_id, force=False):
-        """Collect and store survival rate when excluding a specific test.
-
-        This method runs all tests except the specified one to measure
-        mutation detection capability without that test's contribution.
-        Useful for identifying test redundancy and unique mutation
-        detection. The result is stored in TestModel.msr_without.
+    def save_test_msr_without(self, test_id, value, result):
+        """Save MSR-without for a single test and write history.
 
         Parameters
         ----------
         test_id : str
-            Unique test identifier to exclude (e.g., pytest node ID).
-        force : bool, optional
-            Force re-execution of mutations even if already run.
-            Default is False.
+            Unique test identifier to exclude.
+        value : float
+            MSR percentage when running all tests except this one.
+        result : object
+            Result object from the mutation suite execution.
 
         Returns
         -------
         float
-            Mutation survival rate percentage (0-100) when running all
-            tests except this one.
-
-        Notes
-        -----
-        Creates a HistoryModel record with
-        tag='collect_survival_rate_without_test::{test_id}' for tracking
-        execution history. Queries all test IDs except the target and runs
-        them together to measure combined mutation detection capability.
+            The MSR value.
         """
-        suite = self.mutation_suite
         with self.transaction():
-            query = TestModel.select(TestModel.test_id).where(
-                TestModel.test_id != test_id
-            )
-            tids_to_run = [test.test_id for test in query]
-
-            result = suite.get_survival_rate_for_tests(
-                self.path, self.name, tids_to_run, force
-            )
-
+            project = self._get_project_model()
             if not result.error:
                 test = TestModel.get(TestModel.test_id == test_id)
-                test.msr_without = result.value
+                test.msr_without = value
                 test.save()
 
             self._write_history(
-                project=test.project,
-                tag=f"collect_survival_rate_without_test::{test_id}",
-                result=result,
+                project,
+                f"collect_survival_rate_without_test::{test_id}",
+                result,
             )
 
         result.raise_if_error()
-
-        return result.value
+        return value
 
     # ========================================================================
     # Public Methods - Project Information
@@ -896,17 +751,6 @@ class Project:
         mutation_timeout : float, optional
             Timeout in seconds for mutation testing.
         """
-        if test_suite_name not in TEST_SUITES:
-            raise ValueError(
-                f"Invalid test suite: {test_suite_name}. "
-                f"Available: {', '.join(TEST_SUITES.keys())}"
-            )
-        if mutation_suite_name not in MUTATION_SUITES:
-            raise ValueError(
-                f"Invalid mutation suite: {mutation_suite_name}. "
-                f"Available: {', '.join(MUTATION_SUITES.keys())}"
-            )
-
         with self.transaction():
             project, created = ProjectModel.get_or_create(
                 id=1,

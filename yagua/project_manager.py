@@ -1,9 +1,9 @@
-"""Yagua - Project Manager.
+"""Yagua - Project Manager (Business Logic Layer).
 
 This module provides the ProjectManager class, which encapsulates the
-business logic for project operations. It separates the core functionality
-from the CLI presentation layer, making the code more maintainable and
-testable.
+business logic for project operations. It handles suite instantiation
+and execution, pipeline validation, and delegates all database
+operations to the Project DAL.
 
 The ProjectManager implements a pipeline workflow:
 1. created -> Project is initialized
@@ -19,10 +19,23 @@ The ProjectManager implements a pipeline workflow:
 
 import numpy as np
 
+from .mutationsuites import CosmicRaySuite
+from .testsuites import PytestSuite
+
 
 # =============================================================================
 # CONSTANTS
 # =============================================================================
+
+#: Available test suite handlers mapped by name.
+TEST_SUITES = {
+    "pytest": PytestSuite,
+}
+
+#: Available mutation suite handlers mapped by name.
+MUTATION_SUITES = {
+    "cosmic-ray": CosmicRaySuite,
+}
 
 #: Valid pipeline steps in order
 PIPELINE_STEPS = [
@@ -92,37 +105,22 @@ def _default_callback(current, total, test_id):
 
 
 class ProjectManager:
-    """Manages project operations for Yagua.
+    """Business logic layer for Yagua project operations.
 
     This class encapsulates the business logic for project operations,
-    separating it from the CLI presentation layer. It handles test
-    collection, coverage analysis, mutation testing, and other core
-    functionality.
+    including suite instantiation and execution, pipeline validation,
+    and workflow orchestration. It delegates all database operations
+    to the Project DAL.
 
     Parameters
     ----------
     project : Project
-        Project instance to manage.
+        Project instance (DAL) to manage.
 
     Attributes
     ----------
     project : Project
-        The project instance being managed.
-
-    Methods
-    -------
-    collect_tests
-        Collect tests from a project using pytest.
-    get_tests_info
-        Get tests information as DataFrame.
-    collect_coverage
-        Collect and store coverage information.
-    collect_mutations
-        Collect and analyze mutation testing data.
-    get_project_info
-        Get project information dictionary.
-    export_project
-        Export work directory to an archive file.
+        The project DAL instance being managed.
 
     Notes
     -----
@@ -139,6 +137,39 @@ class ProjectManager:
             Project instance to manage.
         """
         self.project = project
+
+    # ========================================================================
+    # Properties
+    # ========================================================================
+
+    @property
+    def test_suite(self):
+        """Get test suite handler instance for this project.
+
+        Returns
+        -------
+        TestSuiteABC
+            Instantiated test suite handler based on the project's
+            test_suite_name configuration.
+        """
+        suite_cls = TEST_SUITES[self.project.test_suite_name]
+        return suite_cls(self.project.work_path)
+
+    @property
+    def mutation_suite(self):
+        """Get mutation testing suite handler instance for this project.
+
+        Returns
+        -------
+        MutationSuiteABC
+            Instantiated mutation suite handler based on the project's
+            mutation_suite_name configuration.
+        """
+        suite_cls = MUTATION_SUITES[self.project.mutation_suite_name]
+        return suite_cls(
+            self.project.work_path,
+            mutation_timeout=self.project.mutation_timeout,
+        )
 
     # ========================================================================
     # Private Methods - Pipeline Management
@@ -285,14 +316,18 @@ class ProjectManager:
         was_collected = False
 
         if total_tests == 0 or force:
-            # Call progress callback before collection
             progress_callback(0, 1, "collecting")
 
-            saved_count, updated_count = self.project.collect_tests()
+            suite = self.test_suite
+            result = suite.get_tests(self.project.path)
+            tests_data = result.value if not result.error else []
+
+            saved_count, updated_count = self.project.save_tests(
+                tests_data, result
+            )
             total_tests = saved_count + updated_count
             was_collected = True
 
-            # Call progress callback after collection
             progress_callback(1, 1, "collecting")
 
         if total_tests == 0:
@@ -413,10 +448,15 @@ class ProjectManager:
                 f"No tests found for project '{self.project.name}'."
             )
 
+        suite = self.test_suite
+        project_path = self.project.path
+        project_name = self.project.name
+
         # Phase 1: Calculate coverage for all tests combined
         if self.project.coverage is None or force:
             progress_callback(1, 1, "All Tests")
-            self.project.collect_coverage()
+            result = suite.get_coverage(project_path, project_name)
+            self.project.save_coverage(result.value, result)
 
         coverage = self.project.coverage
 
@@ -429,19 +469,28 @@ class ProjectManager:
         tests_data = []
 
         for idx, (test_id, cov_alone, cov_wo) in enumerate(tests_ids, 1):
-            # Call progress callback
             progress_callback(idx, tests_count, test_id)
 
-            # Phase 2: Calculate coverage when running only this test
+            # Phase 2: Coverage when running only this test
             cov_alone = _coerce_na(cov_alone)
             if cov_alone is None or force:
-                cov_alone = self.project.collect_coverage_for_test(test_id)
+                result = suite.get_coverage_for_tests(
+                    project_path, project_name, [test_id]
+                )
+                cov_alone = self.project.save_test_coverage_alone(
+                    test_id, result.value, result
+                )
 
-            # Phase 3: Calculate coverage when running all tests except
-            # this one
+            # Phase 3: Coverage when running all tests except this one
             cov_wo = _coerce_na(cov_wo)
             if cov_wo is None or force:
-                cov_wo = self.project.collect_coverage_without_test(test_id)
+                tids = self.project.get_test_ids_except(test_id)
+                result = suite.get_coverage_for_tests(
+                    project_path, project_name, tids
+                )
+                cov_wo = self.project.save_test_coverage_without(
+                    test_id, result.value, result
+                )
 
             tests_data.append((test_id, cov_alone, cov_wo))
 
@@ -500,19 +549,26 @@ class ProjectManager:
         # Validate that coverage exists before running mutations
         if not self.project.coverage:
             raise ValueError(
-                "Coverage data is required before running mutation analysis."
+                "Coverage data is required before running "
+                "mutation analysis."
             )
+
+        suite = self.mutation_suite
+        project_path = self.project.path
+        project_name = self.project.name
 
         # Phase 1: Initialize mutations and count mutants
         if self.project.mutants_number is None or force:
-            self.project.collect_mutants(force=force)
+            result = suite.get_mutants(project_path, project_name, force=force)
+            self.project.save_mutants_number(result.value, result)
 
         mutants_number = self.project.mutants_number
 
         # Phase 2: Execute mutations and calculate survival rate
         if self.project.msr is None or force:
             progress_callback(1, 1, "All tests")
-            self.project.collect_survival_rate(force)
+            result = suite.get_survival_rate(project_path, project_name, force)
+            self.project.save_msr(result.value, result)
 
         msr = self.project.msr
 
@@ -540,22 +596,27 @@ class ProjectManager:
 
         tests_data = []
         for idx, (test_id, msr_alone, msr_wo) in enumerate(tests_data_arr, 1):
-            # Call progress callback
             progress_callback(idx, tests_count, test_id)
 
-            # Phase 2: Calculate mutation score when running only this test
+            # MSR when running only this test
             msr_alone = _coerce_na(msr_alone)
             if msr_alone is None or force:
-                msr_alone = self.project.collect_survival_rate_for_test(
-                    test_id, force=force
+                result = suite.get_survival_rate_for_tests(
+                    project_path, project_name, [test_id], force
+                )
+                msr_alone = self.project.save_test_msr_alone(
+                    test_id, result.value, result
                 )
 
-            # Phase 3: Calculate mutation score when running all tests
-            # except this one
+            # MSR when running all tests except this one
             msr_wo = _coerce_na(msr_wo)
             if msr_wo is None or force:
-                msr_wo = self.project.collect_survival_rate_without_test(
-                    test_id, force=force
+                tids = self.project.get_test_ids_except(test_id)
+                result = suite.get_survival_rate_for_tests(
+                    project_path, project_name, tids, force
+                )
+                msr_wo = self.project.save_test_msr_without(
+                    test_id, result.value, result
                 )
 
             tests_data.append((test_id, msr_alone, msr_wo))
