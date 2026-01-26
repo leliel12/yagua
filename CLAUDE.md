@@ -12,10 +12,10 @@
 yagua/
 ├── __init__.py
 ├── models.py           # Peewee ORM models (ProjectModel, TestModel, HistoryModel)
-├── project.py          # Project class - database access layer (DAL)
-├── project_manager.py  # ProjectManager class - business logic layer
+├── project_store.py    # ProjectStore class - database access layer (DAL)
+├── project.py          # Project class - business logic layer
 ├── cli.py              # Typer CLI commands (session-based pipeline pattern)
-├── io.py               # Import/export operations (read_dir/read_archive return ProjectManager)
+├── io.py               # Import/export operations (read_dir/read_archive return Project)
 ├── testsuites/         # Test suite handlers (TestSuiteABC, PytestSuite)
 ├── mutationsuites/     # Mutation suite handlers (MutationSuiteABC, CosmicRaySuite)
 └── utils/              # Utility functions (df2rt for Rich table formatting)
@@ -24,8 +24,8 @@ yagua/
 ## Key Patterns
 
 - **One Work Directory Per Project**: Each work directory contains yagua.db with one project
-- **Dynamic Model Binding**: Models bound to database at runtime in `Project.__init__()`
-- **Layered Architecture**: `Project` (DAL) handles database operations, `ProjectManager` (business logic) handles pipeline validation and workflows
+- **Dynamic Model Binding**: Models bound to database at runtime in `ProjectStore.__init__()`
+- **Layered Architecture**: `ProjectStore` (DAL) handles database operations, `Project` (business logic) handles pipeline validation and workflows
 - **Session-Based Pipeline**: CLI implements resumable pipeline pattern with state tracking
 
 ## Commands
@@ -65,6 +65,4 @@ yagua export my_work_dir output.tar.gz
 
 Cuando use claude, recordame que revise estos pendientes
 
-1. ~~Usar el timeout de cosmic ray~~ ✅ (Completado)
-2. Los MSR no se guardan bien
-3. ~~El coverage dentro de yagua da distinto a ejecutarlo manualmente~~ ✅ (Completado)
+> No hay pendientes

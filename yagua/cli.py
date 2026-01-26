@@ -22,8 +22,8 @@ from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
 
-from .project import Project
-from .project_manager import ProjectManager, PipelineError
+from .project import Project, PipelineError
+from .project_store import ProjectStore
 from .utils.df2rt import df_to_rich_table
 
 
@@ -195,7 +195,7 @@ class CLIManager:
     @contextlib.contextmanager
     def _use_project(self, work_dir):
         """Context manager to validate work directory and provide \
-        ProjectManager.
+        Project.
 
         Parameters
         ----------
@@ -204,8 +204,8 @@ class CLIManager:
 
         Yields
         ------
-        ProjectManager
-            ProjectManager instance with the project.
+        Project
+            Project instance with the store.
 
         Raises
         ------
@@ -221,31 +221,31 @@ class CLIManager:
                 )
             )
             raise typer.Exit(code=1)
-        proj = Project(work_dir=work_dir)
+        store = ProjectStore(work_dir=work_dir)
         try:
             console.print(
-                f"[dim]🔍 Using project:[/dim] [cyan]{proj.name}[/cyan] "
-                f"[dim]({proj.path})[/dim]\n"
+                f"[dim]🔍 Using project:[/dim] [cyan]{store.name}[/cyan] "
+                f"[dim]({store.path})[/dim]\n"
             )
-            pm = ProjectManager(proj)
-            yield pm
+            proj = Project(store)
+            yield proj
         finally:
-            proj.close()
+            store.close()
 
-    def _get_pipeline_progress(self, pm):
+    def _get_pipeline_progress(self, proj):
         """Calculate pipeline progress statistics.
 
         Parameters
         ----------
-        pm : ProjectManager
-            ProjectManager instance.
+        proj : Project
+            Project instance.
 
         Returns
         -------
         dict
             Dictionary with progress statistics for each phase.
         """
-        tests_df = pm.project.get_tests_dataframe()
+        tests_df = proj.store.get_tests_dataframe()
         total_tests = len(tests_df)
 
         progress = {
@@ -389,7 +389,7 @@ class CLIManager:
         )
 
         try:
-            proj = Project.from_project_info(
+            store = ProjectStore.from_project_info(
                 name=project_name,
                 path=project_path,
                 work_dir=work_dir,
@@ -409,20 +409,20 @@ class CLIManager:
         # Build success message
         info_lines = [
             "[bold green]✅ Project initialized successfully![/bold green]\n",
-            f"[cyan]📝 Name:[/cyan] {proj.name}",
-            f"[cyan]📁 Path:[/cyan] {proj.path}",
-            f"[cyan]🗂️  Work Dir:[/cyan] {proj.work_dir}",
-            f"[cyan]💾 Database:[/cyan] {proj.db_path}",
-            f"[cyan]📊 Pipeline:[/cyan] {proj.pipeline_step}",
+            f"[cyan]📝 Name:[/cyan] {store.name}",
+            f"[cyan]📁 Path:[/cyan] {store.path}",
+            f"[cyan]🗂️  Work Dir:[/cyan] {store.work_dir}",
+            f"[cyan]💾 Database:[/cyan] {store.db_path}",
+            f"[cyan]📊 Pipeline:[/cyan] {store.pipeline_step}",
         ]
 
-        if proj.description:
+        if store.description:
             info_lines.append(
-                f"[cyan]🪪 Description:[/cyan] {proj.description}"
+                f"[cyan]🪪 Description:[/cyan] {store.description}"
             )
 
         info_lines.append(
-            f"[cyan]⏱️  Mutation Timeout:[/cyan] {proj.mutation_timeout}s"
+            f"[cyan]⏱️  Mutation Timeout:[/cyan] {store.mutation_timeout}s"
         )
 
         info_lines.append(
@@ -478,12 +478,12 @@ class CLIManager:
         typer.Exit
             If work directory does not exist or execution fails.
         """
-        with self._use_project(work_dir) as pm:
+        with self._use_project(work_dir) as proj:
             console.print(
                 "[bold cyan]🚀 Running yagua pipeline...[/bold cyan]\n"
             )
             try:
-                while step_method := pm.next_step():
+                while step_method := proj.next_step():
                     step_name = step_method.__name__.replace("_", "-")
                     self._run_step(step_method, step_name, force)
 
@@ -492,8 +492,8 @@ class CLIManager:
                     "[/bold green]\n"
                 )
             except Exception as err:
-                # Mark failure using ProjectManager
-                pm.mark_failed()
+                # Mark failure using Project
+                proj.mark_failed()
 
                 if raise_errors:
                     raise
@@ -598,10 +598,10 @@ class CLIManager:
         typer.Exit
             If work directory does not exist.
         """
-        with self._use_project(work_dir) as pm:
+        with self._use_project(work_dir) as proj:
             # Get progress statistics
-            progress = self._get_pipeline_progress(pm)
-            current_step = PipelineStep(pm.project.pipeline_step)
+            progress = self._get_pipeline_progress(proj)
+            current_step = PipelineStep(proj.store.pipeline_step)
 
             # Build status table
             table = Table(title="Pipeline Status", show_header=True)
@@ -686,24 +686,24 @@ class CLIManager:
                 f"[cyan]📊 Current Step:[/cyan] {current_step.value}",
             ]
 
-            if pm.project.coverage is not None:
+            if proj.store.coverage is not None:
                 info_lines.append(
-                    f"[cyan]💯 Coverage:[/cyan] {pm.project.coverage:.2f}%"
+                    f"[cyan]💯 Coverage:[/cyan] {proj.store.coverage:.2f}%"
                 )
 
-            if pm.project.mutants_number is not None:
+            if proj.store.mutants_number is not None:
                 info_lines.append(
-                    f"[cyan]🧬 Mutants:[/cyan] {pm.project.mutants_number}"
+                    f"[cyan]🧬 Mutants:[/cyan] {proj.store.mutants_number}"
                 )
 
-            if pm.project.msr is not None:
+            if proj.store.msr is not None:
                 info_lines.append(
-                    f"[cyan]🎯 Survival Rate:[/cyan] {pm.project.msr:.2f}%"
+                    f"[cyan]🎯 Survival Rate:[/cyan] {proj.store.msr:.2f}%"
                 )
 
-            if pm.project.failed_at:
+            if proj.store.failed_at:
                 info_lines.append(
-                    f"[yellow]⚠️  Last Failure:[/yellow] {pm.project.failed_at}"  # noqa
+                    f"[yellow]⚠️  Last Failure:[/yellow] {proj.store.failed_at}"  # noqa
                 )
 
             console.print(Panel("\n".join(info_lines), border_style="blue"))
@@ -749,9 +749,9 @@ class CLIManager:
         typer.Exit
             If work directory does not exist.
         """
-        with self._use_project(work_dir) as pm:
+        with self._use_project(work_dir) as proj:
             try:
-                result = pm.get_tests_info(include_internal=long)
+                result = proj.get_tests_info(include_internal=long)
             except (ValueError, PipelineError) as err:
                 if raise_errors:
                     raise
@@ -774,10 +774,10 @@ class CLIManager:
                     f"💯 [bold green]Total coverage:[/bold green] "
                     f"[cyan]{result['coverage']:.2f}%[/cyan]"
                 )
-            if pm.project.msr is not None:
+            if proj.store.msr is not None:
                 console.print(
                     f"🎯 [bold green]Survival rate:[/bold green] "
-                    f"[cyan]{pm.project.msr:.2f}%[/cyan]"
+                    f"[cyan]{proj.store.msr:.2f}%[/cyan]"
                 )
             console.print()
 
@@ -829,13 +829,13 @@ class CLIManager:
         typer.Exit
             If work directory does not exist or export fails.
         """
-        with self._use_project(work_dir) as pm:
+        with self._use_project(work_dir) as proj:
             console.print(
                 "\n[bold cyan]📦 Exporting work directory...[/bold cyan]\n"
             )
 
             try:
-                archive_path = pm.export_project(output_path=output)
+                archive_path = proj.export_project(output_path=output)
             except Exception as err:
                 if raise_errors:
                     raise
@@ -858,7 +858,7 @@ class CLIManager:
                     "[/bold green]\n"
                 ),
                 f"[cyan]📦 Archive:[/cyan] {archive_path}",
-                f"[cyan]📁 Source:[/cyan] {pm.project.work_dir}",
+                f"[cyan]📁 Source:[/cyan] {proj.store.work_dir}",
             ]
 
             console.print(

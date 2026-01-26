@@ -15,13 +15,13 @@ Yagua uses a 3-layer architecture with subprocess-based framework adapters:
                             ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                    Business Logic Layer                         │
-│  (project_manager.py) - Pipeline validation, state tracking     │
+│     (project.py) - Pipeline validation, state tracking           │
 └───────────────────────────┬─────────────────────────────────────┘
                             │
                             ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                   Data Access Layer                             │
-│     (project.py) - Database ops, suite orchestration            │
+│  (project_store.py) - Database ops, suite orchestration          │
 └────────┬──────────────────┬──────────────────┬──────────────────┘
          │                  │                  │
          ▼                  ▼                  ▼
@@ -45,9 +45,9 @@ Yagua uses a 3-layer architecture with subprocess-based framework adapters:
 
 **Pattern**: Session-based pipeline with resumability
 
-### 2. Business Logic (`project_manager.py`)
+### 2. Business Logic (`project.py`)
 
-**ProjectManager** wraps Project to provide:
+**Project** wraps ProjectStore to provide:
 - Pipeline validation and state tracking
 - Stage execution with caching
 - Progress callbacks
@@ -57,18 +57,18 @@ Yagua uses a 3-layer architecture with subprocess-based framework adapters:
 - `run_pipeline(rerun=False)`: Execute complete workflow
 - `get_pipeline_status()`: Check stage completion
 
-### 3. Data Access Layer (`project.py`)
+### 3. Data Access Layer (`project_store.py`)
 
-**Project** handles database operations:
+**ProjectStore** handles database operations:
 
 ```python
 # Create new
-proj = Project.from_project_info(
+store = ProjectStore.from_project_info(
     name="name", path="/project", work_dir="/work", mutation_timeout=50.0
 )
 
 # Open existing
-proj = Project(work_dir="/work")
+store = ProjectStore(work_dir="/work")
 ```
 
 **Responsibilities**:
@@ -121,7 +121,7 @@ yagua run work_dir
   ↓
 CLIManager.run()
   ↓
-ProjectManager.run_pipeline()
+Project.run_pipeline()
   ↓
 1. collect_tests() → PytestSuite (subprocess)
 2. collect_coverage() → PytestSuite (subprocess, N tests = 2N+1 runs)
@@ -144,7 +144,7 @@ Database: All data persisted to work_dir/yagua.db
 
 ## Key Design Patterns
 
-1. **Layered Architecture**: CLI → ProjectManager → Project → Suites
+1. **Layered Architecture**: CLI → Project → ProjectStore → Suites
 2. **Subprocess Isolation**: External commands for pytest/cosmic-ray
 3. **Session-Based Pipeline**: Resumable, cached stages
 4. **Hash-Based Files**: Deterministic temp file naming (MD5)
@@ -155,7 +155,7 @@ Database: All data persisted to work_dir/yagua.db
 ## Database Architecture
 
 - **One work_dir per project**: Each contains yagua.db with one ProjectModel (id=1)
-- **Runtime binding**: Models dynamically bound to SqliteDatabase instance
+- **Runtime binding**: Models dynamically bound to SqliteDatabase instance in ProjectStore
 - **Transaction management**: All operations wrapped in transactions
 - **Calculated properties**: Metrics auto-computed via hybrid properties
 

@@ -214,46 +214,46 @@ yagua export my_work_dir --output backup.tar.gz
 Yagua provides a complete Python API for integration into scripts and tools:
 
 ```python
-from yagua import Project, ProjectManager, read_dir, read_archive
+from yagua import Project, ProjectStore, read_dir, read_archive
 
-# Create new project (creates work_dir with yagua.db inside)
-proj = Project.from_project_info(
+# Create new project store (creates work_dir with yagua.db inside)
+store = ProjectStore.from_project_info(
     name="my_project",
     path="/path/to/project",
     work_dir="my_work_dir",
     description="Optional description",
     mutation_timeout=50.0
 )
-# Wrap in ProjectManager for business logic operations
-pm = ProjectManager(proj)
+# Wrap in Project for business logic operations
+proj = Project(store)
 
-# Open existing project from work directory (returns ProjectManager)
-pm = read_dir("my_work_dir")
+# Open existing project from work directory (returns Project)
+proj = read_dir("my_work_dir")
 
-# Open project from an archive file (returns ProjectManager)
-pm = read_archive("my_project.zip")
+# Open project from an archive file (returns Project)
+proj = read_archive("my_project.zip")
 
 # Run the complete pipeline with progress tracking
 def progress(current, total, test_id):
     print(f"Processing {current}/{total}: {test_id}")
 
-result = pm.run_pipeline(
+result = proj.run_pipeline(
     rerun=False,  # Set to True to force re-execution
     progress_callback=progress
 )
 
 # Check pipeline status
-status = pm.get_pipeline_status()
+status = proj.get_pipeline_status()
 print(f"Tests collected: {status['tests_collected']}")
 print(f"Coverage collected: {status['coverage_collected']}")
 print(f"Mutations collected: {status['mutations_collected']}")
 
 # Get tests as DataFrame
-info = pm.get_tests_info()
+info = proj.get_tests_info()
 tests_df = info['tests_df']
 
 # Access project properties
-project_info = pm.get_project_info()
+project_info = proj.get_project_info()
 print(f"Name: {project_info['name']}")
 print(f"Path: {project_info['path']}")
 print(f"Work Dir: {project_info['work_dir']}")
@@ -262,7 +262,7 @@ print(f"Coverage: {project_info['coverage']}")
 print(f"Total MSR: {project_info['msr']}")
 
 # Close when done
-pm.project.close()
+proj.store.close()
 ```
 
 For architectural details and system design, see [ARCHITECTURE.md](ARCHITECTURE.md).

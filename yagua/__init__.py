@@ -13,31 +13,31 @@ main : function
     CLI entry point for the yagua command-line tool (session-based
     pipeline design).
 Project : class
-    Database access layer for managing project data and test information.
-ProjectManager : class
     Business logic layer for project operations with pipeline validation.
+ProjectStore : class
+    Data access layer for managing project data and test information.
 PytestSuite : class
     Test suite handler for pytest-based projects.
 TestSuiteABC : class
     Abstract base class for implementing test suite handlers.
 read_dir : function
     Convenience function to open an existing project work directory
-    (returns ProjectManager).
+    (returns Project).
 read_archive : function
     Convenience function to extract and open a project from an archive
-    file (returns ProjectManager).
+    file (returns Project).
 """
 
 from .cli import main
 from .io import read_archive, read_dir
 from .project import Project
-from .project_manager import ProjectManager
+from .project_store import ProjectStore
 from .testsuites import PytestSuite, TestSuiteABC
 
 __all__ = [
     "main",
     "Project",
-    "ProjectManager",
+    "ProjectStore",
     "PytestSuite",
     "TestSuiteABC",
     "read_dir",

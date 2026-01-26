@@ -1,793 +1,690 @@
-"""Yagua - Project Class (Data Access Layer).
+"""Yagua - Project Class (Business Logic Layer).
 
-This module provides the Project class, which serves as the data
-access layer (DAL) for managing project databases, tests, and
-history records. Each Project instance represents a single SQLite
-database file containing one project's data.
+This module provides the Project class, which encapsulates the
+business logic for project operations. It handles suite instantiation
+and execution, pipeline validation, and delegates all database
+operations to the ProjectStore DAL.
 
-The Project class is responsible exclusively for CRUD operations
-and transactions. All business logic, suite execution, and pipeline
-management are handled by ProjectManager.
-
-Classes
--------
-Project : class
-    Data access layer for project database operations, providing
-    methods to save/query tests, coverage, mutations, and history.
-
-Architecture
-------------
-- Each Project instance creates its own SqliteDatabase connection
-- Models are dynamically bound to the database via transaction()
-  context manager
-- All database operations are wrapped in transactions for ACID
-  compliance
-- The database schema is automatically created on first instantiation
-
-Key Patterns
-------------
-1. **One Work Directory Per Project**: Each work directory contains
-   exactly one project database
-2. **Dynamic Model Binding**: Models are bound to database instances
-   at runtime
-3. **Transaction Management**: All DB operations use atomic
-   transactions
-4. **Pure DAL**: No suite execution or business logic; only
-   database read/write operations
+The Project implements a pipeline workflow:
+1. created -> Project is initialized
+2. tests_collected -> Tests have been collected
+3. coverage_collected -> Coverage has been analyzed
+4. mutations_collected -> Mutations have been analyzed
+5. completed -> All analysis steps finished
 """
 
-import contextlib
-from pathlib import Path
+# =============================================================================
+# IMPORTS
+# =============================================================================
 
-import pandas as pd
-from peewee import SqliteDatabase
+import numpy as np
 
-from . import io as yagua_io
-from .models import BaseModel, HistoryModel, ProjectModel, TestModel
+from .mutationsuites import CosmicRaySuite
+from .testsuites import PytestSuite
 
 
-# ============================================================================
+# =============================================================================
 # CONSTANTS
-# ============================================================================
+# =============================================================================
 
-#: Models that need to have tables created in the database.
-#: These are the concrete models that store actual data.
-#: BaseModel is excluded as it's abstract.
-MODELS_TO_CREATE = [ProjectModel, TestModel, HistoryModel]
+#: Available test suite handlers mapped by name.
+TEST_SUITES = {
+    "pytest": PytestSuite,
+}
 
-#: All models that need to be bound to the database instance.
-#: Includes BaseModel since child models inherit from it and
-#: the binding needs to propagate through the inheritance chain.
-ALL_MODELS = [BaseModel] + MODELS_TO_CREATE
+#: Available mutation suite handlers mapped by name.
+MUTATION_SUITES = {
+    "cosmic-ray": CosmicRaySuite,
+}
 
-# ============================================================================
-# PROJECT CLASS
-# ============================================================================
+#: Valid pipeline steps in order
+PIPELINE_STEPS = [
+    "created",
+    "tests_collected",
+    "coverage_collected",
+    "mutations_collected",
+]
+
+#: Mapping of pipeline steps to their index for ordering
+PIPELINE_ORDER = {step: idx for idx, step in enumerate(PIPELINE_STEPS)}
 
 
-class Project:
-    """Data access layer for project database operations.
+# =============================================================================
+# EXCEPTIONS
+# =============================================================================
 
-    This class manages the database connection and provides methods to
-    save and query projects, tests, and execution history. The database
-    instance is created per-project and models are dynamically bound
-    to it. Each work directory represents a single project.
 
-    All suite execution and business logic is handled by
-    ProjectManager; this class only performs database operations.
+class PipelineError(Exception):
+    """Exception raised when pipeline step validation fails."""
+
+    pass
+
+
+# =============================================================================
+# PRIVATE HELPER FUNCTIONS
+# =============================================================================
+
+
+def _coerce_na(value):
+    """
+    Coerces input values that are None or NaN (Not a Number) to None.
+
+    This function is useful in data cleaning pipelines where you need a
+    consistent representation for missing data points before further processing
+    or storage (e.g., storing in a database that uses NULL).
 
     Parameters
     ----------
-    work_dir : str or Path
-        Path to the project's work directory. The database file (yagua.db)
-        will be located inside this directory along with all temporary files.
+    value : Any
+        The input value to check. Can be of various types
+        (float, int, str, None, etc.).
+
+    Returns
+    -------
+    Union[Any, None]
+        Returns ``None`` if the input value is ``None`` or if it is a
+        floating-point ``NaN`` value from numpy. Otherwise, the original value
+        is returned unchanged.
+
+    See Also
+    --------
+    numpy.isnan : Function used internally to check for NaN values.
+    """
+    if value is None or (isinstance(value, float) and np.isnan(value)):
+        return None
+    return value
+
+
+def _default_callback(current, total, test_id):
+    pass
+
+
+# =============================================================================
+# PROJECT CLASS
+# =============================================================================
+
+
+class Project:
+    """Business logic layer for Yagua project operations.
+
+    This class encapsulates the business logic for project operations,
+    including suite instantiation and execution, pipeline validation,
+    and workflow orchestration. It delegates all database operations
+    to the ProjectStore DAL.
+
+    Parameters
+    ----------
+    store : ProjectStore
+        ProjectStore instance (DAL) to manage.
 
     Attributes
     ----------
-    work_dir : Path
-        Work directory for this project containing the database and
-        temporary files.
-    db_path : Path
-        Path to the SQLite database file (work_dir/yagua.db).
-    db : SqliteDatabase
-        Database instance for this project. Models (ProjectModel, TestModel,
-        HistoryModel) are bound to this instance via transaction contexts.
+    store : ProjectStore
+        The project DAL instance being managed.
 
     Notes
     -----
-    All database operations use the transaction() context manager which handles
-    model binding and automatic transaction management (commit/rollback).
-
-    The work directory structure:
-    work_dir/
-    ├── yagua.db           # Main database file
-    └── [temp files]       # Framework-specific temporary files
+    This class does not handle any CLI-specific formatting or display.
+    All presentation logic should be handled by the CLIManager.
     """
 
-    # ========================================================================
-    # Constructor
-    # ========================================================================
-
-    def __init__(self, work_dir):
-        """Initialize Project with work directory.
+    def __init__(self, store):
+        """Initialize Project with a ProjectStore instance.
 
         Parameters
         ----------
-        work_dir : str or Path
-            Path to work directory containing yagua.db and temporary files.
+        store : ProjectStore
+            ProjectStore instance to manage.
         """
-        self.work_dir = Path(work_dir).resolve()
-        self.db_path = self.work_dir / "yagua.db"
-        self.db = SqliteDatabase(str(self.db_path))
-        self.db.connect()
-
-        with self.transaction():
-            self.db.create_tables(MODELS_TO_CREATE, safe=True)
+        self.store = store
 
     # ========================================================================
-    # Alternative Constructors
+    # Properties
     # ========================================================================
 
-    @classmethod
-    def from_project_info(
-        cls, name, path, work_dir, description=None, mutation_timeout=None
-    ) -> "Project":
-        """Create new Project with initial project information.
-
-        This method creates a new work directory and initializes a project
-        database inside it with the provided metadata.
-
-        Parameters
-        ----------
-        name : str
-            Project name.
-        path : str or Path
-            Path to the project directory being analyzed.
-        work_dir : str or Path
-            Work directory path where yagua.db and temporary files will
-            be stored (must not exist).
-        description : str, optional
-            Project description. Default is None.
-        mutation_timeout : float, optional
-            Timeout in seconds for mutation testing. Default is None.
+    @property
+    def test_suite(self):
+        """Get test suite handler instance for this project.
 
         Returns
         -------
-        Project
-            New Project instance with stored project information.
+        TestSuiteABC
+            Instantiated test suite handler based on the project's
+            test_suite_name configuration.
+        """
+        suite_cls = TEST_SUITES[self.store.test_suite_name]
+        return suite_cls(self.store.work_path)
+
+    @property
+    def mutation_suite(self):
+        """Get mutation testing suite handler instance for this project.
+
+        Returns
+        -------
+        MutationSuiteABC
+            Instantiated mutation suite handler based on the project's
+            mutation_suite_name configuration.
+        """
+        suite_cls = MUTATION_SUITES[self.store.mutation_suite_name]
+        return suite_cls(
+            self.store.work_path,
+            mutation_timeout=self.store.mutation_timeout,
+        )
+
+    # ========================================================================
+    # Private Methods - Pipeline Management
+    # ========================================================================
+
+    def _get_current_step(self):
+        """Get current pipeline step from the database.
+
+        Returns
+        -------
+        str
+            Current pipeline step.
+        """
+        return self.store.pipeline_step
+
+    def _validate_step(self, required_step):
+        """Validate that the required pipeline step has been completed.
+
+        Parameters
+        ----------
+        required_step : str
+            The pipeline step that must have been completed.
 
         Raises
         ------
-        ValueError
-            If work directory already exists.
-
-        Notes
-        -----
-        The work directory will be created by this method and will contain:
-        - yagua.db: SQLite database with project metadata and test data
-        - Temporary files from test/mutation frameworks
+        PipelineError
+            If the required step has not been completed yet.
         """
-        work_dir = Path(work_dir).resolve()
-        if work_dir.exists():
-            raise ValueError(
-                f"Work directory {work_dir} already exists. "
-                "Please choose a different directory or remove the existing one."
+        current = self._get_current_step()
+        current_idx = PIPELINE_ORDER.get(current, -1)
+        required_idx = PIPELINE_ORDER.get(required_step, -1)
+
+        if current_idx < required_idx:
+            raise PipelineError(
+                f"Cannot proceed: required pipeline step '{required_step}' "
+                f"has not been completed yet. Current step: '{current}'."
             )
 
-        path = Path(path).resolve()
-
-        # Create work directory
-        work_dir.mkdir(parents=True, exist_ok=False)
-
-        # Test and mutation suite names are constants for now
-        test_suite_name = "pytest"
-        mutation_suite_name = "cosmic-ray"
-
-        project = cls(work_dir)
-        project.store_project_info(
-            name,
-            path,
-            work_dir,
-            test_suite_name,
-            mutation_suite_name,
-            description,
-            mutation_timeout,
-        )
-
-        return project
-
-    # ========================================================================
-    # Private Methods
-    # ========================================================================
-
-    def _get_project_model(self):
-        """Get the project model from database.
-
-        Returns
-        -------
-        ProjectModel
-            The project model instance.
-        """
-        with self.transaction():
-            return ProjectModel.get_by_id(1)
-
-    @contextlib.contextmanager
-    def transaction(self):
-        """Context manager for database transactions with model binding.
-
-        This method provides a context manager that:
-        1. Binds all models to this project's database instance
-        2. Opens an atomic transaction
-        3. Automatically commits on success or rolls back on error
-
-        Yields
-        ------
-        Transaction
-            Database transaction context from Peewee.
-
-        Notes
-        -----
-        All database operations should be wrapped in this context manager
-        to ensure proper model binding and transaction management.
-        """
-        with self.db.bind_ctx(ALL_MODELS):
-            with self.db.atomic() as txn:
-                try:
-                    yield txn
-                    txn.commit()
-                except Exception:
-                    txn.rollback()
-
-    # ========================================================================
-    # Public Methods - Test Management
-    # ========================================================================
-
-    def add_test(
-        self,
-        project,
-        test_id: str,
-        file: str,
-        suite: str | None,
-        test: str,
-    ) -> tuple[TestModel, bool]:
-        """Add or update a test in the database.
-
-        Parameters
-        ----------
-        project : ProjectModel
-            Project model instance.
-        test_id : str
-            Unique identifier for the test (usually the full pytest nodeid).
-        file : str
-            Test file path.
-        suite : str, optional
-            Test suite name.
-        test : str
-            Test name.
-
-        Returns
-        -------
-        tuple[TestModel, bool]
-            Tuple of (test, created) where created is True if the test
-            was newly created.
-
-        Notes
-        -----
-        Coverage information (coverage_alone, coverage_without) should be
-        updated separately using save_test_coverage_alone() and
-        save_test_coverage_without() methods.
-        """
-        with self.transaction():
-            test_obj, created = TestModel.get_or_create(
-                project=project,
-                test_id=test_id,
-                file=file,
-                suite=suite,
-                test=test,
-            )
-
-        return test_obj, created
-
-    def get_tests_dataframe(self) -> pd.DataFrame:
-        """Get all tests for this project as a DataFrame.
-
-        This method queries all tests from the database and converts them
-        to a pandas DataFrame, including both regular fields and calculated
-        hybrid properties (coverage_impact, coverage_uniqueness, etc.).
-
-        Returns
-        -------
-        pd.DataFrame
-            DataFrame containing all test information.
-
-        Notes
-        -----
-        Calculated properties (coverage_impact, coverage_uniqueness, etc.)
-        will be None if the required coverage data has not been collected yet.
-        """
-        # Helper function to group coverage columns (currently commented out)
-        # def group_coverage_columns(columns):
-        #     levels = []
-        #     for c in columns:
-        #         if c.startswith("coverage_"):
-        #             sublevel = c.split("_", 1)[-1]
-        #             levels.append(("coverage", sublevel))
-        #         else:
-        #             levels.append((None, c))
-        #     return pd.MultiIndex.from_tuples(levels)
-
-        with self.transaction():
-            project = self._get_project_model()
-            query = TestModel.select().where(TestModel.project == project)
-            # Convert each model to dict using to_records() which
-            # includes hybrid properties
-            dicts = (dict(mdl.to_records()) for mdl in query)
-            df = pd.DataFrame.from_dict(dicts)
-            # Option to group coverage columns into multiindex
-            # (currently disabled)
-            # df.columns = group_coverage_columns(df.columns)
-
-        return df
-
-    def count_tests(self) -> int:
-        """Count all tests for this project.
-
-        Returns
-        -------
-        int
-            Number of tests for the project.
-        """
-        with self.transaction():
-            project = self._get_project_model()
-            return (
-                TestModel.select().where(TestModel.project == project).count()
-            )
-
-    def get_test(self, test_id: str | int) -> pd.Series:
-        """Get a specific test by its test_id or database ID.
-
-        This method retrieves a test from the database and returns it as
-        a pandas Series with all fields and calculated properties. It supports
-        lookup by both the database integer ID and the string test_id
-        (pytest nodeid).
-
-        Parameters
-        ----------
-        test_id : str | int
-            Unique identifier for the test. Can be either:
-            - int: Database primary key ID (e.g., 1, 2, 3)
-            - str: Pytest nodeid (e.g., 'test_file.py::TestClass::test_method')
-
-        Returns
-        -------
-        pd.Series
-            Pandas Series containing all test fields and calculated properties
-            (coverage_impact, coverage_overlap, coverage_uniqueness,
-            coverage_redundancy). The series name is set to "test".
-
-        Raises
-        ------
-        peewee.DoesNotExist
-            If no test with the given test_id exists.
-        """
-        with self.transaction():
-            # Build filter condition based on test_id type
-            # Integer: lookup by database primary key ID
-            # String: lookup by pytest nodeid (test_id field)
-            flt = (
-                (TestModel.id == test_id)
-                if isinstance(test_id, int)
-                else (TestModel.test_id == test_id)
-            )
-
-            # Retrieve test model instance
-            test = TestModel.get(flt)
-
-            # Convert to dictionary including hybrid properties
-            test_dict = dict(test.to_records())
-
-            # Convert to pandas Series for easier data manipulation
-            series = pd.DataFrame.from_dict([test_dict]).iloc[0]
-            series.name = "test"
-
-            return series
-
-    def _write_history(self, project, tag, result):
-        return HistoryModel.create(
-            project=project,
-            tag=tag,
-            command=result.command,
-            status_code=result.status_code,
-            stdout=result.stdout,
-            stderr=result.stderr,
-            result=result.result,
-        )
-
-    def write_history(self, tag, result, project=None):
-        """Write a history entry to the database.
-
-        Parameters
-        ----------
-        tag : str
-            History tag identifying the operation.
-        result : object
-            Result object with command, status_code, stdout, stderr,
-            and result attributes.
-        project : ProjectModel, optional
-            Project model instance. If None, fetches from database.
-
-        Returns
-        -------
-        HistoryModel
-            Created history model instance.
-        """
-        with self.transaction():
-            if project is None:
-                project = self._get_project_model()
-            return self._write_history(project, tag, result)
-
-    def get_test_ids_except(self, excluded_test_id):
-        """Get all test IDs except the specified one.
-
-        Parameters
-        ----------
-        excluded_test_id : str
-            Test ID to exclude from the results.
-
-        Returns
-        -------
-        list[str]
-            List of test IDs excluding the specified one.
-        """
-        with self.transaction():
-            query = TestModel.select(TestModel.test_id).where(
-                TestModel.test_id != excluded_test_id
-            )
-            return [test.test_id for test in query]
-
-    # ========================================================================
-    # Public Methods - Save Operations (DAL)
-    # ========================================================================
-
-    def save_tests(self, tests_data, result):
-        """Save collected tests and write history in a transaction.
-
-        Parameters
-        ----------
-        tests_data : list[tuple]
-            List of (test_id, file, suite_name, test) tuples.
-        result : object
-            Result object from the test suite execution.
-
-        Returns
-        -------
-        tuple[int, int]
-            Tuple of (saved_count, updated_count).
-        """
-        saved_count = 0
-        updated_count = 0
-        with self.transaction():
-            project = self._get_project_model()
-            if not result.error:
-                for test_id, file, suite_name, test in tests_data:
-                    _, created = self.add_test(
-                        project=project,
-                        test_id=test_id,
-                        file=file,
-                        suite=suite_name,
-                        test=test,
-                    )
-                    if created:
-                        saved_count += 1
-                    else:
-                        updated_count += 1
-
-            self._write_history(project, "collect_tests", result)
-
-        result.raise_if_error()
-        return saved_count, updated_count
-
-    def save_coverage(self, value, result):
-        """Save project coverage value and write history.
-
-        Parameters
-        ----------
-        value : float
-            Coverage percentage to store.
-        result : object
-            Result object from the test suite execution.
-
-        Returns
-        -------
-        float
-            The coverage value.
-        """
-        with self.transaction():
-            project = self._get_project_model()
-            if not result.error:
-                project.coverage = value
-                project.save()
-
-            self._write_history(project, "collect_coverage", result)
-
-        result.raise_if_error()
-        return value
-
-    def save_test_coverage_alone(self, test_id, value, result):
-        """Save isolated coverage for a single test and write history.
-
-        Parameters
-        ----------
-        test_id : str
-            Unique test identifier.
-        value : float
-            Coverage percentage when running only this test.
-        result : object
-            Result object from the test suite execution.
-
-        Returns
-        -------
-        float
-            The coverage value.
-        """
-        with self.transaction():
-            project = self._get_project_model()
-            if not result.error:
-                test = TestModel.get(TestModel.test_id == test_id)
-                test.coverage_alone = value
-                test.save()
-
-            self._write_history(
-                project,
-                f"collect_coverage_for_test::{test_id}",
-                result,
-            )
-
-        result.raise_if_error()
-        return value
-
-    def save_test_coverage_without(self, test_id, value, result):
-        """Save coverage-without for a single test and write history.
-
-        Parameters
-        ----------
-        test_id : str
-            Unique test identifier to exclude.
-        value : float
-            Coverage percentage when running all tests except this one.
-        result : object
-            Result object from the test suite execution.
-
-        Returns
-        -------
-        float
-            The coverage value.
-        """
-        with self.transaction():
-            project = self._get_project_model()
-            if not result.error:
-                test = TestModel.get(TestModel.test_id == test_id)
-                test.coverage_without = value
-                test.save()
-
-            self._write_history(
-                project,
-                f"collect_coverage_without_test::{test_id}",
-                result,
-            )
-
-        result.raise_if_error()
-        return value
-
-    def save_mutants_number(self, value, result):
-        """Save project mutants number and write history.
-
-        Parameters
-        ----------
-        value : int
-            Number of mutants generated.
-        result : object
-            Result object from the mutation suite execution.
-
-        Returns
-        -------
-        int
-            The mutants number.
-        """
-        with self.transaction():
-            project = self._get_project_model()
-            if not result.error:
-                project.mutants_number = value
-                project.save()
-
-            self._write_history(project, "collect_mutants", result)
-
-        result.raise_if_error()
-        return value
-
-    def save_msr(self, value, result):
-        """Save project mutation survival rate and write history.
-
-        Parameters
-        ----------
-        value : float
-            Mutation survival rate percentage.
-        result : object
-            Result object from the mutation suite execution.
-
-        Returns
-        -------
-        float
-            The MSR value.
-        """
-        with self.transaction():
-            project = self._get_project_model()
-            if not result.error:
-                project.msr = value
-                project.save()
-
-            self._write_history(project, "get_survival_rate", result)
-
-        result.raise_if_error()
-        return value
-
-    def save_test_msr_alone(self, test_id, value, result):
-        """Save isolated MSR for a single test and write history.
-
-        Parameters
-        ----------
-        test_id : str
-            Unique test identifier.
-        value : float
-            MSR percentage when running only this test.
-        result : object
-            Result object from the mutation suite execution.
-
-        Returns
-        -------
-        float
-            The MSR value.
-        """
-        with self.transaction():
-            project = self._get_project_model()
-            if not result.error:
-                test = TestModel.get(TestModel.test_id == test_id)
-                test.msr_alone = value
-                test.save()
-
-            self._write_history(
-                project,
-                f"collect_survival_rate_for_test::{test_id}",
-                result,
-            )
-
-        result.raise_if_error()
-        return value
-
-    def save_test_msr_without(self, test_id, value, result):
-        """Save MSR-without for a single test and write history.
-
-        Parameters
-        ----------
-        test_id : str
-            Unique test identifier to exclude.
-        value : float
-            MSR percentage when running all tests except this one.
-        result : object
-            Result object from the mutation suite execution.
-
-        Returns
-        -------
-        float
-            The MSR value.
-        """
-        with self.transaction():
-            project = self._get_project_model()
-            if not result.error:
-                test = TestModel.get(TestModel.test_id == test_id)
-                test.msr_without = value
-                test.save()
-
-            self._write_history(
-                project,
-                f"collect_survival_rate_without_test::{test_id}",
-                result,
-            )
-
-        result.raise_if_error()
-        return value
-
-    # ========================================================================
-    # Public Methods - Project Information
-    # ========================================================================
-
-    def update_pipeline_step(self, new_step: str) -> None:
+    def _update_step(self, new_step):
         """Update the pipeline step in the database.
-
-        This method updates the pipeline step without validation.
-        Validation should be performed by the caller (ProjectManager).
 
         Parameters
         ----------
         new_step : str
             New pipeline step to set.
 
+        Raises
+        ------
+        ValueError
+            If the new step is not valid or out of order.
+        """
+        if new_step not in PIPELINE_ORDER:
+            raise ValueError(
+                f"Invalid pipeline step: {new_step}. "
+                f"Valid steps: {', '.join(PIPELINE_STEPS)}"
+            )
+
+        current = self._get_current_step()
+        current_idx = PIPELINE_ORDER[current]
+        new_idx = PIPELINE_ORDER[new_step]
+
+        # Allow moving to the next step or staying in the same step
+        if new_idx < current_idx:
+            raise ValueError(
+                f"Cannot move backwards in pipeline from '{current}' "
+                f"to '{new_step}'"
+            )
+
+        # Delegate to ProjectStore for the database update
+        self.store.update_pipeline_step(new_step)
+
+    def next_step(self):
+        """Get the next method to execute in the pipeline based on \
+        current state.
+
+        Returns
+        -------
+        callable | None
+            Next method to execute (collect_tests, collect_coverage,
+            collect_mutations), or None if pipeline is complete.
+
         Notes
         -----
-        This method does not validate the step order or validity.
-        Use ProjectManager for proper pipeline validation and updates.
+        This method determines the next step by examining the current
+        pipeline_step value:
+        - 'created' -> collect_tests
+        - 'tests_collected' -> collect_coverage
+        - 'coverage_collected' -> collect_mutations
+        - 'mutations_collected' -> None (pipeline complete)
         """
-        with self.transaction():
-            proj_model = self._get_project_model()
-            proj_model.pipeline_step = new_step
+        current = self._get_current_step()
+
+        if current == "created":
+            return self.collect_tests
+        elif current == "tests_collected":
+            return self.collect_coverage
+        elif current == "coverage_collected":
+            return self.collect_mutations
+        return None
+
+    # ========================================================================
+    # Public Methods - Test Management
+    # ========================================================================
+
+    def collect_tests(self, force=False, progress_callback=_default_callback):
+        """Collect tests from the project using pytest.
+
+        This method runs pytest --collect-only to discover all tests
+        in the project and stores them in the yagua database.
+
+        Pipeline step: Updates from 'created' to 'tests_collected'.
+
+        Parameters
+        ----------
+        force : bool, optional
+            Force recollection of tests even if already collected.
+            Default is False.
+        progress_callback : callable, optional
+            Callback function called for progress updates with signature:
+            progress_callback(current, total, test_id).
+            Default is _default_callback (no-op function).
+
+        Returns
+        -------
+        dict
+            Dictionary with keys:
+            - 'total_tests': Total number of tests
+            - 'saved_count': Number of new tests saved
+            - 'updated_count': Number of existing tests updated
+            - 'was_collected': Whether collection was performed
+
+        Raises
+        ------
+        ValueError
+            If no tests are found in the project.
+        PipelineError
+            If called before project is created.
+        """
+        # Validate pipeline: must be at least 'created'
+        self._validate_step("created")
+
+        total_tests = self.store.count_tests()
+        saved_count, updated_count = 0, 0
+        was_collected = False
+
+        if total_tests == 0 or force:
+            progress_callback(0, 1, "collecting")
+
+            suite = self.test_suite
+            result = suite.get_tests(self.store.path)
+            tests_data = result.value if not result.error else []
+
+            saved_count, updated_count = self.store.save_tests(
+                tests_data, result
+            )
+            total_tests = saved_count + updated_count
+            was_collected = True
+
+            progress_callback(1, 1, "collecting")
+
+        if total_tests == 0:
+            raise ValueError("No tests found in the project.")
+
+        # Update pipeline step
+        self._update_step("tests_collected")
+
+        return {
+            "total_tests": total_tests,
+            "saved_count": saved_count,
+            "updated_count": updated_count,
+            "was_collected": was_collected,
+        }
+
+    def get_tests_info(self, include_internal=False):
+        """Get tests information as DataFrame.
+
+        Pipeline step: Requires 'tests_collected' or later.
+
+        Parameters
+        ----------
+        include_internal : bool, optional
+            Include internal columns (id, project, test_id, created_at,
+            modified_at). Default is False.
+
+        Returns
+        -------
+        dict
+            Dictionary with keys:
+            - 'tests_df': DataFrame with test information
+            - 'coverage': Total coverage percentage (or None)
+            - 'total_count': Total number of tests
+
+        Raises
+        ------
+        ValueError
+            If no tests are found.
+        PipelineError
+            If called before tests are collected.
+        """
+        # Validate pipeline: must have collected tests
+        self._validate_step("tests_collected")
+
+        tests = self.store.get_tests_dataframe()
+
+        # Filter out internal columns unless requested
+        if not include_internal:
+            ignore_columns = [
+                "id",
+                "project",
+                "test_id",
+                "created_at",
+                "modified_at",
+            ]
+            columns = [
+                col for col in tests.columns if col not in ignore_columns
+            ]
+            tests = tests[columns]
+
+        if not len(tests):
+            raise ValueError(f"No tests found for project: {self.store.name}")
+
+        return {
+            "tests_df": tests,
+            "coverage": self.store.coverage,
+            "total_count": len(tests),
+        }
+
+    # ========================================================================
+    # Public Methods - Coverage Management
+    # ========================================================================
+
+    def collect_coverage(
+        self, force=False, progress_callback=_default_callback
+    ):
+        """Collect and store coverage information for the project.
+
+        This method runs pytest with coverage enabled in three phases:
+        1. Total project coverage (all tests)
+        2. Per-test coverage (each test in isolation)
+        3. Coverage without each test (all tests except one)
+
+        Pipeline step: Updates from 'tests_collected' to 'coverage_collected'.
+
+        Parameters
+        ----------
+        force : bool, optional
+            Force recalculation of coverage even if it already exists.
+            Default is False.
+        progress_callback : callable, optional
+            Callback function called for each test with signature:
+            progress_callback(current, total, test_id).
+            Default is _default_callback (no-op function).
+
+        Returns
+        -------
+        dict
+            Dictionary with keys:
+            - 'coverage': Total coverage percentage
+            - 'tests_data': List of tuples (test_id, cov_alone, cov_wo)
+
+        Raises
+        ------
+        ValueError
+            If no tests found.
+        PipelineError
+            If called before tests are collected.
+        """
+        # Validate pipeline: must have collected tests
+        self._validate_step("tests_collected")
+
+        # Validate that there are tests to analyze
+        if not self.store.count_tests():
+            raise ValueError(
+                f"No tests found for project '{self.store.name}'."
+            )
+
+        suite = self.test_suite
+        project_path = self.store.path
+        project_name = self.store.name
+
+        # Phase 1: Calculate coverage for all tests combined
+        if self.store.coverage is None or force:
+            progress_callback(1, 1, "All Tests")
+            result = suite.get_coverage(project_path, project_name)
+            self.store.save_coverage(result.value, result)
+
+        coverage = self.store.coverage
+
+        # Phase 2 & 3: Calculate per-test coverage metrics
+        tests_ids = self.store.get_tests_dataframe()[
+            ["test_id", "coverage_alone", "coverage_without"]
+        ].to_numpy()
+
+        tests_count = len(tests_ids)
+        tests_data = []
+
+        for idx, (test_id, cov_alone, cov_wo) in enumerate(tests_ids, 1):
+            progress_callback(idx, tests_count, test_id)
+
+            # Phase 2: Coverage when running only this test
+            cov_alone = _coerce_na(cov_alone)
+            if cov_alone is None or force:
+                result = suite.get_coverage_for_tests(
+                    project_path, project_name, [test_id]
+                )
+                cov_alone = self.store.save_test_coverage_alone(
+                    test_id, result.value, result
+                )
+
+            # Phase 3: Coverage when running all tests except this one
+            cov_wo = _coerce_na(cov_wo)
+            if cov_wo is None or force:
+                tids = self.store.get_test_ids_except(test_id)
+                result = suite.get_coverage_for_tests(
+                    project_path, project_name, tids
+                )
+                cov_wo = self.store.save_test_coverage_without(
+                    test_id, result.value, result
+                )
+
+            tests_data.append((test_id, cov_alone, cov_wo))
+
+        # Update pipeline step
+        self._update_step("coverage_collected")
+
+        return {"coverage": coverage, "tests_data": tests_data}
+
+    # ========================================================================
+    # Public Methods - Mutation Management
+    # ========================================================================
+
+    def collect_mutations(
+        self, force=False, progress_callback=_default_callback
+    ):
+        """Collect and analyze mutation testing data for the project.
+
+        This method performs mutation testing analysis in phases:
+        1. Mutation initialization (count mutants)
+        2. Mutation execution (calculate survival rate)
+        3. Per-test mutation analysis
+
+        Tests are evaluated in order of coverage_uniqueness (descending)
+        to optimize mutation detection.
+
+        Pipeline step: Updates from 'coverage_collected' to
+        'mutations_collected'.
+
+        Parameters
+        ----------
+        force : bool, optional
+            Force recalculation even if mutations exist. Default is False.
+        progress_callback : callable, optional
+            Callback function called for each test with signature:
+            progress_callback(current, total, test_id).
+            Default is _default_callback (no-op function).
+
+        Returns
+        -------
+        dict
+            Dictionary with keys:
+            - 'mutants_number': Total number of mutants
+            - 'msr': Mutation survival rate percentage
+            - 'tests_data': List of tuples (test_id, msr_alone, msr_wo)
+
+        Raises
+        ------
+        ValueError
+            If coverage data does not exist or is incomplete.
+        PipelineError
+            If called before coverage is collected.
+        """
+        # Validate pipeline: must have collected coverage
+        self._validate_step("coverage_collected")
+
+        # Validate that coverage exists before running mutations
+        if not self.store.coverage:
+            raise ValueError(
+                "Coverage data is required before running "
+                "mutation analysis."
+            )
+
+        suite = self.mutation_suite
+        project_path = self.store.path
+        project_name = self.store.name
+
+        # Phase 1: Initialize mutations and count mutants
+        if self.store.mutants_number is None or force:
+            result = suite.get_mutants(project_path, project_name, force=force)
+            self.store.save_mutants_number(result.value, result)
+
+        mutants_number = self.store.mutants_number
+
+        # Phase 2: Execute mutations and calculate survival rate
+        if self.store.msr is None or force:
+            progress_callback(1, 1, "All tests")
+            result = suite.get_survival_rate(project_path, project_name, force)
+            self.store.save_msr(result.value, result)
+
+        msr = self.store.msr
+
+        priority = "coverage_uniqueness"
+        cov_columns = list({"coverage_alone", "coverage_without", priority})
+        mutation_columns = ["test_id", "msr_alone", "msr_without"]
+
+        tests_df = self.store.get_tests_dataframe()[
+            mutation_columns + cov_columns
+        ]
+
+        # Priority
+        tests_df.sort_values(priority, ascending=False, inplace=True)
+
+        # Validate that coverage collection is complete
+        if tests_df[cov_columns].isna().to_numpy().any():
+            raise ValueError(
+                "Coverage collection appears to be incomplete. "
+                "Some tests are missing coverage data."
+            )
+
+        # Phase 3: Calculate per-test mutation metrics
+        tests_data_arr = tests_df[mutation_columns].to_numpy()
+        tests_count = len(tests_data_arr)
+
+        tests_data = []
+        for idx, (test_id, msr_alone, msr_wo) in enumerate(tests_data_arr, 1):
+            progress_callback(idx, tests_count, test_id)
+
+            # MSR when running only this test
+            msr_alone = _coerce_na(msr_alone)
+            if msr_alone is None or force:
+                result = suite.get_survival_rate_for_tests(
+                    project_path, project_name, [test_id], force
+                )
+                msr_alone = self.store.save_test_msr_alone(
+                    test_id, result.value, result
+                )
+
+            # MSR when running all tests except this one
+            msr_wo = _coerce_na(msr_wo)
+            if msr_wo is None or force:
+                tids = self.store.get_test_ids_except(test_id)
+                result = suite.get_survival_rate_for_tests(
+                    project_path, project_name, tids, force
+                )
+                msr_wo = self.store.save_test_msr_without(
+                    test_id, result.value, result
+                )
+
+            tests_data.append((test_id, msr_alone, msr_wo))
+
+        # Update pipeline step
+        self._update_step("mutations_collected")
+
+        return {
+            "mutants_number": mutants_number,
+            "msr": msr,
+            "tests_data": tests_data,
+        }
+
+    # ========================================================================
+    # Public Methods - Project Information
+    # ========================================================================
+
+    def get_project_info(self):
+        """Get project information dictionary.
+
+        Returns
+        -------
+        dict
+            Dictionary with project information including:
+            - 'name': Project name
+            - 'path': Project path
+            - 'work_dir': Work directory path
+            - 'db_path': Database path
+            - 'description': Project description (or None)
+            - 'test_count': Number of tests
+            - 'coverage': Coverage percentage (or None)
+            - 'mutants_number': Number of mutants (or None)
+        """
+        test_count = self.store.count_tests()
+
+        return {
+            "name": self.store.name,
+            "path": self.store.path,
+            "work_dir": self.store.work_dir,
+            "db_path": self.store.db_path,
+            "description": self.store.description,
+            "test_count": test_count,
+            "coverage": self.store.coverage,
+            "mutants_number": self.store.mutants_number,
+        }
+
+    def mark_failed(self):
+        """Mark the project as failed with current timestamp.
+
+        This method updates the project's failed_at timestamp to indicate
+        when a pipeline failure occurred.
+        """
+        from datetime import datetime, timezone
+
+        with self.store.transaction():
+            proj_model = self.store._get_project_model()
+            proj_model.failed_at = datetime.now(timezone.utc)
             proj_model.save()
 
-    def store_project_info(
-        self,
-        name: str,
-        path: str,
-        work_path: str,
-        test_suite_name: str,
-        mutation_suite_name: str,
-        description: str | None = None,
-        mutation_timeout: float | None = 10,
-    ) -> None:
-        """Store or update project information in database.
+    def export_project(self, output_path):
+        """Export work directory to an archive file.
+
+        This method creates an archive file containing the entire work
+        directory, including the yagua.db database and all temporary files.
 
         Parameters
         ----------
-        name : str
-            Project name.
-        path : str
-            Project path.
-        work_path : str
-            Working directory for yagua operations.
-        test_suite_name : str
-            Name of the test suite handler (e.g., 'pytest').
-        mutation_suite_name : str
-            Name of the mutation suite handler (e.g., 'cosmic-ray').
-        description : str, optional
-            Project description.
-        mutation_timeout : float, optional
-            Timeout in seconds for mutation testing.
-        """
-        with self.transaction():
-            project, created = ProjectModel.get_or_create(
-                id=1,
-                name=name,
-                test_suite_name=test_suite_name,
-                mutation_suite_name=mutation_suite_name,
-                path=path,
-                work_path=work_path,
-                description=description,
-                mutation_timeout=mutation_timeout,
-            )
-            if not created:
-                project.name = name
-                project.path = path
-                project.work_path = work_path
-                project.test_suite_name = test_suite_name
-                project.mutation_suite_name = mutation_suite_name
-                project.description = description
-                project.mutation_timeout = mutation_timeout
-                project.save()
-
-    def export(self, output_path=None):
-        """Export the work directory to an archive file.
-
-        This method creates an archive file containing the complete work
-        directory, including the yagua.db database and all temporary
-        files generated by test and mutation frameworks. The archive
-        format is determined by the file extension.
-
-        Parameters
-        ----------
-        output_path : str or Path, optional
-            Path where the archive will be created, including the desired
-            extension (e.g., 'backup.zip', 'backup.tar.gz'). If not
-            provided, defaults to '<work_dir_name>.zip' in the current
-            directory. Supported formats: zip, tar, tar.gz (tgz), tar.bz2
-            (tbz2), tar.xz (txz).
+        output_path : Path, optional
+            Output path including the desired extension. If not provided,
+            defaults to '<work_dir_name>.zip' in the current directory.
 
         Returns
         -------
@@ -796,101 +693,8 @@ class Project:
 
         Raises
         ------
-        ValueError
-            If the archive format is not supported.
-
-        Notes
-        -----
-        The archive preserves the complete directory structure and can be
-        used to backup, share, or restore a yagua project. The format is
-        automatically detected from the file extension.
-
-        Supported formats:
-        - .zip: ZIP archive
-        - .tar: Uncompressed TAR archive
-        - .tar.gz or .tgz: Gzipped TAR archive
-        - .tar.bz2 or .tbz2: Bzip2 compressed TAR archive
-        - .tar.xz or .txz: XZ compressed TAR archive
-
-        See Also
-        --------
-        yagua.io.export_work_dir : Lower-level export function.
-        yagua.io.import_archive : Import an archive file.
+        Exception
+            If export fails.
         """
-        # Close database connection before archiving
-        self.close()
-
-        try:
-            # Use io module function for export
-            return yagua_io.export_work_dir(self.work_dir, output_path)
-        finally:
-            # Reconnect to database
-            self.db.connect()
-
-    # ========================================================================
-    # Magic Methods
-    # ========================================================================
-
-    def close(self):
-        """Close the database connection.
-
-        This method should be called when done using the Project instance
-        to properly close the database connection and release resources.
-        """
-        if not self.db.is_closed():
-            self.db.close()
-
-    def __getattr__(self, a):
-        """Provide dynamic access to project model attributes.
-
-        This magic method allows accessing ProjectModel fields directly
-        through the Project instance
-        (e.g., proj.name, proj.path, proj.coverage).
-
-        Parameters
-        ----------
-        a : str
-            Attribute name to access from ProjectModel.
-
-        Returns
-        -------
-        Any
-            Attribute value from the project model.
-
-        Raises
-        ------
-        AttributeError
-            If the attribute doesn't exist in ProjectModel.
-        """
-        if a not in dir(self):
-            cls_name = type(self).__name__
-            raise AttributeError(f"{cls_name!r} object has no attribute {a!r}")
-        model = self._get_project_model()
-        return getattr(model, a)
-
-    def __dir__(self):
-        """Expose project model fields in dir().
-
-        This makes ProjectModel fields discoverable through autocomplete
-        and dir() calls on the Project instance.
-
-        Returns
-        -------
-        list
-            List of available attributes including both Project instance
-            attributes and ProjectModel fields (excluding 'id').
-        """
-        fields = [
-            f for f in ProjectModel._meta.sorted_field_names if f != "id"
-        ]
-        return super().__dir__() + fields
-
-    def __repr__(self):
-        """Return string representation of Project instance.
-
-        Returns
-        -------
-        str
-            String in format "Project(work_dir=<path>)".
-        """
-        return f"Project(work_dir={self.work_dir})"
+        archive_path = self.store.export(output_path=output_path)
+        return archive_path

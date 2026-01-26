@@ -22,14 +22,14 @@ Database Design
 - Each project can have many tests
 - Each project can have many history entries
 - All timestamps are stored in UTC
-- Models are bound to database instances in Project.__init__()
+- Models are bound to database instances in ProjectStore.__init__()
 
 Notes
 -----
 Models in this module do not have a hardcoded database connection.
-The database binding happens dynamically in the Project class using
-Peewee's bind_ctx() context manager, allowing multiple Project instances
-to each have their own database connection.
+The database binding happens dynamically in the ProjectStore class using
+Peewee's bind_ctx() context manager, allowing multiple ProjectStore
+instances to each have their own database connection.
 """
 
 from datetime import datetime, timezone
@@ -205,7 +205,6 @@ class ProjectModel(BaseModel):
 
     mutants_number = IntegerField(null=True, default=None)
     msr = FloatField(null=True, default=None)
-    
 
     # Pipeline state tracking
     pipeline_step = CharField(default="created")

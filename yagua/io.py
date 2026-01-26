@@ -12,10 +12,10 @@ export_work_dir : function
 import_archive : function
     Extract and validate an archive containing a yagua work directory.
 read_dir : function
-    Open an existing project work directory (returns ProjectManager).
+    Open an existing project work directory (returns Project).
 read_archive : function
     Extract and open a project from an archive file (returns
-    ProjectManager).
+    Project).
 detect_archive_format : function
     Detect archive format from file extension.
 
@@ -283,7 +283,7 @@ def import_archive(archive_path, extract_to=None):
 def read_dir(path):
     """Open an existing project work directory.
 
-    This is a convenience function that creates a ProjectManager instance
+    This is a convenience function that creates a Project instance
     from an existing work directory containing a yagua.db file.
 
     Parameters
@@ -293,8 +293,8 @@ def read_dir(path):
 
     Returns
     -------
-    ProjectManager
-        ProjectManager instance connected to the specified work directory.
+    Project
+        Project instance connected to the specified work directory.
 
     Notes
     -----
@@ -306,9 +306,9 @@ def read_dir(path):
     read_archive : Extract and open a project from an archive file.
     """
     from .project import Project
-    from .project_manager import ProjectManager
+    from .project_store import ProjectStore
 
-    return ProjectManager(Project(path))
+    return Project(ProjectStore(path))
 
 
 def read_archive(archive_path):
@@ -317,7 +317,7 @@ def read_archive(archive_path):
     This is a convenience function that extracts a work directory archive
     (created with the export command or export_work_dir()) to a temporary
     directory and opens the project for use. The temporary directory is
-    automatically cleaned up when the ProjectManager instance is closed or
+    automatically cleaned up when the Project instance is closed or
     when the Python process exits.
 
     Parameters
@@ -329,8 +329,8 @@ def read_archive(archive_path):
 
     Returns
     -------
-    ProjectManager
-        ProjectManager instance connected to the extracted work directory
+    Project
+        Project instance connected to the extracted work directory
         in a temporary location.
 
     Raises
@@ -358,11 +358,11 @@ def read_archive(archive_path):
     export_work_dir : Export work directory to an archive file.
     """
     from .project import Project
-    from .project_manager import ProjectManager
+    from .project_store import ProjectStore
 
     try:
         work_dir = import_archive(archive_path)
-        return ProjectManager(Project(work_dir))
+        return Project(ProjectStore(work_dir))
     except Exception:
         # Clean up temp directory if opening fails
         work_dir_parent = work_dir.parent if "work_dir" in locals() else None
