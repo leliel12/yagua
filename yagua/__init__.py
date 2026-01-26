@@ -29,9 +29,9 @@ read_archive : function
 """
 
 from .cli import main
+from .dal import ProjectStore
 from .io import read_archive, read_dir
 from .project import Project
-from .project_store import ProjectStore
 from .testsuites import PytestSuite, TestSuiteABC
 
 __all__ = [

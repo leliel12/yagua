@@ -305,10 +305,9 @@ def read_dir(path):
     --------
     read_archive : Extract and open a project from an archive file.
     """
-    from .project import Project
-    from .project_store import ProjectStore
+    from . import project as project_module
 
-    return Project(ProjectStore(path))
+    return project_module.from_work_dir(path)
 
 
 def read_archive(archive_path):
@@ -357,12 +356,11 @@ def read_archive(archive_path):
     import_archive : Lower-level function for extracting archives.
     export_work_dir : Export work directory to an archive file.
     """
-    from .project import Project
-    from .project_store import ProjectStore
+    from . import project as project_module
 
     try:
         work_dir = import_archive(archive_path)
-        return Project(ProjectStore(work_dir))
+        return project_module.from_work_dir(work_dir)
     except Exception:
         # Clean up temp directory if opening fails
         work_dir_parent = work_dir.parent if "work_dir" in locals() else None

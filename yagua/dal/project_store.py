@@ -44,7 +44,7 @@ from pathlib import Path
 import pandas as pd
 from peewee import SqliteDatabase
 
-from . import io as yagua_io
+from .. import io as yagua_io
 from .models import BaseModel, HistoryModel, ProjectModel, TestModel
 
 

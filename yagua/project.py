@@ -1,9 +1,8 @@
 """Yagua - Project Class (Business Logic Layer).
 
-This module provides the Project class, which encapsulates the
-business logic for project operations. It handles suite instantiation
-and execution, pipeline validation, and delegates all database
-operations to the ProjectStore DAL.
+This module provides the Project class, which orchestrates the
+pipeline workflow by coordinating the Collector (suite execution) and
+ProjectStore (data persistence).
 
 The Project implements a pipeline workflow:
 1. created -> Project is initialized
@@ -11,31 +10,36 @@ The Project implements a pipeline workflow:
 3. coverage_collected -> Coverage has been analyzed
 4. mutations_collected -> Mutations have been analyzed
 5. completed -> All analysis steps finished
+
+Classes
+-------
+Project : class
+    Orchestration layer that coordinates Collector and Store.
+
+Functions
+---------
+from_work_dir : function
+    Factory function to create Project from existing work directory.
+from_project_info : function
+    Factory function to create new Project with configuration.
 """
 
 # =============================================================================
 # IMPORTS
 # =============================================================================
 
+from datetime import datetime, timezone
+from pathlib import Path
+
 import numpy as np
 
-from .mutationsuites import CosmicRaySuite
-from .testsuites import PytestSuite
+from .collector import Collector
+from .dal import ProjectStore
 
 
 # =============================================================================
 # CONSTANTS
 # =============================================================================
-
-#: Available test suite handlers mapped by name.
-TEST_SUITES = {
-    "pytest": PytestSuite,
-}
-
-#: Available mutation suite handlers mapped by name.
-MUTATION_SUITES = {
-    "cosmic-ray": CosmicRaySuite,
-}
 
 #: Valid pipeline steps in order
 PIPELINE_STEPS = [
@@ -70,8 +74,8 @@ def _coerce_na(value):
     Coerces input values that are None or NaN (Not a Number) to None.
 
     This function is useful in data cleaning pipelines where you need a
-    consistent representation for missing data points before further processing
-    or storage (e.g., storing in a database that uses NULL).
+    consistent representation for missing data points before further
+    processing or storage (e.g., storing in a database that uses NULL).
 
     Parameters
     ----------
@@ -83,8 +87,8 @@ def _coerce_na(value):
     -------
     Union[Any, None]
         Returns ``None`` if the input value is ``None`` or if it is a
-        floating-point ``NaN`` value from numpy. Otherwise, the original value
-        is returned unchanged.
+        floating-point ``NaN`` value from numpy. Otherwise, the original
+        value is returned unchanged.
 
     See Also
     --------
@@ -105,71 +109,45 @@ def _default_callback(current, total, test_id):
 
 
 class Project:
-    """Business logic layer for Yagua project operations.
+    """Orchestration layer for Yagua project pipeline.
 
-    This class encapsulates the business logic for project operations,
-    including suite instantiation and execution, pipeline validation,
-    and workflow orchestration. It delegates all database operations
-    to the ProjectStore DAL.
+    This class orchestrates the project pipeline by coordinating the
+    Collector (suite execution) and ProjectStore (data persistence).
+    It validates pipeline steps, manages state transitions, and handles
+    the complete workflow from test collection to mutation analysis.
 
     Parameters
     ----------
     store : ProjectStore
-        ProjectStore instance (DAL) to manage.
+        ProjectStore instance (DAL) for database operations.
+    collector : Collector
+        Collector instance for suite execution.
 
     Attributes
     ----------
     store : ProjectStore
-        The project DAL instance being managed.
+        The project DAL instance.
+    collector : Collector
+        The collector instance for running suites.
 
     Notes
     -----
     This class does not handle any CLI-specific formatting or display.
-    All presentation logic should be handled by the CLIManager.
+    All presentation logic should be handled by the CLI layer.
     """
 
-    def __init__(self, store):
-        """Initialize Project with a ProjectStore instance.
+    def __init__(self, store, collector):
+        """Initialize Project with store and collector.
 
         Parameters
         ----------
         store : ProjectStore
             ProjectStore instance to manage.
+        collector : Collector
+            Collector instance for suite execution.
         """
         self.store = store
-
-    # ========================================================================
-    # Properties
-    # ========================================================================
-
-    @property
-    def test_suite(self):
-        """Get test suite handler instance for this project.
-
-        Returns
-        -------
-        TestSuiteABC
-            Instantiated test suite handler based on the project's
-            test_suite_name configuration.
-        """
-        suite_cls = TEST_SUITES[self.store.test_suite_name]
-        return suite_cls(self.store.work_path)
-
-    @property
-    def mutation_suite(self):
-        """Get mutation testing suite handler instance for this project.
-
-        Returns
-        -------
-        MutationSuiteABC
-            Instantiated mutation suite handler based on the project's
-            mutation_suite_name configuration.
-        """
-        suite_cls = MUTATION_SUITES[self.store.mutation_suite_name]
-        return suite_cls(
-            self.store.work_path,
-            mutation_timeout=self.store.mutation_timeout,
-        )
+        self.collector = collector
 
     # ========================================================================
     # Private Methods - Pipeline Management
@@ -271,14 +249,14 @@ class Project:
         return None
 
     # ========================================================================
-    # Public Methods - Test Management
+    # Public Methods - Test Collection
     # ========================================================================
 
     def collect_tests(self, force=False, progress_callback=_default_callback):
-        """Collect tests from the project using pytest.
+        """Collect tests from the project using the configured test suite.
 
-        This method runs pytest --collect-only to discover all tests
-        in the project and stores them in the yagua database.
+        This method runs the test suite's discovery mechanism and stores
+        the results in the database.
 
         Pipeline step: Updates from 'created' to 'tests_collected'.
 
@@ -316,19 +294,17 @@ class Project:
         was_collected = False
 
         if total_tests == 0 or force:
-            progress_callback(0, 1, "collecting")
+            # Use collector to gather test data
+            collected = self.collector.collect_tests(progress_callback)
+            tests_data = collected["tests_data"]
+            result = collected["result"]
 
-            suite = self.test_suite
-            result = suite.get_tests(self.store.path)
-            tests_data = result.value if not result.error else []
-
+            # Save to database via store
             saved_count, updated_count = self.store.save_tests(
                 tests_data, result
             )
             total_tests = saved_count + updated_count
             was_collected = True
-
-            progress_callback(1, 1, "collecting")
 
         if total_tests == 0:
             raise ValueError("No tests found in the project.")
@@ -343,62 +319,8 @@ class Project:
             "was_collected": was_collected,
         }
 
-    def get_tests_info(self, include_internal=False):
-        """Get tests information as DataFrame.
-
-        Pipeline step: Requires 'tests_collected' or later.
-
-        Parameters
-        ----------
-        include_internal : bool, optional
-            Include internal columns (id, project, test_id, created_at,
-            modified_at). Default is False.
-
-        Returns
-        -------
-        dict
-            Dictionary with keys:
-            - 'tests_df': DataFrame with test information
-            - 'coverage': Total coverage percentage (or None)
-            - 'total_count': Total number of tests
-
-        Raises
-        ------
-        ValueError
-            If no tests are found.
-        PipelineError
-            If called before tests are collected.
-        """
-        # Validate pipeline: must have collected tests
-        self._validate_step("tests_collected")
-
-        tests = self.store.get_tests_dataframe()
-
-        # Filter out internal columns unless requested
-        if not include_internal:
-            ignore_columns = [
-                "id",
-                "project",
-                "test_id",
-                "created_at",
-                "modified_at",
-            ]
-            columns = [
-                col for col in tests.columns if col not in ignore_columns
-            ]
-            tests = tests[columns]
-
-        if not len(tests):
-            raise ValueError(f"No tests found for project: {self.store.name}")
-
-        return {
-            "tests_df": tests,
-            "coverage": self.store.coverage,
-            "total_count": len(tests),
-        }
-
     # ========================================================================
-    # Public Methods - Coverage Management
+    # Public Methods - Coverage Collection
     # ========================================================================
 
     def collect_coverage(
@@ -406,12 +328,11 @@ class Project:
     ):
         """Collect and store coverage information for the project.
 
-        This method runs pytest with coverage enabled in three phases:
-        1. Total project coverage (all tests)
-        2. Per-test coverage (each test in isolation)
-        3. Coverage without each test (all tests except one)
+        This method coordinates coverage collection through the collector
+        and persists results via the store.
 
-        Pipeline step: Updates from 'tests_collected' to 'coverage_collected'.
+        Pipeline step: Updates from 'tests_collected' to
+        'coverage_collected'.
 
         Parameters
         ----------
@@ -446,51 +367,57 @@ class Project:
                 f"No tests found for project '{self.store.name}'."
             )
 
-        suite = self.test_suite
-        project_path = self.store.path
         project_name = self.store.name
 
         # Phase 1: Calculate coverage for all tests combined
         if self.store.coverage is None or force:
-            progress_callback(1, 1, "All Tests")
-            result = suite.get_coverage(project_path, project_name)
-            self.store.save_coverage(result.value, result)
+            progress_callback(0, 1, "All Tests")
+
+            # Get all test IDs from dataframe
+            test_ids = self.store.get_tests_dataframe()["test_id"].tolist()
+
+            # Collect coverage using collector
+            collected = self.collector.collect_coverage(
+                project_name, test_ids, progress_callback
+            )
+
+            # Save total coverage
+            self.store.save_coverage(
+                collected["total_coverage"], collected["total_result"]
+            )
+
+            # Save per-test coverage
+            for test_data in collected["per_test_data"]:
+                test_id = test_data["test_id"]
+
+                self.store.save_test_coverage_alone(
+                    test_id,
+                    test_data["coverage_alone"],
+                    test_data["result_alone"],
+                )
+
+                self.store.save_test_coverage_without(
+                    test_id,
+                    test_data["coverage_without"],
+                    test_data["result_without"],
+                )
 
         coverage = self.store.coverage
 
-        # Phase 2 & 3: Calculate per-test coverage metrics
-        tests_ids = self.store.get_tests_dataframe()[
-            ["test_id", "coverage_alone", "coverage_without"]
-        ].to_numpy()
-
-        tests_count = len(tests_ids)
+        # Get final coverage data
         tests_data = []
+        tests_df = self.store.get_tests_dataframe()[
+            ["test_id", "coverage_alone", "coverage_without"]
+        ]
 
-        for idx, (test_id, cov_alone, cov_wo) in enumerate(tests_ids, 1):
-            progress_callback(idx, tests_count, test_id)
-
-            # Phase 2: Coverage when running only this test
-            cov_alone = _coerce_na(cov_alone)
-            if cov_alone is None or force:
-                result = suite.get_coverage_for_tests(
-                    project_path, project_name, [test_id]
+        for _, row in tests_df.iterrows():
+            tests_data.append(
+                (
+                    row["test_id"],
+                    row["coverage_alone"],
+                    row["coverage_without"],
                 )
-                cov_alone = self.store.save_test_coverage_alone(
-                    test_id, result.value, result
-                )
-
-            # Phase 3: Coverage when running all tests except this one
-            cov_wo = _coerce_na(cov_wo)
-            if cov_wo is None or force:
-                tids = self.store.get_test_ids_except(test_id)
-                result = suite.get_coverage_for_tests(
-                    project_path, project_name, tids
-                )
-                cov_wo = self.store.save_test_coverage_without(
-                    test_id, result.value, result
-                )
-
-            tests_data.append((test_id, cov_alone, cov_wo))
+            )
 
         # Update pipeline step
         self._update_step("coverage_collected")
@@ -498,7 +425,7 @@ class Project:
         return {"coverage": coverage, "tests_data": tests_data}
 
     # ========================================================================
-    # Public Methods - Mutation Management
+    # Public Methods - Mutation Collection
     # ========================================================================
 
     def collect_mutations(
@@ -506,13 +433,8 @@ class Project:
     ):
         """Collect and analyze mutation testing data for the project.
 
-        This method performs mutation testing analysis in phases:
-        1. Mutation initialization (count mutants)
-        2. Mutation execution (calculate survival rate)
-        3. Per-test mutation analysis
-
-        Tests are evaluated in order of coverage_uniqueness (descending)
-        to optimize mutation detection.
+        This method coordinates mutation testing through the mutation
+        suite and persists results via the store.
 
         Pipeline step: Updates from 'coverage_collected' to
         'mutations_collected'.
@@ -551,7 +473,7 @@ class Project:
                 "mutation analysis."
             )
 
-        suite = self.mutation_suite
+        suite = self.collector.mutation_suite
         project_path = self.store.path
         project_name = self.store.name
 
@@ -570,6 +492,7 @@ class Project:
 
         msr = self.store.msr
 
+        # Get tests ordered by priority (coverage_uniqueness)
         priority = "coverage_uniqueness"
         cov_columns = list({"coverage_alone", "coverage_without", priority})
         mutation_columns = ["test_id", "msr_alone", "msr_without"]
@@ -629,8 +552,61 @@ class Project:
         }
 
     # ========================================================================
-    # Public Methods - Project Information
+    # Public Methods - Information and Status
     # ========================================================================
+
+    def get_tests_info(self, include_internal=False):
+        """Get tests information as DataFrame.
+
+        Pipeline step: Requires 'tests_collected' or later.
+
+        Parameters
+        ----------
+        include_internal : bool, optional
+            Include internal columns (id, project, test_id, created_at,
+            modified_at). Default is False.
+
+        Returns
+        -------
+        dict
+            Dictionary with keys:
+            - 'tests_df': DataFrame with test information
+            - 'coverage': Total coverage percentage (or None)
+            - 'total_count': Total number of tests
+
+        Raises
+        ------
+        ValueError
+            If no tests are found.
+        PipelineError
+            If called before tests are collected.
+        """
+        # Validate pipeline: must have collected tests
+        self._validate_step("tests_collected")
+
+        tests = self.store.get_tests_dataframe()
+
+        if tests.empty:
+            raise ValueError("No tests found in the project.")
+
+        # Drop internal columns if requested
+        if not include_internal:
+            internal_cols = [
+                "id",
+                "project",
+                "test_id",
+                "created_at",
+                "modified_at",
+            ]
+            tests = tests.drop(
+                columns=[c for c in internal_cols if c in tests.columns]
+            )
+
+        return {
+            "tests_df": tests,
+            "coverage": self.store.coverage,
+            "total_count": len(tests),
+        }
 
     def get_project_info(self):
         """Get project information dictionary.
@@ -661,14 +637,37 @@ class Project:
             "mutants_number": self.store.mutants_number,
         }
 
+    def get_pipeline_status(self):
+        """Get current pipeline status.
+
+        Returns
+        -------
+        dict
+            Dictionary with keys:
+            - 'current_step': Current pipeline step
+            - 'tests_collected': Boolean
+            - 'coverage_collected': Boolean
+            - 'mutations_collected': Boolean
+        """
+        current = self._get_current_step()
+        current_idx = PIPELINE_ORDER[current]
+
+        return {
+            "current_step": current,
+            "tests_collected": current_idx
+            >= PIPELINE_ORDER["tests_collected"],
+            "coverage_collected": current_idx
+            >= PIPELINE_ORDER["coverage_collected"],
+            "mutations_collected": current_idx
+            >= PIPELINE_ORDER["mutations_collected"],
+        }
+
     def mark_failed(self):
         """Mark the project as failed with current timestamp.
 
         This method updates the project's failed_at timestamp to indicate
         when a pipeline failure occurred.
         """
-        from datetime import datetime, timezone
-
         with self.store.transaction():
             proj_model = self.store._get_project_model()
             proj_model.failed_at = datetime.now(timezone.utc)
@@ -678,7 +677,8 @@ class Project:
         """Export work directory to an archive file.
 
         This method creates an archive file containing the entire work
-        directory, including the yagua.db database and all temporary files.
+        directory, including the yagua.db database and all temporary
+        files.
 
         Parameters
         ----------
@@ -698,3 +698,123 @@ class Project:
         """
         archive_path = self.store.export(output_path=output_path)
         return archive_path
+
+
+# =============================================================================
+# FACTORY FUNCTIONS
+# =============================================================================
+
+
+def from_work_dir(work_dir):
+    """Create Project from existing work directory.
+
+    This factory function reads the project configuration from the
+    database and creates the Store, Collector, and Project instances.
+
+    Parameters
+    ----------
+    work_dir : str or Path
+        Path to existing work directory containing yagua.db.
+
+    Returns
+    -------
+    Project
+        Configured Project instance ready to run pipeline.
+
+    Raises
+    ------
+    FileNotFoundError
+        If work directory or database does not exist.
+
+    Examples
+    --------
+    >>> proj = from_work_dir("/path/to/work_dir")
+    >>> proj.collect_tests()
+    >>> proj.collect_coverage()
+    """
+    # Create ProjectStore (DAL)
+    store = ProjectStore(work_dir)
+
+    # Create Collector (suite execution)
+    collector = Collector(
+        project_path=store.path,
+        work_path=store.work_path,
+        test_suite_name=store.test_suite_name,
+        mutation_suite_name=store.mutation_suite_name,
+        mutation_timeout=store.mutation_timeout,
+    )
+
+    # Create Project (orchestration)
+    project = Project(store, collector)
+
+    return project
+
+
+def from_project_info(
+    name, path, work_dir, description=None, mutation_timeout=None
+):
+    """Create new project with initial configuration.
+
+    This factory function creates a new work directory and initializes
+    the project database with the provided metadata.
+
+    Parameters
+    ----------
+    name : str
+        Project name.
+    path : str or Path
+        Path to the project directory being analyzed.
+    work_dir : str or Path
+        Work directory path where yagua.db and temporary files will
+        be stored (must not exist).
+    description : str, optional
+        Project description. Default is None.
+    mutation_timeout : float, optional
+        Timeout in seconds for mutation testing. Default is None.
+
+    Returns
+    -------
+    Project
+        Configured Project instance ready to run pipeline.
+
+    Raises
+    ------
+    ValueError
+        If work directory already exists.
+
+    Examples
+    --------
+    >>> proj = from_project_info(
+    ...     name="MyProject",
+    ...     path="/path/to/project",
+    ...     work_dir="/path/to/work_dir",
+    ...     mutation_timeout=50.0
+    ... )
+    >>> proj.collect_tests()
+    """
+    # Test and mutation suite names are constants for now
+    test_suite_name = "pytest"
+    mutation_suite_name = "cosmic-ray"
+
+    # Create ProjectStore (DAL) with initial data
+    store = ProjectStore.from_project_info(
+        name=name,
+        path=path,
+        work_dir=work_dir,
+        description=description,
+        mutation_timeout=mutation_timeout,
+    )
+
+    # Create Collector (suite execution)
+    collector = Collector(
+        project_path=store.path,
+        work_path=store.work_path,
+        test_suite_name=test_suite_name,
+        mutation_suite_name=mutation_suite_name,
+        mutation_timeout=mutation_timeout,
+    )
+
+    # Create Project (orchestration)
+    project = Project(store, collector)
+
+    return project

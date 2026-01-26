@@ -22,8 +22,9 @@ from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
 
-from .project import Project, PipelineError
-from .project_store import ProjectStore
+from . import project as project_module
+from .dal import ProjectStore
+from .project import PipelineError
 from .utils.df2rt import df_to_rich_table
 
 
@@ -221,16 +222,15 @@ class CLIManager:
                 )
             )
             raise typer.Exit(code=1)
-        store = ProjectStore(work_dir=work_dir)
+        proj = project_module.from_work_dir(work_dir)
         try:
             console.print(
-                f"[dim]🔍 Using project:[/dim] [cyan]{store.name}[/cyan] "
-                f"[dim]({store.path})[/dim]\n"
+                f"[dim]🔍 Using project:[/dim] [cyan]{proj.store.name}[/cyan] "
+                f"[dim]({proj.store.path})[/dim]\n"
             )
-            proj = Project(store)
             yield proj
         finally:
-            store.close()
+            proj.store.close()
 
     def _get_pipeline_progress(self, proj):
         """Calculate pipeline progress statistics.
@@ -389,7 +389,7 @@ class CLIManager:
         )
 
         try:
-            store = ProjectStore.from_project_info(
+            manager = project_module.from_project_info(
                 name=project_name,
                 path=project_path,
                 work_dir=work_dir,
@@ -409,20 +409,20 @@ class CLIManager:
         # Build success message
         info_lines = [
             "[bold green]✅ Project initialized successfully![/bold green]\n",
-            f"[cyan]📝 Name:[/cyan] {store.name}",
-            f"[cyan]📁 Path:[/cyan] {store.path}",
-            f"[cyan]🗂️  Work Dir:[/cyan] {store.work_dir}",
-            f"[cyan]💾 Database:[/cyan] {store.db_path}",
-            f"[cyan]📊 Pipeline:[/cyan] {store.pipeline_step}",
+            f"[cyan]📝 Name:[/cyan] {manager.store.name}",
+            f"[cyan]📁 Path:[/cyan] {manager.store.path}",
+            f"[cyan]🗂️  Work Dir:[/cyan] {manager.store.work_dir}",
+            f"[cyan]💾 Database:[/cyan] {manager.store.db_path}",
+            f"[cyan]📊 Pipeline:[/cyan] {manager.store.pipeline_step}",
         ]
 
-        if store.description:
+        if manager.store.description:
             info_lines.append(
-                f"[cyan]🪪 Description:[/cyan] {store.description}"
+                f"[cyan]🪪 Description:[/cyan] {manager.store.description}"
             )
 
         info_lines.append(
-            f"[cyan]⏱️  Mutation Timeout:[/cyan] {store.mutation_timeout}s"
+            f"[cyan]⏱️  Mutation Timeout:[/cyan] {manager.store.mutation_timeout}s"
         )
 
         info_lines.append(
