@@ -29,10 +29,10 @@ read_archive : function
 """
 
 from .cli import main
+from .collection import PytestSuite, TestSuiteABC
 from .dal import ProjectStore
 from .io import read_archive, read_dir
 from .project import Project
-from .testsuites import PytestSuite, TestSuiteABC
 
 __all__ = [
     "main",

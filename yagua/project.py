@@ -33,7 +33,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .collector import Collector
+from .collection import Collector
 from .dal import ProjectStore
 
 
