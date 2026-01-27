@@ -29,14 +29,6 @@ from .utils.df2rt import df_to_rich_table
 
 
 # ============================================================================
-# CONSTANTS
-# ============================================================================
-
-# Rich console for colored output
-console = Console()
-
-
-# ============================================================================
 # PIPELINE STEPS ENUM
 # ============================================================================
 
@@ -188,6 +180,9 @@ class CLIManager:
     export
         Export work directory to archive.
     """
+    def __init__(self):
+        # Rich console for colored output
+        self.console = Console()
 
     # ========================================================================
     # Private Methods
@@ -214,7 +209,7 @@ class CLIManager:
             If work directory does not exist (exits with code 1).
         """
         if not work_dir.exists():
-            console.print(
+            self.console.print(
                 Panel(
                     f"[red]Work directory does not exist:[/red]\n{work_dir}",
                     title="❌ Error",
@@ -224,7 +219,7 @@ class CLIManager:
             raise typer.Exit(code=1)
         proj = project_module.from_work_dir(work_dir)
         try:
-            console.print(
+            self.console.print(
                 f"[dim]🔍 Using project:[/dim] [cyan]{proj.store.name}[/cyan] "
                 f"[dim]({proj.store.path})[/dim]\n"
             )
@@ -348,7 +343,7 @@ class CLIManager:
                 raise FileNotFoundError(
                     f"Project path does not exist: {project_path}"
                 )
-            console.print(
+            self.console.print(
                 Panel(
                     (
                         f"[red]Project path does not exist:[/red]"
@@ -372,7 +367,7 @@ class CLIManager:
                 raise FileExistsError(
                     f"Work directory already exists: {work_dir}"
                 )
-            console.print(
+            self.console.print(
                 Panel(
                     (
                         f"[red]Work directory already exists:[/red]"
@@ -384,7 +379,7 @@ class CLIManager:
             )
             raise typer.Exit(code=1)
 
-        console.print(
+        self.console.print(
             "\n[bold cyan]📦 Initializing yagua project...[/bold cyan]\n"
         )
 
@@ -399,7 +394,7 @@ class CLIManager:
         except Exception as err:
             if raise_errors:
                 raise
-            console.print(
+            self.console.print(
                 Panel(
                     f"[red]{err}[/red]", title="❌ Error", border_style="red"
                 )
@@ -429,7 +424,7 @@ class CLIManager:
             "\n[dim]💡 Next step:[/dim] " f"[cyan]yagua run {work_dir}[/cyan]"
         )
 
-        console.print(
+        self.console.print(
             Panel(
                 "\n".join(info_lines),
                 border_style="green",
@@ -479,7 +474,7 @@ class CLIManager:
             If work directory does not exist or execution fails.
         """
         with self._use_project(work_dir) as proj:
-            console.print(
+            self.console.print(
                 "[bold cyan]🚀 Running yagua pipeline...[/bold cyan]\n"
             )
             try:
@@ -487,7 +482,7 @@ class CLIManager:
                     step_name = step_method.__name__.replace("_", "-")
                     self._run_step(step_method, step_name, force)
 
-                console.print(
+                self.console.print(
                     "\n[bold green]✅ Pipeline completed successfully!"
                     "[/bold green]\n"
                 )
@@ -498,7 +493,7 @@ class CLIManager:
                 if raise_errors:
                     raise
 
-                console.print(
+                self.console.print(
                     Panel(
                         f"[red]Pipeline failed:[/red]\n{err}",
                         title="❌ Error",
@@ -527,13 +522,13 @@ class CLIManager:
         dict
             Result dictionary from the step execution.
         """
-        console.print(f"[bold blue]🌟 {step_name}...[/bold blue]")
+        self.console.print(f"[bold blue]🌟 {step_name}...[/bold blue]")
 
         # Create Rich Progress for the operation
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
-            console=console,
+            console=self.console,
         ) as progress:
 
             task = progress.add_task("⚙️ Initializing...", total=None)
@@ -567,7 +562,7 @@ class CLIManager:
                 result_items.append(f"{key}={value}")
 
         result_str = ", ".join(result_items)
-        console.print(
+        self.console.print(
             f"[green]💯[/green] {step_name} [bold]Done[/bold]: "
             f"[cyan]{result_str}[/cyan]\n"
         )
@@ -677,9 +672,9 @@ class CLIManager:
                 "3. Collect Mutations", mutations_status, mut_progress
             )
 
-            console.print()
-            console.print(table)
-            console.print()
+            self.console.print()
+            self.console.print(table)
+            self.console.print()
 
             # Summary information
             info_lines = [
@@ -706,16 +701,16 @@ class CLIManager:
                     f"[yellow]⚠️  Last Failure:[/yellow] {proj.store.failed_at}"  # noqa
                 )
 
-            console.print(Panel("\n".join(info_lines), border_style="blue"))
+            self.console.print(Panel("\n".join(info_lines), border_style="blue"))
 
             # Next step suggestion
             if current_step != PipelineStep.COMPLETED:
-                console.print(
+                self.console.print(
                     f"\n[dim]💡 Next:[/dim] [cyan]yagua run "
                     f"{work_dir}[/cyan]\n"
                 )
             else:
-                console.print(
+                self.console.print(
                     f"\n[dim]💡 View results:[/dim] [cyan]yagua report "
                     f"{work_dir}[/cyan]\n"
                 )
@@ -755,7 +750,7 @@ class CLIManager:
             except (ValueError, PipelineError) as err:
                 if raise_errors:
                     raise
-                console.print(
+                self.console.print(
                     Panel(
                         f"[yellow]{err}[/yellow]",
                         title="⚠️  Warning",
@@ -768,22 +763,22 @@ class CLIManager:
             tests_table = df_to_rich_table(tests, show_index=False)
 
             # Show summary info
-            console.print()
+            self.console.print()
             if result["coverage"] is not None:
-                console.print(
+                self.console.print(
                     f"💯 [bold green]Total coverage:[/bold green] "
                     f"[cyan]{result['coverage']:.2f}%[/cyan]"
                 )
             if proj.store.msr is not None:
-                console.print(
+                self.console.print(
                     f"🎯 [bold green]Survival rate:[/bold green] "
                     f"[cyan]{proj.store.msr:.2f}%[/cyan]"
                 )
-            console.print()
+            self.console.print()
 
-            console.print("[bold cyan]🧪 Tests:[/bold cyan]\n")
-            console.print(tests_table)
-            console.print(
+            self.console.print("[bold cyan]🧪 Tests:[/bold cyan]\n")
+            self.console.print(tests_table)
+            self.console.print(
                 f"\n[dim]📊 Total:[/dim] [bold]{result['total_count']}[/bold] "
                 f"[dim]tests[/dim]\n"
             )
@@ -830,7 +825,7 @@ class CLIManager:
             If work directory does not exist or export fails.
         """
         with self._use_project(work_dir) as proj:
-            console.print(
+            self.console.print(
                 "\n[bold cyan]📦 Exporting work directory...[/bold cyan]\n"
             )
 
@@ -839,7 +834,7 @@ class CLIManager:
             except Exception as err:
                 if raise_errors:
                     raise
-                console.print(
+                self.console.print(
                     Panel(
                         (
                             f"[red]Failed to export work directory:[/red]"
@@ -861,14 +856,14 @@ class CLIManager:
                 f"[cyan]📁 Source:[/cyan] {proj.store.work_dir}",
             ]
 
-            console.print(
+            self.console.print(
                 Panel(
                     "\n".join(info_lines),
                     border_style="green",
                     padding=(1, 2),
                 )
             )
-            console.print()
+            self.console.print()
 
 
 # ============================================================================
