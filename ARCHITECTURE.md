@@ -72,6 +72,7 @@ Yagua uses a 4-layer architecture with subprocess-based framework adapters:
 # Create collector
 collector = Collector(
     project_path="/path/to/project",
+    project_name="my_project",
     work_path="/path/to/work_dir",
     test_suite_name="pytest",
     mutation_suite_name="cosmic-ray",
@@ -82,13 +83,11 @@ collector = Collector(
 tests_data = collector.collect_tests(progress_callback)
 
 # Collect coverage
-coverage_data = collector.collect_coverage(
-    project_name, test_ids, progress_callback
-)
+coverage_data = collector.collect_coverage(test_ids, progress_callback)
 
 # Collect mutations
 mutations_data = collector.collect_mutations(
-    project_name, test_ids, force, progress_callback
+    test_ids, force, progress_callback
 )
 ```
 
@@ -100,8 +99,8 @@ mutations_data = collector.collect_mutations(
 
 **Key Methods**:
 - `collect_tests(callback)`: Discover tests in the project
-- `collect_coverage(project_name, test_ids, callback)`: Measure coverage
-- `collect_mutations(project_name, test_ids, force, callback)`: Run mutations
+- `collect_coverage(test_ids, callback)`: Measure coverage
+- `collect_mutations(test_ids, force, callback)`: Run mutations
 
 ### 4. Data Access Layer (`project_store.py`)
 

@@ -348,8 +348,6 @@ class Project:
                 f"No tests found for project '{self.store.name}'."
             )
 
-        project_name = self.store.name
-
         # Phase 1: Calculate coverage for all tests combined
         if self.store.coverage is None or force:
             progress_callback(0, 1, "All Tests")
@@ -359,7 +357,7 @@ class Project:
 
             # Collect coverage using collector
             collected = self.collector.collect_coverage(
-                project_name, test_ids, progress_callback
+                test_ids, progress_callback
             )
 
             # Save total coverage
@@ -455,8 +453,6 @@ class Project:
             )
 
         if self.store.mutants_number is None or force:
-            project_name = self.store.name
-
             # Get tests ordered by priority (coverage_uniqueness)
             priority = "coverage_uniqueness"
             cov_columns = list(
@@ -480,7 +476,7 @@ class Project:
 
             # Collect mutations using collector
             collected = self.collector.collect_mutations(
-                project_name, test_ids, force, progress_callback
+                test_ids, force, progress_callback
             )
 
             # Save mutants number
@@ -720,6 +716,7 @@ def from_work_dir(work_dir):
     # Create Collector (suite execution)
     collector = Collector(
         project_path=store.path,
+        project_name=store.name,
         work_path=store.work_path,
         test_suite_name=store.test_suite_name,
         mutation_suite_name=store.mutation_suite_name,
@@ -790,6 +787,7 @@ def from_project_info(
     # Create Collector (suite execution)
     collector = Collector(
         project_path=store.path,
+        project_name=store.name,
         work_path=store.work_path,
         test_suite_name=test_suite_name,
         mutation_suite_name=mutation_suite_name,

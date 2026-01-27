@@ -67,6 +67,8 @@ class Collector:
     ----------
     project_path : str or Path
         Path to the project directory being analyzed.
+    project_name : str
+        Name of the project/package being analyzed.
     work_path : str or Path
         Path to the work directory for temporary files.
     test_suite_name : str
@@ -80,6 +82,8 @@ class Collector:
     ----------
     project_path : Path
         Project directory path.
+    project_name : str
+        Project name.
     work_path : Path
         Work directory path.
     test_suite_name : str
@@ -93,6 +97,7 @@ class Collector:
     def __init__(
         self,
         project_path,
+        project_name,
         work_path,
         test_suite_name,
         mutation_suite_name,
@@ -104,6 +109,8 @@ class Collector:
         ----------
         project_path : str or Path
             Path to the project directory being analyzed.
+        project_name : str
+            Name of the project/package being analyzed.
         work_path : str or Path
             Path to the work directory for temporary files.
         test_suite_name : str
@@ -114,6 +121,7 @@ class Collector:
             Timeout in seconds for mutation testing. Default is None.
         """
         self.project_path = project_path
+        self.project_name = project_name
         self.work_path = work_path
         self.test_suite_name = test_suite_name
         self.mutation_suite_name = mutation_suite_name
@@ -197,7 +205,7 @@ class Collector:
     # ========================================================================
 
     def collect_coverage(
-        self, project_name, test_ids, progress_callback=_default_callback
+        self, test_ids, progress_callback=_default_callback
     ):
         """Collect coverage information for the project.
 
@@ -208,8 +216,6 @@ class Collector:
 
         Parameters
         ----------
-        project_name : str
-            Project name for reporting.
         test_ids : list of str
             List of test IDs to analyze.
         progress_callback : callable, optional
@@ -234,7 +240,9 @@ class Collector:
 
         # Phase 1: Calculate coverage for all tests combined
         progress_callback(0, len(test_ids) + 1, "All Tests")
-        total_result = suite.get_coverage(self.project_path, project_name)
+        total_result = suite.get_coverage(
+            self.project_path, self.project_name
+        )
         total_coverage = total_result.value
 
         # Phase 2 & 3: Calculate per-test coverage metrics
@@ -244,14 +252,14 @@ class Collector:
 
             # Phase 2: Coverage when running only this test
             result_alone = suite.get_coverage_for_tests(
-                self.project_path, project_name, [test_id]
+                self.project_path, self.project_name, [test_id]
             )
             cov_alone = result_alone.value
 
             # Phase 3: Coverage when running all tests except this one
             tids_without = [t for t in test_ids if t != test_id]
             result_without = suite.get_coverage_for_tests(
-                self.project_path, project_name, tids_without
+                self.project_path, self.project_name, tids_without
             )
             cov_without = result_without.value
 
@@ -277,7 +285,6 @@ class Collector:
 
     def collect_mutations(
         self,
-        project_name,
         test_ids,
         force=False,
         progress_callback=_default_callback,
@@ -291,8 +298,6 @@ class Collector:
 
         Parameters
         ----------
-        project_name : str
-            Project name for reporting.
         test_ids : list of str
             List of test IDs to analyze (ordered by priority).
         force : bool, optional
@@ -318,13 +323,13 @@ class Collector:
         # Phase 1: Initialize mutations and count mutants
         progress_callback(0, len(test_ids) + 1, "Initializing")
         mutants_result = suite.get_mutants(
-            self.project_path, project_name, force=force
+            self.project_path, self.project_name, force=force
         )
 
         # Phase 2: Execute mutations and calculate survival rate
         progress_callback(0, len(test_ids) + 1, "All tests")
         msr_result = suite.get_survival_rate(
-            self.project_path, project_name, force
+            self.project_path, self.project_name, force
         )
 
         # Phase 3: Per-test mutation analysis
@@ -334,13 +339,13 @@ class Collector:
 
             # MSR when running only this test
             result_alone = suite.get_survival_rate_for_tests(
-                self.project_path, project_name, [test_id], force
+                self.project_path, self.project_name, [test_id], force
             )
 
             # MSR when running all tests except this one
             tids_without = [t for t in test_ids if t != test_id]
             result_without = suite.get_survival_rate_for_tests(
-                self.project_path, project_name, tids_without, force
+                self.project_path, self.project_name, tids_without, force
             )
 
             per_test_data.append(
