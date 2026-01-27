@@ -58,7 +58,10 @@ Yagua uses a 4-layer architecture with subprocess-based framework adapters:
 - Orchestration between suite execution (Collector) and data persistence (ProjectStore)
 
 **Key Methods**:
-- `run_pipeline(rerun=False)`: Execute complete workflow
+- `next_step()`: Get the next pipeline method to execute
+- `collect_tests()`: Collect and store test data
+- `collect_coverage()`: Collect and store coverage data
+- `collect_mutations()`: Collect and store mutation data
 - `get_pipeline_status()`: Check stage completion
 
 ### 3. Suite Execution Layer (`collector.py`)
@@ -70,17 +73,23 @@ Yagua uses a 4-layer architecture with subprocess-based framework adapters:
 collector = Collector(
     project_path="/path/to/project",
     work_path="/path/to/work_dir",
-    mutation_timeout=50.0
+    test_suite_name="pytest",
+    mutation_suite_name="cosmic-ray",
+    mutation_timeout=50.0,
 )
 
 # Collect tests
-tests_data = collector.collect_tests()
+tests_data = collector.collect_tests(progress_callback)
 
 # Collect coverage
-coverage_data = collector.collect_coverage(test_ids, progress_callback)
+coverage_data = collector.collect_coverage(
+    project_name, test_ids, progress_callback
+)
 
 # Collect mutations
-mutations_data = collector.collect_mutations(test_ids, progress_callback)
+mutations_data = collector.collect_mutations(
+    project_name, test_ids, force, progress_callback
+)
 ```
 
 **Responsibilities**:
@@ -90,9 +99,9 @@ mutations_data = collector.collect_mutations(test_ids, progress_callback)
 - Provide progress callbacks during long-running operations
 
 **Key Methods**:
-- `collect_tests()`: Discover tests in the project
-- `collect_coverage(test_ids, callback)`: Measure coverage for tests
-- `collect_mutations(test_ids, callback)`: Run mutation testing
+- `collect_tests(callback)`: Discover tests in the project
+- `collect_coverage(project_name, test_ids, callback)`: Measure coverage
+- `collect_mutations(project_name, test_ids, force, callback)`: Run mutations
 
 ### 4. Data Access Layer (`project_store.py`)
 

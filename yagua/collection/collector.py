@@ -11,7 +11,7 @@ The Collector is responsible for:
 - Returning collected data to the caller
 
 Data persistence is handled by ProjectStore. Pipeline orchestration
-is handled by ProjectManager.
+is handled by Project.
 
 Classes
 -------
@@ -22,8 +22,6 @@ Collector : class
 # =============================================================================
 # IMPORTS
 # =============================================================================
-
-import numpy as np
 
 from .mutationsuites import CosmicRaySuite
 from .testsuites import PytestSuite
@@ -47,36 +45,6 @@ MUTATION_SUITES = {
 # =============================================================================
 # PRIVATE HELPER FUNCTIONS
 # =============================================================================
-
-
-def _coerce_na(value):
-    """
-    Coerces input values that are None or NaN (Not a Number) to None.
-
-    This function is useful in data cleaning pipelines where you need a
-    consistent representation for missing data points before further
-    processing or storage (e.g., storing in a database that uses NULL).
-
-    Parameters
-    ----------
-    value : Any
-        The input value to check. Can be of various types
-        (float, int, str, None, etc.).
-
-    Returns
-    -------
-    Union[Any, None]
-        Returns ``None`` if the input value is ``None`` or if it is a
-        floating-point ``NaN`` value from numpy. Otherwise, the original
-        value is returned unchanged.
-
-    See Also
-    --------
-    numpy.isnan : Function used internally to check for NaN values.
-    """
-    if value is None or (isinstance(value, float) and np.isnan(value)):
-        return None
-    return value
 
 
 def _default_callback(current, total, test_id):
@@ -308,14 +276,18 @@ class Collector:
     # ========================================================================
 
     def collect_mutations(
-        self, project_name, test_ids, progress_callback=_default_callback
+        self,
+        project_name,
+        test_ids,
+        force=False,
+        progress_callback=_default_callback,
     ):
         """Collect mutation testing data for the project.
 
         This method performs mutation testing analysis in phases:
         1. Mutation initialization (count mutants)
         2. Mutation execution (calculate survival rate)
-        3. Per-test mutation analysis
+        3. Per-test mutation analysis (msr_alone and msr_without)
 
         Parameters
         ----------
@@ -323,6 +295,9 @@ class Collector:
             Project name for reporting.
         test_ids : list of str
             List of test IDs to analyze (ordered by priority).
+        force : bool, optional
+            Force re-execution of mutations even if already run.
+            Default is False.
         progress_callback : callable, optional
             Callback function with signature:
             progress_callback(current, total, test_id).
@@ -332,45 +307,56 @@ class Collector:
         -------
         dict
             Dictionary with keys:
-            - 'total_mutants': Total number of mutants
-            - 'surviving_mutants': Number of surviving mutants
-            - 'init_result': Suite result for initialization
-            - 'exec_result': Suite result for execution
+            - 'mutants_number': Number of mutants generated
+            - 'mutants_result': SuiteRunResult for initialization
+            - 'msr': Mutation survival rate percentage
+            - 'msr_result': SuiteRunResult for execution
             - 'per_test_data': List of dicts with test mutation data
         """
         suite = self.mutation_suite
 
         # Phase 1: Initialize mutations and count mutants
-        progress_callback(0, len(test_ids) + 2, "Initializing")
-        init_result = suite.init_db(self.project_path, project_name)
-        total_mutants = init_result.value
+        progress_callback(0, len(test_ids) + 1, "Initializing")
+        mutants_result = suite.get_mutants(
+            self.project_path, project_name, force=force
+        )
 
-        # Phase 2: Execute all mutations to calculate baseline survival
-        progress_callback(1, len(test_ids) + 2, "Executing")
-        exec_result = suite.exec_db()
-        surviving_mutants = exec_result.value
+        # Phase 2: Execute mutations and calculate survival rate
+        progress_callback(0, len(test_ids) + 1, "All tests")
+        msr_result = suite.get_survival_rate(
+            self.project_path, project_name, force
+        )
 
         # Phase 3: Per-test mutation analysis
         per_test_data = []
-        for idx, test_id in enumerate(test_ids, 2):
-            progress_callback(idx, len(test_ids) + 2, test_id)
+        for idx, test_id in enumerate(test_ids, 1):
+            progress_callback(idx, len(test_ids) + 1, test_id)
 
-            # Run mutations with only this test
-            test_result = suite.exec_db(test_filter=test_id)
-            surviving = test_result.value
+            # MSR when running only this test
+            result_alone = suite.get_survival_rate_for_tests(
+                self.project_path, project_name, [test_id], force
+            )
+
+            # MSR when running all tests except this one
+            tids_without = [t for t in test_ids if t != test_id]
+            result_without = suite.get_survival_rate_for_tests(
+                self.project_path, project_name, tids_without, force
+            )
 
             per_test_data.append(
                 {
                     "test_id": test_id,
-                    "surviving_mutants": surviving,
-                    "result": test_result,
+                    "msr_alone": result_alone.value,
+                    "result_alone": result_alone,
+                    "msr_without": result_without.value,
+                    "result_without": result_without,
                 }
             )
 
         return {
-            "total_mutants": total_mutants,
-            "surviving_mutants": surviving_mutants,
-            "init_result": init_result,
-            "exec_result": exec_result,
+            "mutants_number": mutants_result.value,
+            "mutants_result": mutants_result,
+            "msr": msr_result.value,
+            "msr_result": msr_result,
             "per_test_data": per_test_data,
         }

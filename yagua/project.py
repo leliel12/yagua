@@ -31,7 +31,6 @@ from_project_info : function
 from datetime import datetime, timezone
 from pathlib import Path
 
-import numpy as np
 
 from .collection import Collector
 from .dal import ProjectStore
@@ -63,40 +62,6 @@ class PipelineError(Exception):
 
     pass
 
-
-# =============================================================================
-# PRIVATE HELPER FUNCTIONS
-# =============================================================================
-
-
-def _coerce_na(value):
-    """
-    Coerces input values that are None or NaN (Not a Number) to None.
-
-    This function is useful in data cleaning pipelines where you need a
-    consistent representation for missing data points before further
-    processing or storage (e.g., storing in a database that uses NULL).
-
-    Parameters
-    ----------
-    value : Any
-        The input value to check. Can be of various types
-        (float, int, str, None, etc.).
-
-    Returns
-    -------
-    Union[Any, None]
-        Returns ``None`` if the input value is ``None`` or if it is a
-        floating-point ``NaN`` value from numpy. Otherwise, the original
-        value is returned unchanged.
-
-    See Also
-    --------
-    numpy.isnan : Function used internally to check for NaN values.
-    """
-    if value is None or (isinstance(value, float) and np.isnan(value)):
-        return None
-    return value
 
 
 def _default_callback(current, total, test_id):
@@ -489,74 +454,75 @@ class Project:
                 "mutation analysis."
             )
 
-        suite = self.collector.mutation_suite
-        project_path = self.store.path
-        project_name = self.store.name
-
-        # Phase 1: Initialize mutations and count mutants
         if self.store.mutants_number is None or force:
-            result = suite.get_mutants(project_path, project_name, force=force)
-            self.store.save_mutants_number(result.value, result)
+            project_name = self.store.name
 
-        mutants_number = self.store.mutants_number
-
-        # Phase 2: Execute mutations and calculate survival rate
-        if self.store.msr is None or force:
-            progress_callback(1, 1, "All tests")
-            result = suite.get_survival_rate(project_path, project_name, force)
-            self.store.save_msr(result.value, result)
-
-        msr = self.store.msr
-
-        # Get tests ordered by priority (coverage_uniqueness)
-        priority = "coverage_uniqueness"
-        cov_columns = list({"coverage_alone", "coverage_without", priority})
-        mutation_columns = ["test_id", "msr_alone", "msr_without"]
-
-        tests_df = self.store.get_tests_dataframe()[
-            mutation_columns + cov_columns
-        ]
-
-        # Priority
-        tests_df.sort_values(priority, ascending=False, inplace=True)
-
-        # Validate that coverage collection is complete
-        if tests_df[cov_columns].isna().to_numpy().any():
-            raise ValueError(
-                "Coverage collection appears to be incomplete. "
-                "Some tests are missing coverage data."
+            # Get tests ordered by priority (coverage_uniqueness)
+            priority = "coverage_uniqueness"
+            cov_columns = list(
+                {"coverage_alone", "coverage_without", priority}
+            )
+            tests_df = self.store.get_tests_dataframe()[
+                ["test_id"] + cov_columns
+            ]
+            tests_df.sort_values(
+                priority, ascending=False, inplace=True
             )
 
-        # Phase 3: Calculate per-test mutation metrics
-        tests_data_arr = tests_df[mutation_columns].to_numpy()
-        tests_count = len(tests_data_arr)
+            # Validate that coverage collection is complete
+            if tests_df[cov_columns].isna().to_numpy().any():
+                raise ValueError(
+                    "Coverage collection appears to be incomplete. "
+                    "Some tests are missing coverage data."
+                )
 
+            test_ids = tests_df["test_id"].tolist()
+
+            # Collect mutations using collector
+            collected = self.collector.collect_mutations(
+                project_name, test_ids, force, progress_callback
+            )
+
+            # Save mutants number
+            self.store.save_mutants_number(
+                collected["mutants_number"],
+                collected["mutants_result"],
+            )
+
+            # Save overall MSR
+            self.store.save_msr(
+                collected["msr"],
+                collected["msr_result"],
+            )
+
+            # Save per-test mutation data
+            for test_data in collected["per_test_data"]:
+                test_id = test_data["test_id"]
+
+                self.store.save_test_msr_alone(
+                    test_id,
+                    test_data["msr_alone"],
+                    test_data["result_alone"],
+                )
+
+                self.store.save_test_msr_without(
+                    test_id,
+                    test_data["msr_without"],
+                    test_data["result_without"],
+                )
+
+        mutants_number = self.store.mutants_number
+        msr = self.store.msr
+
+        # Get final mutation data
         tests_data = []
-        for idx, (test_id, msr_alone, msr_wo) in enumerate(tests_data_arr, 1):
-            progress_callback(idx, tests_count, test_id)
-
-            # MSR when running only this test
-            msr_alone = _coerce_na(msr_alone)
-            if msr_alone is None or force:
-                result = suite.get_survival_rate_for_tests(
-                    project_path, project_name, [test_id], force
-                )
-                msr_alone = self.store.save_test_msr_alone(
-                    test_id, result.value, result
-                )
-
-            # MSR when running all tests except this one
-            msr_wo = _coerce_na(msr_wo)
-            if msr_wo is None or force:
-                tids = self.store.get_test_ids_except(test_id)
-                result = suite.get_survival_rate_for_tests(
-                    project_path, project_name, tids, force
-                )
-                msr_wo = self.store.save_test_msr_without(
-                    test_id, result.value, result
-                )
-
-            tests_data.append((test_id, msr_alone, msr_wo))
+        mutation_df = self.store.get_tests_dataframe()[
+            ["test_id", "msr_alone", "msr_without"]
+        ]
+        for _, row in mutation_df.iterrows():
+            tests_data.append(
+                (row["test_id"], row["msr_alone"], row["msr_without"])
+            )
 
         # Update pipeline step
         self._update_step("mutations_collected")

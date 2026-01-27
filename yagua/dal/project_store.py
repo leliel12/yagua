@@ -707,7 +707,7 @@ class ProjectStore:
         """Update the pipeline step in the database.
 
         This method updates the pipeline step without validation.
-        Validation should be performed by the caller (ProjectManager).
+        Validation should be performed by the caller (Project).
 
         Parameters
         ----------
