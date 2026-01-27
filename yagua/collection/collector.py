@@ -204,9 +204,7 @@ class Collector:
     # Public Methods - Coverage Collection
     # ========================================================================
 
-    def collect_coverage(
-        self, test_ids, progress_callback=_default_callback
-    ):
+    def collect_coverage(self, test_ids, progress_callback=_default_callback):
         """Collect coverage information for the project.
 
         This method runs the test suite with coverage enabled in phases:
@@ -239,16 +237,14 @@ class Collector:
         suite = self.test_suite
 
         # Phase 1: Calculate coverage for all tests combined
-        progress_callback(0, len(test_ids) + 1, "All Tests")
-        total_result = suite.get_coverage(
-            self.project_path, self.project_name
-        )
+        progress_callback(0, len(test_ids), "All Tests")
+        total_result = suite.get_coverage(self.project_path, self.project_name)
         total_coverage = total_result.value
 
         # Phase 2 & 3: Calculate per-test coverage metrics
         per_test_data = []
         for idx, test_id in enumerate(test_ids, 1):
-            progress_callback(idx, len(test_ids) + 1, test_id)
+            progress_callback(idx, len(test_ids), test_id)
 
             # Phase 2: Coverage when running only this test
             result_alone = suite.get_coverage_for_tests(
@@ -321,13 +317,13 @@ class Collector:
         suite = self.mutation_suite
 
         # Phase 1: Initialize mutations and count mutants
-        progress_callback(0, len(test_ids) + 1, "Initializing")
+        progress_callback(0, len(test_ids), "Initializing")
         mutants_result = suite.get_mutants(
             self.project_path, self.project_name, force=force
         )
 
         # Phase 2: Execute mutations and calculate survival rate
-        progress_callback(0, len(test_ids) + 1, "All tests")
+        progress_callback(0, len(test_ids), "All tests")
         msr_result = suite.get_survival_rate(
             self.project_path, self.project_name, force
         )
@@ -335,7 +331,7 @@ class Collector:
         # Phase 3: Per-test mutation analysis
         per_test_data = []
         for idx, test_id in enumerate(test_ids, 1):
-            progress_callback(idx, len(test_ids) + 1, test_id)
+            progress_callback(idx, len(test_ids), test_id)
 
             # MSR when running only this test
             result_alone = suite.get_survival_rate_for_tests(
