@@ -15,7 +15,7 @@ Yagua uses a 4-layer architecture with subprocess-based framework adapters:
                             ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                    Business Logic Layer                         │
-│     (project.py) - Pipeline validation, state tracking           │
+│     (project.py) - Pipeline validation, state tracking          │
 └──────────────────┬────────────────────────────┬─────────────────┘
                    │                            │
                    ▼                            ▼
@@ -27,12 +27,12 @@ Yagua uses a 4-layer architecture with subprocess-based framework adapters:
    └────────┬──────────────────┘    └──────────┬───────────────┘
             │                                   │
             ▼                                   ▼
-   ┌──────────────────┐                 ┌─────────────┐
-   │  Framework Suites│                 │   Models    │
-   │  - Test Suites   │                 │ (Peewee ORM)│
+   ┌───────────────────┐                ┌─────────────┐
+   │  Framework Suites │                │   Models    │
+   │  - Test Suites    │                │ (Peewee ORM)│
    │  - Mutation Suites│                └─────────────┘
-   │  (subprocess)    │
-   └──────────────────┘
+   │  (subprocess)     │
+   └───────────────────┘
 ```
 
 ## Layers
