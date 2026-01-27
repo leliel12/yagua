@@ -4,7 +4,7 @@ This document explains the architecture of Yagua, a tool for collecting and mana
 
 ## Overview
 
-Yagua uses a 3-layer architecture with subprocess-based framework adapters:
+Yagua uses a 4-layer architecture with subprocess-based framework adapters:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -16,20 +16,23 @@ Yagua uses a 3-layer architecture with subprocess-based framework adapters:
 ┌─────────────────────────────────────────────────────────────────┐
 │                    Business Logic Layer                         │
 │     (project.py) - Pipeline validation, state tracking           │
-└───────────────────────────┬─────────────────────────────────────┘
-                            │
-                            ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                   Data Access Layer                             │
-│  (project_store.py) - Database ops, suite orchestration          │
-└────────┬──────────────────┬──────────────────┬──────────────────┘
-         │                  │                  │
-         ▼                  ▼                  ▼
-   ┌──────────┐      ┌────────────┐     ┌─────────────┐
-   │  Test    │      │ Mutation   │     │   Models    │
-   │  Suites  │      │  Suites    │     │ (Peewee ORM)│
-   │(subprocess)│     │(subprocess)│    └─────────────┘
-   └──────────┘      └────────────┘
+└──────────────────┬────────────────────────────┬─────────────────┘
+                   │                            │
+                   ▼                            ▼
+   ┌───────────────────────────┐    ┌──────────────────────────┐
+   │  Suite Execution Layer    │    │   Data Access Layer      │
+   │ (collector.py)            │    │ (project_store.py)       │
+   │ - Orchestrates suites     │    │ - Database operations    │
+   │ - Returns collected data  │    │ - Data persistence       │
+   └────────┬──────────────────┘    └──────────┬───────────────┘
+            │                                   │
+            ▼                                   ▼
+   ┌──────────────────┐                 ┌─────────────┐
+   │  Framework Suites│                 │   Models    │
+   │  - Test Suites   │                 │ (Peewee ORM)│
+   │  - Mutation Suites│                └─────────────┘
+   │  (subprocess)    │
+   └──────────────────┘
 ```
 
 ## Layers
@@ -45,19 +48,53 @@ Yagua uses a 3-layer architecture with subprocess-based framework adapters:
 
 **Pattern**: Session-based pipeline with resumability
 
-### 2. Business Logic (`project.py`)
+### 2. Business Logic Layer (`project.py`)
 
-**Project** wraps ProjectStore to provide:
+**Project** coordinates Collector and ProjectStore to provide:
 - Pipeline validation and state tracking
 - Stage execution with caching
 - Progress callbacks
 - Resumability (skip completed stages)
+- Orchestration between suite execution (Collector) and data persistence (ProjectStore)
 
 **Key Methods**:
 - `run_pipeline(rerun=False)`: Execute complete workflow
 - `get_pipeline_status()`: Check stage completion
 
-### 3. Data Access Layer (`project_store.py`)
+### 3. Suite Execution Layer (`collector.py`)
+
+**Collector** orchestrates test and mutation suite execution:
+
+```python
+# Create collector
+collector = Collector(
+    project_path="/path/to/project",
+    work_path="/path/to/work_dir",
+    mutation_timeout=50.0
+)
+
+# Collect tests
+tests_data = collector.collect_tests()
+
+# Collect coverage
+coverage_data = collector.collect_coverage(test_ids, progress_callback)
+
+# Collect mutations
+mutations_data = collector.collect_mutations(test_ids, progress_callback)
+```
+
+**Responsibilities**:
+- Execute test suites (pytest) via TestSuiteABC implementations
+- Execute mutation suites (cosmic-ray) via MutationSuiteABC implementations
+- Return collected data to caller (does NOT persist to database)
+- Provide progress callbacks during long-running operations
+
+**Key Methods**:
+- `collect_tests()`: Discover tests in the project
+- `collect_coverage(test_ids, callback)`: Measure coverage for tests
+- `collect_mutations(test_ids, callback)`: Run mutation testing
+
+### 4. Data Access Layer (`project_store.py`)
 
 **ProjectStore** handles database operations:
 
@@ -72,12 +109,18 @@ store = ProjectStore(work_dir="/work")
 ```
 
 **Responsibilities**:
-- Test collection: `collect_tests()`, `add_test()`
-- Coverage: `collect_coverage()`, `collect_coverage_for_test()`, `collect_coverage_without_test()`
-- Mutations: `collect_mutations()`, `collect_mutations_for_test()`, `collect_mutations_without_test()`
-- Suite orchestration via TestSuiteABC/MutationSuiteABC
+- Database connection management and model binding
+- CRUD operations for projects, tests, and history
+- Transaction management for ACID compliance
+- Data persistence for test metadata, coverage, and mutations
 
-### 4. Framework Adapters (subprocess-based)
+**Key Methods**:
+- `add_test()`: Save test to database
+- `update_coverage()`: Update coverage metrics for a test
+- `update_mutations()`: Update mutation metrics for a test
+- `get_tests()`: Query tests from database
+
+### 5. Framework Adapters (subprocess-based)
 
 **Test Suites** (`testsuites/`):
 - `TestSuiteABC`: Abstract interface
@@ -96,7 +139,7 @@ store = ProjectStore(work_dir="/work")
   - Manual TOML config (better isolation)
   - Respects `mutation_timeout` parameter
 
-### 5. Data Models (`models.py`)
+### 6. Data Models (`dal/models.py`)
 
 **ProjectModel** (singleton, id=1):
 - Metadata: name, path, work_path, description
@@ -119,14 +162,28 @@ store = ProjectStore(work_dir="/work")
 ```
 yagua run work_dir
   ↓
-CLIManager.run()
+CLI Layer: typer command
   ↓
-Project.run_pipeline()
+Business Logic: Project.run_pipeline()
   ↓
-1. collect_tests() → PytestSuite (subprocess)
-2. collect_coverage() → PytestSuite (subprocess, N tests = 2N+1 runs)
-3. collect_mutations() → CosmicRaySuite (subprocess)
-  ↓
+  ├─> Suite Execution: Collector.collect_tests()
+  │     ↓
+  │   PytestSuite (subprocess) → returns test data
+  │     ↓
+  │   Data Access: ProjectStore.add_test() → persists to DB
+  │
+  ├─> Suite Execution: Collector.collect_coverage()
+  │     ↓
+  │   PytestSuite (subprocess, N tests = 2N+1 runs) → returns coverage data
+  │     ↓
+  │   Data Access: ProjectStore.update_coverage() → persists to DB
+  │
+  └─> Suite Execution: Collector.collect_mutations()
+        ↓
+      CosmicRaySuite (subprocess) → returns mutation data
+        ↓
+      Data Access: ProjectStore.update_mutations() → persists to DB
+        ↓
 Database: All data persisted to work_dir/yagua.db
 ```
 
@@ -144,13 +201,14 @@ Database: All data persisted to work_dir/yagua.db
 
 ## Key Design Patterns
 
-1. **Layered Architecture**: CLI → Project → ProjectStore → Suites
-2. **Subprocess Isolation**: External commands for pytest/cosmic-ray
-3. **Session-Based Pipeline**: Resumable, cached stages
-4. **Hash-Based Files**: Deterministic temp file naming (MD5)
-5. **Abstract Factory**: TestSuiteABC/MutationSuiteABC for extensibility
-6. **Context Manager**: Project auto-closes database
-7. **Dynamic Binding**: Models bound to database at runtime
+1. **Layered Architecture**: CLI → Project → Collector + ProjectStore → Suites
+2. **Separation of Concerns**: Collector (execution) vs ProjectStore (persistence)
+3. **Subprocess Isolation**: External commands for pytest/cosmic-ray
+4. **Session-Based Pipeline**: Resumable, cached stages
+5. **Hash-Based Files**: Deterministic temp file naming (MD5)
+6. **Abstract Factory**: TestSuiteABC/MutationSuiteABC for extensibility
+7. **Context Manager**: Project auto-closes database
+8. **Dynamic Binding**: Models bound to database at runtime
 
 ## Database Architecture
 
@@ -164,7 +222,8 @@ Database: All data persisted to work_dir/yagua.db
 ### Add Test Framework
 
 ```python
-from yagua.testsuites import TestSuiteABC
+from yagua.collection.testsuites import TestSuiteABC
+import pathlib
 import subprocess
 
 class UnittestSuite(TestSuiteABC):
@@ -184,7 +243,8 @@ class UnittestSuite(TestSuiteABC):
 ### Add Mutation Framework
 
 ```python
-from yagua.mutationsuites import MutationSuiteABC
+from yagua.collection.mutationsuites import MutationSuiteABC
+import pathlib
 
 class MutmutSuite(MutationSuiteABC):
     def __init__(self, work_path, mutation_timeout=50.0):

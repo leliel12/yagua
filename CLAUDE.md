@@ -11,21 +11,37 @@
 ```
 yagua/
 ├── __init__.py
-├── models.py           # Peewee ORM models (ProjectModel, TestModel, HistoryModel)
-├── project_store.py    # ProjectStore class - database access layer (DAL)
 ├── project.py          # Project class - business logic layer
 ├── cli.py              # Typer CLI commands (session-based pipeline pattern)
 ├── io.py               # Import/export operations (read_dir/read_archive return Project)
-├── testsuites/         # Test suite handlers (TestSuiteABC, PytestSuite)
-├── mutationsuites/     # Mutation suite handlers (MutationSuiteABC, CosmicRaySuite)
+├── dal/                # Data Access Layer package
+│   ├── __init__.py
+│   ├── models.py       # Peewee ORM models (ProjectModel, TestModel, HistoryModel)
+│   └── project_store.py # ProjectStore class - database operations
+├── collection/         # Suite Execution Layer package
+│   ├── __init__.py
+│   ├── collector.py    # Collector class - orchestrates suite execution
+│   ├── testsuites/     # Test suite handlers (TestSuiteABC, PytestSuite)
+│   │   ├── __init__.py
+│   │   ├── abc.py
+│   │   └── pytest_suite.py
+│   └── mutationsuites/ # Mutation suite handlers (MutationSuiteABC, CosmicRaySuite)
+│       ├── __init__.py
+│       ├── abc.py
+│       └── cosmicray_suite.py
 └── utils/              # Utility functions (df2rt for Rich table formatting)
+    ├── __init__.py
+    └── df2rt.py
 ```
 
 ## Key Patterns
 
 - **One Work Directory Per Project**: Each work directory contains yagua.db with one project
 - **Dynamic Model Binding**: Models bound to database at runtime in `ProjectStore.__init__()`
-- **Layered Architecture**: `ProjectStore` (DAL) handles database operations, `Project` (business logic) handles pipeline validation and workflows
+- **Layered Architecture**:
+  - `ProjectStore` (DAL) handles database operations
+  - `Collector` (Suite Execution Layer) orchestrates test/mutation suite execution
+  - `Project` (Business Logic) handles pipeline validation and workflows
 - **Session-Based Pipeline**: CLI implements resumable pipeline pattern with state tracking
 
 ## Commands

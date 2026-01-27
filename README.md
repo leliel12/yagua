@@ -265,6 +265,8 @@ print(f"Total MSR: {project_info['msr']}")
 proj.store.close()
 ```
 
+**Note**: The `Project` class internally coordinates two layers: `Collector` (suite execution) and `ProjectStore` (data persistence). For most use cases, you should use the high-level `Project` API shown above. Advanced users who need fine-grained control over suite execution or database operations can access these internal components directly.
+
 For architectural details and system design, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ---
