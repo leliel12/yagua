@@ -897,3 +897,63 @@ class ProjectStore:
             String in format "ProjectStore(work_dir=<path>)".
         """
         return f"ProjectStore(work_dir={self.work_dir})"
+
+    def macrostate_tightness_ratio(self):
+        """Calculate the macrostate tightness index (MTI) for the test suite.
+
+        This method computes a normalized entropy-based metric that measures
+        how evenly the mutation-killing capability is distributed across the
+        test suite. It uses the Shannon entropy of mutation kill impacts,
+        normalized by the logarithm of the test count.
+
+        Returns
+        -------
+        float
+            Macrostate Tightness Index (MTI), a value between 0 and 1:
+            - Values near 1: mutation-killing capability is evenly distributed
+              across tests (high redundancy, balanced test suite)
+            - Values near 0: capability is concentrated in a few tests
+              (low redundancy, unbalanced test suite)
+
+        Formula
+        -------
+        MTI = -sum(w_i * log(w_i)) / log(N)
+
+        where:
+        - w_i = mk_impact_i / sum(mk_impacts) are normalized weights
+        - N is the total number of tests
+        - mk_impact_i is the number of mutants exclusively killed by test i
+
+        Notes
+        -----
+        - Only tests with mk_impact > 0 are included in the calculation
+        - Requires mutation testing data to be collected
+        - Based on information theory entropy concepts
+        - Higher MTI suggests more redundancy in the test suite
+
+        See Also
+        --------
+        TestModel.mk_impact : Mutants exclusively killed by each test
+
+        """
+        import numpy as np
+
+        with self.transaction():
+            proj = self._get_project_model()
+            log_tests_number = np.log(proj.tests.count())
+
+            mk_impacts = np.array(
+                [
+                    test.mk_impact
+                    for test in TestModel.select()
+                    if test.mk_impact > 0
+                ]
+            )
+            information_weights = mk_impacts / mk_impacts.sum()
+
+            mti2 = (
+                -np.sum(information_weights * np.log(information_weights))
+                / log_tests_number
+            )
+
+            return mti2

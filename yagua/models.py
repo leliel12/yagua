@@ -272,7 +272,7 @@ class TestModel(BaseModel):
         Requires: coverage_alone and coverage_impact
     msr_impact : float | None
         Impact on total MSR (unique contribution to mutation detection).
-        Calculated as: total_msr - msr_without
+        Calculated as: msr_without - total_msr
         Requires: project.msr and msr_without
     msr_overlap : float | None
         Mutants killed by this test that are also killed by other tests.
@@ -408,6 +408,32 @@ class TestModel(BaseModel):
             return None
 
     @hybrid.hybrid_property
+    def mk_impact(self) -> int | None:
+        """Calculate number of mutants exclusively killed by this test.
+
+        Returns
+        -------
+        int | None
+            Number of mutants killed exclusively by this test (rounded), or
+            None if data unavailable.
+
+        Formula
+        -------
+        mk_impact = round(mutants_number * msr_impact / 100)
+
+        This represents the absolute count of mutants that would survive
+        if this test were removed. It converts the percentage msr_impact
+        to an actual count of mutants.
+
+        """
+        try:
+            value = self.project.mutants_number * self.msr_impact / 100
+            return int(round(value))
+        except TypeError:
+            return None
+
+
+    @hybrid.hybrid_property
     def msr_impact(self) -> float | None:
         """Calculate impact on total MSR (unique contribution).
 
@@ -418,14 +444,19 @@ class TestModel(BaseModel):
 
         Formula
         -------
-        msr_impact = total_msr - msr_without
+        msr_impact = msr_without - total_msr
 
-        This represents how much MSR would be lost if this test
-        were removed from the test suite (i.e., how many additional
-        mutants this test kills that no other test kills).
+        This represents how much the survival rate would increase if this
+        test were removed from the test suite. A positive value indicates
+        the test kills mutants that other tests do not kill (unique
+        contribution).
+
+        msr_impact measures the ratio of mutants killed exclusively by this
+        test.
+
         """
         try:
-            return self.project.msr - self.msr_without
+            return self.msr_without - self.project.msr
         except TypeError:
             return None
 
