@@ -100,6 +100,22 @@ def _coerce_na(value):
 
 
 def _default_callback(current, total, test_id):
+    """Default no-op progress callback.
+
+    This function serves as the default progress callback for pipeline
+    methods when no custom callback is provided. It accepts progress
+    parameters but performs no action.
+
+    Parameters
+    ----------
+    current : int
+        Current progress count (e.g., current test number).
+    total : int
+        Total count (e.g., total number of tests).
+    test_id : str
+        Identifier of the current item being processed.
+
+    """
     pass
 
 
