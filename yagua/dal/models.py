@@ -210,6 +210,21 @@ class ProjectModel(BaseModel):
     pipeline_step = CharField(default="created")
     failed_at = DateTimeField(null=True, default=None)
 
+    @hybrid.hybrid_property
+    def mutants_survived(self):
+        try:
+            the_ms = self.msr * self.mutants_number / 100.0
+            return int(round(the_ms))
+        except TypeError:
+            return None
+    
+    @hybrid.hybrid_property
+    def mutants_killed(self):
+        try:
+            return self.mutants_number - self.mutants_survived
+        except TypeError:
+            return None
+
     class Meta:
         # Ensure only one project per database
         # The id must always be 1
@@ -312,222 +327,34 @@ class TestModel(BaseModel):
     msr_without = FloatField(null=True, default=None)
 
     @hybrid.hybrid_property
-    def coverage_impact(self) -> float | None:
-        """Calculate impact on total coverage (unique contribution).
-
-        Returns
-        -------
-        float | None
-            Impact percentage, or None if data unavailable.
-
-        Formula
-        -------
-        coverage_impact = total_coverage - coverage_without
-
-        This represents how much coverage would be lost if this test
-        were removed from the test suite.
-        """
+    def mutants_survived_alone(self):
         try:
-            return self.project.coverage - self.coverage_without
+            the_ms_alone = self.msr_alone * self.project.mutants_number / 100.0
+            return int(round(the_ms_alone))
         except TypeError:
             return None
 
     @hybrid.hybrid_property
-    def coverage_overlap(self) -> float | None:
-        """Calculate coverage shared with other tests.
-
-        Returns
-        -------
-        float | None
-            Overlap percentage, or None if data unavailable.
-
-        Formula
-        -------
-        coverage_overlap = coverage_alone - coverage_impact
-                         = coverage_without + coverage_alone - total_coverage
-
-        This represents how much of the total coverage is NOT unique
-        to this test (i.e., covered by other tests as well).
-        """
+    def mutants_killed_alone(self):
         try:
-            return (
-                self.coverage_without
-                + self.coverage_alone
-                - self.project.coverage
+            return self.project.mutants_number - self.mutants_survived_alone
+        except TypeError:
+            return None
+
+    @hybrid.hybrid_property
+    def mutants_survived_without(self):
+        try:
+            the_ms_without = (
+                self.msr_without * self.project.mutants_number / 100.0
             )
+            return int(round(the_ms_without))
         except TypeError:
             return None
 
     @hybrid.hybrid_property
-    def coverage_uniqueness(self) -> float | None:
-        """Calculate percentage of test's coverage that is unique.
-
-        Returns
-        -------
-        float | None
-            Uniqueness percentage (0-100), or None if data unavailable.
-
-        Formula
-        -------
-        coverage_uniqueness = (coverage_impact / coverage_alone) * 100
-
-        - 100% = All coverage from this test is unique
-        - 0% = None of this test's coverage is unique (completely redundant)
-        """
+    def mutants_killed_without(self):
         try:
-            impact = self.coverage_impact
-            return (impact / self.coverage_alone) * 100
-        except ZeroDivisionError:
-            return 0
-        except TypeError:
-            return None
-
-    @hybrid.hybrid_property
-    def coverage_redundancy(self) -> float | None:
-        """Calculate percentage of test's coverage that is redundant.
-
-        Returns
-        -------
-        float | None
-            Redundancy percentage (0-100), or None if data unavailable.
-
-        Formula
-        -------
-        coverage_redundancy = (coverage_overlap / coverage_alone) * 100
-                = ((coverage_alone - coverage_impact) / coverage_alone) * 100
-
-        - 0% = Test is completely unique (no redundancy)
-        - 100% = Test is completely redundant (all coverage duplicated)
-        """
-        try:
-            impact = self.coverage_impact
-            return ((self.coverage_alone - impact) / self.coverage_alone) * 100
-        except ZeroDivisionError:
-            return 0
-        except TypeError:
-            return None
-
-    @hybrid.hybrid_property
-    def mk_impact(self) -> int | None:
-        """Calculate number of mutants exclusively killed by this test.
-
-        Returns
-        -------
-        int | None
-            Number of mutants killed exclusively by this test (rounded), or
-            None if data unavailable.
-
-        Formula
-        -------
-        mk_impact = round(mutants_number * msr_impact / 100)
-
-        This represents the absolute count of mutants that would survive
-        if this test were removed. It converts the percentage msr_impact
-        to an actual count of mutants.
-
-        """
-        try:
-            value = self.project.mutants_number * self.msr_impact / 100
-            return int(round(value))
-        except TypeError:
-            return None
-
-
-    @hybrid.hybrid_property
-    def msr_impact(self) -> float | None:
-        """Calculate impact on total MSR (unique contribution).
-
-        Returns
-        -------
-        float | None
-            Impact percentage, or None if data unavailable.
-
-        Formula
-        -------
-        msr_impact = msr_without - total_msr
-
-        This represents how much the survival rate would increase if this
-        test were removed from the test suite. A positive value indicates
-        the test kills mutants that other tests do not kill (unique
-        contribution).
-
-        msr_impact measures the ratio of mutants killed exclusively by this
-        test.
-
-        """
-        try:
-            return self.msr_without - self.project.msr
-        except TypeError:
-            return None
-
-    @hybrid.hybrid_property
-    def msr_overlap(self) -> float | None:
-        """Calculate mutants killed by this test and other tests.
-
-        Returns
-        -------
-        float | None
-            Overlap percentage, or None if data unavailable.
-
-        Formula
-        -------
-        msr_overlap = msr_alone - msr_impact
-                    = msr_without + msr_alone - total_msr
-
-        This represents how many mutants killed by this test are
-        also killed by other tests (i.e., redundant mutant kills).
-        """
-        try:
-            return self.msr_without + self.msr_alone - self.project.msr
-        except TypeError:
-            return None
-
-    @hybrid.hybrid_property
-    def msr_uniqueness(self) -> float | None:
-        """Calculate percentage of test's killed mutants that are unique.
-
-        Returns
-        -------
-        float | None
-            Uniqueness percentage (0-100), or None if data unavailable.
-
-        Formula
-        -------
-        msr_uniqueness = (msr_impact / msr_alone) * 100
-
-        - 100% = All mutants killed by this test are unique
-        - 0% = None of this test's mutant kills are unique (redundant)
-        """
-        try:
-            impact = self.msr_impact
-            return (impact / self.msr_alone) * 100
-        except ZeroDivisionError:
-            return 0
-        except TypeError:
-            return None
-
-    @hybrid.hybrid_property
-    def msr_redundancy(self) -> float | None:
-        """Calculate percentage of test's killed mutants that are redundant.
-
-        Returns
-        -------
-        float | None
-            Redundancy percentage (0-100), or None if data unavailable.
-
-        Formula
-        -------
-        msr_redundancy = (msr_overlap / msr_alone) * 100
-                       = ((msr_alone - msr_impact) / msr_alone) * 100
-
-        - 0% = Test is completely unique (no redundant mutant kills)
-        - 100% = Test is completely redundant (all mutant kills duplicated)
-        """
-        try:
-            impact = self.msr_impact
-            return ((self.msr_alone - impact) / self.msr_alone) * 100
-        except ZeroDivisionError:
-            return 0
+            return self.project.mutants_number - self.mutants_survived_without
         except TypeError:
             return None
 

@@ -773,6 +773,13 @@ class CLIManager:
                 self.console.print(
                     f"🎯 [bold green]Survival rate:[/bold green] "
                     f"[cyan]{proj.store.msr:.2f}%[/cyan]"
+                    f" ([cyan]Killed: {proj.store.mutants_killed}[/cyan], ",
+                    f" [cyan]Survived: {proj.store.mutants_survived}[/cyan], ",
+                    f" [cyan]Total: {proj.store.mutants_number}[/cyan])"
+                )
+                self.console.print(
+                    f"🪢 [bold green]MTI2:[/bold green] "
+                    f"[cyan]{proj.store.mti2:.2f}[/cyan]"
                 )
             self.console.print()
 

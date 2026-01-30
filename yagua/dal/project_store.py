@@ -885,7 +885,7 @@ class ProjectStore:
         """
         fields = [
             f for f in ProjectModel._meta.sorted_field_names if f != "id"
-        ]
+        ] + list(ProjectModel._hproperties())
         return super().__dir__() + fields
 
     def __repr__(self):
@@ -898,6 +898,7 @@ class ProjectStore:
         """
         return f"ProjectStore(work_dir={self.work_dir})"
 
+    @property
     def macrostate_tightness_ratio(self):
         """Calculate the macrostate tightness index (MTI) for the test suite.
 
@@ -942,18 +943,21 @@ class ProjectStore:
             proj = self._get_project_model()
             log_tests_number = np.log(proj.tests.count())
 
-            mk_impacts = np.array(
+            mutants_killed_alones = np.array(
                 [
-                    test.mk_impact
+                    test.mutants_killed_alone
                     for test in TestModel.select()
-                    if test.mk_impact > 0
+                    if test.mutants_killed_alone > 0
                 ]
             )
-            information_weights = mk_impacts / mk_impacts.sum()
+            information_weights = (
+                mutants_killed_alones / mutants_killed_alones.sum()
+            )
 
-            mti2 = (
+            the_mti2 = (
                 -np.sum(information_weights * np.log(information_weights))
                 / log_tests_number
             )
+            return the_mti2
 
-            return mti2
+    mti2 = macrostate_tightness_ratio
