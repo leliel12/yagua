@@ -79,17 +79,10 @@ yagua export my_work_dir output.tar.gz
 
 ## TODO
 
-Cuando use claude, recordame que revise estos pendientes
+Remind me to go over these pending tasks next time I use Claude.
+
+None
 
 ### Problemas Identificados
 
-1. ✅ **CORREGIDO - BUG en project.py línea 457**:
-   - Cambiado el ordenamiento de tests para usar `coverage_alone` en lugar de `coverage_uniqueness`
-   - Los tests ahora se priorizan por su cobertura individual durante la recolección de mutaciones
-   - Actualizado también el comentario en cli.py para reflejar el cambio
-
-2. ✅ **CORREGIDO - Inconsistencia terminológica MSR**:
-   - Actualizada la documentación en models.py para aclarar que MSR = "Mutation Survival Ratio"
-   - MSR representa el % de mutantes que SOBREVIVIERON (no fueron matados)
-   - Valores más bajos indican test suites más efectivos
-   - Agregada nota: mutation_score = 100 - msr
+None
