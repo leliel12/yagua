@@ -173,9 +173,14 @@ class ProjectModel(BaseModel):
     coverage : FloatField, optional
         Total project coverage percentage (0-100).
         Updated via collect-coverage command.
+    mutants_number : IntegerField, optional
+        Total number of mutants generated for the project.
+        Updated via collect-mutations command.
     msr : FloatField, optional
-        Mutation Score Ratio for the entire project (0-100).
-        Represents the percentage of mutants killed by the test suite.
+        Mutation Survival Ratio for the entire project (0-100).
+        Represents the percentage of mutants that survived (were not killed).
+        Lower values indicate more effective test suites.
+        Note: mutation_score = 100 - msr
         Updated via collect-mutations command.
     pipeline_step : CharField
         Current step in the analysis pipeline. One of:
@@ -185,6 +190,15 @@ class ProjectModel(BaseModel):
     failed_at : DateTimeField, optional
         UTC timestamp of last pipeline failure, if any.
         None if pipeline has not failed.
+
+    Hybrid Properties
+    -----------------
+    mutants_survived : int | None
+        Number of mutants that survived the full test suite.
+        Calculated from msr and mutants_number.
+    mutants_killed : int | None
+        Number of mutants killed by the full test suite.
+        Calculated as: mutants_number - mutants_survived
 
     Notes
     -----
@@ -258,49 +272,30 @@ class TestModel(BaseModel):
         Updated via collect-coverage command, useful for identifying
         test redundancy and dependencies.
     msr_alone : FloatField, optional
-        Mutation Score Ratio when running only this test in isolation (0-100).
-        Represents the percentage of mutants killed by this test alone.
+        Mutation Survival Ratio when running only this test in isolation (0-100).
+        Represents the percentage of mutants that survived when tested alone.
+        Lower values indicate this test is more effective at killing mutants.
         Updated via collect-mutations command with per-test analysis.
     msr_without : FloatField, optional
-        Mutation Score Ratio when running all tests except this one (0-100).
+        Mutation Survival Ratio when running all tests except this one (0-100).
+        Represents the percentage of mutants that survived without this test.
         Updated via collect-mutations command, useful for identifying
         which mutants are uniquely detected by this test.
 
-    Calculated Properties
-    ---------------------
-    coverage_impact : float | None
-        Impact on total coverage (unique contribution).
-        Calculated as: total_coverage - coverage_without
-        Requires: project.coverage and coverage_without
-    coverage_overlap : float | None
-        Coverage shared with other tests.
-        Calculated as: total_coverage - coverage_alone
-        Requires: project.coverage and coverage_alone
-    coverage_uniqueness : float | None
-        Percentage of test's coverage that is unique (0-100).
-        Calculated as: (coverage_impact / coverage_alone) * 100
-        Requires: coverage_alone and coverage_impact
-    coverage_redundancy : float | None
-        Percentage of test's coverage that is redundant (0-100).
-        Calculated as:
-            ((coverage_alone - coverage_impact) / coverage_alone) * 100
-        Requires: coverage_alone and coverage_impact
-    msr_impact : float | None
-        Impact on total MSR (unique contribution to mutation detection).
-        Calculated as: msr_without - total_msr
-        Requires: project.msr and msr_without
-    msr_overlap : float | None
-        Mutants killed by this test that are also killed by other tests.
-        Calculated as: msr_alone - msr_impact
-        Requires: project.msr, msr_alone, and msr_without
-    msr_uniqueness : float | None
-        Percentage of test's killed mutants that are unique (0-100).
-        Calculated as: (msr_impact / msr_alone) * 100
-        Requires: msr_alone and msr_impact
-    msr_redundancy : float | None
-        Percentage of test's killed mutants that are redundant (0-100).
-        Calculated as: ((msr_alone - msr_impact) / msr_alone) * 100
-        Requires: msr_alone and msr_impact
+    Hybrid Properties
+    -----------------
+    mutants_survived_alone : int | None
+        Number of mutants that survived when running only this test.
+        Calculated from msr_alone and project.mutants_number.
+    mutants_killed_alone : int | None
+        Number of mutants killed when running only this test.
+        Calculated as: mutants_number - mutants_survived_alone
+    mutants_survived_without : int | None
+        Number of mutants that survived when running all tests except this one.
+        Calculated from msr_without and project.mutants_number.
+    mutants_killed_without : int | None
+        Number of mutants killed when running all tests except this one.
+        Calculated as: mutants_number - mutants_survived_without
 
     Notes
     -----

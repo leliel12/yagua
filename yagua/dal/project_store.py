@@ -294,8 +294,8 @@ class ProjectStore:
         """Get all tests for this project as a DataFrame.
 
         This method queries all tests from the database and converts them
-        to a pandas DataFrame, including both regular fields and calculated
-        hybrid properties (coverage_impact, coverage_uniqueness, etc.).
+        to a pandas DataFrame, including both regular fields and hybrid
+        properties (mutants_survived_alone, mutants_killed_alone, etc.).
 
         Returns
         -------
@@ -304,8 +304,9 @@ class ProjectStore:
 
         Notes
         -----
-        Calculated properties (coverage_impact, coverage_uniqueness, etc.)
-        will be None if the required coverage data has not been collected yet.
+        Hybrid properties (mutants_survived_alone, mutants_killed_alone,
+        mutants_survived_without, mutants_killed_without) will be None
+        if the required mutation data has not been collected yet.
         """
         # Helper function to group coverage columns (currently commented out)
         # def group_coverage_columns(columns):
@@ -363,9 +364,10 @@ class ProjectStore:
         Returns
         -------
         pd.Series
-            Pandas Series containing all test fields and calculated properties
-            (coverage_impact, coverage_overlap, coverage_uniqueness,
-            coverage_redundancy). The series name is set to "test".
+            Pandas Series containing all test fields and hybrid properties
+            (mutants_survived_alone, mutants_killed_alone,
+            mutants_survived_without, mutants_killed_without).
+            The series name is set to "test".
 
         Raises
         ------

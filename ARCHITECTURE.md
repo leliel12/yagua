@@ -121,12 +121,16 @@ store = ProjectStore(work_dir="/work")
 - CRUD operations for projects, tests, and history
 - Transaction management for ACID compliance
 - Data persistence for test metadata, coverage, and mutations
+- Computation of suite-level entropy metrics (MTI)
 
 **Key Methods**:
 - `add_test()`: Save test to database
 - `update_coverage()`: Update coverage metrics for a test
 - `update_mutations()`: Update mutation metrics for a test
 - `get_tests()`: Query tests from database
+
+**Key Properties**:
+- `macrostate_tightness_ratio` (alias `mti2`): Normalized entropy metric measuring distribution of mutation-killing capability across test suite
 
 ### 5. Framework Adapters (subprocess-based)
 
@@ -153,12 +157,13 @@ store = ProjectStore(work_dir="/work")
 - Metadata: name, path, work_path, description
 - Results: coverage, mutants_number, msr
 - Suite names: test_suite_name, mutation_suite_name
+- Hybrid properties: mutants_survived, mutants_killed
 
 **TestModel**:
 - Base data: test_id, file, suite, test
 - Coverage: coverage_alone, coverage_without
 - Mutations: msr_alone, msr_without
-- Calculated properties: impact, overlap, uniqueness, redundancy (auto-computed)
+- Hybrid properties: mutants_survived_alone, mutants_killed_alone, mutants_survived_without, mutants_killed_without
 
 **HistoryModel**:
 - Execution audit: tag, command, status_code, stdout, stderr, result
@@ -199,13 +204,13 @@ Database: All data persisted to work_dir/yagua.db
 - Total coverage: all tests together
 - Coverage alone: single test in isolation
 - Coverage without: all tests except one
-- Calculated: impact, overlap, uniqueness, redundancy
 
 **Mutation Collection** (per test):
-- Total MSR: all tests together
+- Total MSR (survival rate): all tests together
+- Total mutants: number of mutants generated
 - MSR alone: single test in isolation
 - MSR without: all tests except one
-- Calculated: impact, overlap, uniqueness, redundancy
+- Hybrid properties: mutants counts (survived/killed) for project and per test
 
 ## Key Design Patterns
 
@@ -223,7 +228,7 @@ Database: All data persisted to work_dir/yagua.db
 - **One work_dir per project**: Each contains yagua.db with one ProjectModel (id=1)
 - **Runtime binding**: Models dynamically bound to SqliteDatabase instance in ProjectStore
 - **Transaction management**: All operations wrapped in transactions
-- **Calculated properties**: Metrics auto-computed via hybrid properties
+- **Hybrid properties**: Mutation counts (survived/killed) auto-computed via hybrid properties
 
 ## Extending Yagua
 

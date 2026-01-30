@@ -440,6 +440,50 @@ Combine coverage and MSR metrics to identify tests that are both comprehensive (
 **Code Review for Bug Detection**
 Use MSR impact metrics to justify new tests. Tests with high MSR impact demonstrate they catch bugs other tests miss.
 
+### Test Suite Entropy Metrics
+
+Beyond individual test metrics, yagua provides suite-level metrics that measure the overall distribution of mutation-killing capability across your test suite.
+
+#### Macrostate Tightness Index (MTI)
+
+**Available as**: `proj.store.macrostate_tightness_ratio` or `proj.store.mti2`
+
+**Formula**: `MTI = -sum(w_i * log(w_i)) / log(N)`
+
+where:
+- `w_i = mk_alone_i / sum(mk_alones)` are normalized weights
+- `N` is the total number of tests
+- `mk_alone_i` is the number of mutants exclusively killed by test i
+
+**Meaning**: Normalized entropy-based metric measuring how evenly the mutation-killing capability is distributed across the test suite.
+
+**Interpretation**:
+- **Values near 1**: Mutation-killing capability is evenly distributed across tests (high redundancy, balanced test suite)
+- **Values near 0**: Capability is concentrated in a few tests (low redundancy, unbalanced test suite)
+
+**Use Cases**:
+- **Test Suite Balance**: Identify when tests are too concentrated or too distributed
+- **Refactoring Guidance**: Lower MTI suggests critical tests that need preservation
+- **Quality Assessment**: Compare MTI across projects or over time to track test suite evolution
+
+**Example**:
+```python
+from yagua import read_dir
+
+proj = read_dir("my_work_dir")
+mti = proj.store.macrostate_tightness_ratio
+print(f"Macrostate Tightness Index: {mti:.3f}")
+
+if mti > 0.8:
+    print("High redundancy - test suite is well-balanced")
+elif mti < 0.3:
+    print("Low redundancy - capability concentrated in few tests")
+else:
+    print("Moderate redundancy - balanced suite")
+```
+
+**Theoretical Foundation**: MTI is grounded in information theory and the [theoretical framework](#theoretical-foundation) of software entropy. It measures the Shannon entropy of the distribution of mutation-killing impacts, normalized by the maximum possible entropy (which occurs when all tests kill the same number of unique mutants). Higher MTI indicates higher entropy in the macrostate space, meaning the test suite explores more of the mutation graph uniformly.
+
 ---
 
 ## 🔧 Development

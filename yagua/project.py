@@ -453,10 +453,10 @@ class Project:
             )
 
         if self.store.mutants_number is None or force:
-            # Get tests ordered by priority (coverage_uniqueness)
-            priority = "coverage_uniqueness"
+            # Get tests ordered by priority (coverage_alone)
+            priority = "coverage_alone"
             cov_columns = list(
-                {"coverage_alone", "coverage_without", priority}
+                {"coverage_alone", "coverage_without"}
             )
             tests_df = self.store.get_tests_dataframe()[
                 ["test_id"] + cov_columns

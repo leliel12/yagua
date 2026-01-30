@@ -458,8 +458,8 @@ class CLIManager:
         The pipeline state is tracked in the database, allowing you to
         resume from interruptions or failures.
 
-        Mutations are evaluated in coverage_uniqueness order (descending)
-        to optimize detection.
+        Mutations are evaluated in coverage_alone order (descending)
+        to prioritize tests with higher individual coverage.
 
         Parameters
         ----------
