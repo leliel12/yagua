@@ -419,7 +419,7 @@ name = "local"
 
         # Parse survival rate from output
         try:
-            survival_rate = float(sr_stdout.strip())
+            survival_rate = float(sr_stdout.strip()) / 100.0
         except (ValueError, AttributeError):
             survival_rate = 0.0
 
@@ -504,7 +504,7 @@ name = "local"
 
         # Parse survival rate from output
         try:
-            survival_rate = float(sr_stdout.strip())
+            survival_rate = float(sr_stdout.strip()) / 100.0
         except (ValueError, AttributeError):
             survival_rate = 0.0
 

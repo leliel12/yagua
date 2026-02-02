@@ -401,7 +401,7 @@ class PytestSuite(TestSuiteABC):
             json_src = fp.read()
             data = json.loads(json_src)
 
-        cov = data["totals"]["percent_covered"]
+        cov = data["totals"]["percent_covered"] / 100.0
 
         return self.pkg_result(
             value=cov,
@@ -480,7 +480,7 @@ class PytestSuite(TestSuiteABC):
             json_src = fp.read()
             data = json.loads(json_src)
 
-        cov = data["totals"]["percent_covered"]
+        cov = data["totals"]["percent_covered"] / 100.0
 
         return self.pkg_result(
             value=cov,

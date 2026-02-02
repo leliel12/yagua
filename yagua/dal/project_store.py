@@ -345,9 +345,7 @@ class ProjectStore:
         """
         with self.transaction():
             project = self._get_project_model()
-            return (
-                TestModel.select().where(TestModel.project == project).count()
-            )
+            return project.tests.count()
 
     def get_test(self, test_id: str | int) -> pd.Series:
         """Get a specific test by its test_id or database ID.
