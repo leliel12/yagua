@@ -777,9 +777,14 @@ class CLIManager:
                     f" [cyan]Survived: {proj.store.mutants_survived}[/cyan], ",
                     f" [cyan]Total: {proj.store.mutants_number}[/cyan])"
                 )
+                print("-----")
                 self.console.print(
-                    f"🪢 [bold green]MTI2:[/bold green] "
-                    f"[cyan]{proj.store.mti2:.2f}[/cyan]"
+                    f"🪢 [bold green]Mutation Active Test Ratio:[/bold green] "
+                    f"[cyan]{proj.store.mutation_active_test_ratio:.4f}[/cyan]"
+                )
+                self.console.print(
+                    f"🪢 [bold green]Macrostate Tightness Index:[/bold green] "
+                    f"[cyan]{proj.store.macrostate_tightness_ratio:.4f}[/cyan]"
                 )
             self.console.print()
 

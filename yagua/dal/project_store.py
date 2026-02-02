@@ -41,7 +41,10 @@ Key Patterns
 import contextlib
 from pathlib import Path
 
+import numpy as np
+
 import pandas as pd
+
 from peewee import SqliteDatabase
 
 from .. import io as yagua_io
@@ -899,6 +902,58 @@ class ProjectStore:
             String in format "ProjectStore(work_dir=<path>)".
         """
         return f"ProjectStore(work_dir={self.work_dir})"
+    
+    @property
+    def mutation_active_test_ratio(self):
+        """Calculate the ratio of mutation-active tests in the test suite.
+
+        This metric measures the proportion of tests that kill at least one
+        mutant when run in isolation. It provides a simple indicator of how
+        many tests in the suite actively contribute to mutation detection.
+
+        Returns
+        -------
+        float
+            Ratio of mutation-active tests, a value between 0 and 1:
+            - 1.0: All tests kill at least one mutant (all tests are active)
+            - 0.5: Half of the tests kill mutants
+            - 0.0: No tests kill mutants (test suite is ineffective)
+
+        Formula
+        -------
+        ratio = |{t : mutants_killed_alone(t) > 0}| / N
+
+        where N is the total number of tests in the suite.
+
+        Notes
+        -----
+        - A test is considered "mutation-active" if mutants_killed_alone > 0
+        - Requires mutation testing data to be collected
+        - Low values suggest many tests are redundant or ineffective
+        - This is a simpler metric than MTI (macrostate_tightness_ratio)
+
+        See Also
+        --------
+        macrostate_tightness_ratio : More sophisticated entropy-based metric
+        TestModel.mutants_killed_alone : Mutants killed by each test alone
+
+        """
+        with self.transaction():
+            proj = self._get_project_model()
+            tests_number = proj.tests.count()
+
+            mutants_killed_alones = np.array(
+                [
+                    test.mutants_killed_alone
+                    for test in TestModel.select()
+                    if test.mutants_killed_alone > 0
+                ]
+            )
+            ratio = len(mutants_killed_alones) / tests_number
+            return ratio
+
+    # Deprecated alias for backward compatibility
+    mti1 = mutation_active_test_ratio
 
     @property
     def macrostate_tightness_ratio(self):
@@ -939,21 +994,16 @@ class ProjectStore:
         TestModel.mk_impact : Mutants exclusively killed by each test
 
         """
-        import numpy as np
-
         with self.transaction():
             proj = self._get_project_model()
             log_tests_number = np.log(proj.tests.count())
 
-            mutants_killed_alones = np.array(
+            information_weights = np.array(
                 [
-                    test.mutants_killed_alone
+                    test.information_weights
                     for test in TestModel.select()
                     if test.mutants_killed_alone > 0
                 ]
-            )
-            information_weights = (
-                mutants_killed_alones / mutants_killed_alones.sum()
             )
 
             the_mti2 = (

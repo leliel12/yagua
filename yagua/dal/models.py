@@ -34,6 +34,8 @@ instances to each have their own database connection.
 
 from datetime import datetime, timezone
 
+import numpy as np
+
 from peewee import (
     Model,
     CharField,
@@ -226,14 +228,38 @@ class ProjectModel(BaseModel):
 
     @hybrid.hybrid_property
     def mutants_survived(self):
+        """Calculate the number of mutants that survived the full test suite.
+
+        Returns
+        -------
+        int | None
+            Number of surviving mutants, or None if mutation data unavailable.
+
+        Formula
+        -------
+        mutants_survived = round(msr * mutants_number / 100.0)
+
+        """
         try:
             the_ms = self.msr * self.mutants_number / 100.0
             return int(round(the_ms))
         except TypeError:
             return None
-    
+
     @hybrid.hybrid_property
     def mutants_killed(self):
+        """Calculate the number of mutants killed by the full test suite.
+
+        Returns
+        -------
+        int | None
+            Number of killed mutants, or None if mutation data unavailable.
+
+        Formula
+        -------
+        mutants_killed = mutants_number - mutants_survived
+
+        """
         try:
             return self.mutants_number - self.mutants_survived
         except TypeError:
@@ -284,6 +310,12 @@ class TestModel(BaseModel):
 
     Hybrid Properties
     -----------------
+    coverage_impact : float | None
+        Unique coverage contribution of this test.
+        Calculated as: total_coverage - coverage_without
+    coverage_uniqueness : float | None
+        Percentage of this test's coverage that is unique (0-100).
+        Calculated as: (coverage_impact / coverage_alone) × 100
     mutants_survived_alone : int | None
         Number of mutants that survived when running only this test.
         Calculated from msr_alone and project.mutants_number.
@@ -296,6 +328,10 @@ class TestModel(BaseModel):
     mutants_killed_without : int | None
         Number of mutants killed when running all tests except this one.
         Calculated as: mutants_number - mutants_survived_without
+    information_weights : float
+        Normalized weight of this test's mutation impact (0-1).
+        Used in entropy calculations for macrostate tightness index.
+        Calculated as: mutants_killed_alone / sum(all mutants_killed_alone)
 
     Notes
     -----
@@ -322,7 +358,46 @@ class TestModel(BaseModel):
     msr_without = FloatField(null=True, default=None)
 
     @hybrid.hybrid_property
+    def coverage_impact(self):
+        """Calculate the unique coverage contribution of this test.
+
+        This metric measures how much coverage would be lost if this test
+        were removed from the suite. It represents the coverage that is
+        exclusively provided by this test.
+
+        Returns
+        -------
+        float | None
+            Coverage impact (0-100), or None if coverage data unavailable.
+
+        Formula
+        -------
+        coverage_impact = total_coverage - coverage_without
+
+        """
+        return self.project.coverage - self.coverage_without
+
+    @hybrid.hybrid_property
+    def coverage_uniqueness(self):
+        try:
+            return (self.coverage_impact / self.coverage_alone) * 100.0
+        except (TypeError, ZeroDivisionError):
+            return None
+
+    @hybrid.hybrid_property
     def mutants_survived_alone(self):
+        """Calculate number of mutants that survived when running only this test.
+
+        Returns
+        -------
+        int | None
+            Number of surviving mutants, or None if mutation data unavailable.
+
+        Formula
+        -------
+        mutants_survived_alone = round(msr_alone * mutants_number / 100.0)
+
+        """
         try:
             the_ms_alone = self.msr_alone * self.project.mutants_number / 100.0
             return int(round(the_ms_alone))
@@ -331,6 +406,18 @@ class TestModel(BaseModel):
 
     @hybrid.hybrid_property
     def mutants_killed_alone(self):
+        """Calculate number of mutants killed when running only this test.
+
+        Returns
+        -------
+        int | None
+            Number of killed mutants, or None if mutation data unavailable.
+
+        Formula
+        -------
+        mutants_killed_alone = mutants_number - mutants_survived_alone
+
+        """
         try:
             return self.project.mutants_number - self.mutants_survived_alone
         except TypeError:
@@ -338,6 +425,18 @@ class TestModel(BaseModel):
 
     @hybrid.hybrid_property
     def mutants_survived_without(self):
+        """Calculate mutants that survived when running all tests except this one.
+
+        Returns
+        -------
+        int | None
+            Number of surviving mutants, or None if mutation data unavailable.
+
+        Formula
+        -------
+        mutants_survived_without = round(msr_without * mutants_number / 100.0)
+
+        """
         try:
             the_ms_without = (
                 self.msr_without * self.project.mutants_number / 100.0
@@ -348,10 +447,58 @@ class TestModel(BaseModel):
 
     @hybrid.hybrid_property
     def mutants_killed_without(self):
+        """Calculate mutants killed when running all tests except this one.
+
+        Returns
+        -------
+        int | None
+            Number of killed mutants, or None if mutation data unavailable.
+
+        Formula
+        -------
+        mutants_killed_without = mutants_number - mutants_survived_without
+
+        """
         try:
             return self.project.mutants_number - self.mutants_survived_without
         except TypeError:
             return None
+
+    @hybrid.hybrid_property
+    def information_weights(self):
+        """Calculate the normalized weight of this test's mutation impact.
+
+        This metric represents the relative contribution of this test to
+        the total mutation-killing capability of the test suite. It is used
+        in entropy-based calculations like the Macrostate Tightness Index.
+
+        Returns
+        -------
+        float
+            Normalized weight between 0 and 1, where:
+            - Higher values: test kills more mutants relative to other tests
+            - Lower values: test kills fewer mutants relative to other tests
+            - Sum of all weights across all tests equals 1.0
+
+        Formula
+        -------
+        w_i = mutants_killed_alone_i / sum(mutants_killed_alone_j for all j)
+
+        Notes
+        -----
+        - Used for computing Shannon entropy in macrostate_tightness_ratio
+        - Requires mutation testing data to be collected
+        - Tests that kill no mutants have weight 0
+
+        See Also
+        --------
+        ProjectStore.macrostate_tightness_ratio : Uses these weights for MTI
+
+        """
+        all_tests = list(self.project.tests)
+        denom = np.sum([t.mutants_killed_alone for t in all_tests])
+
+        return self.mutants_killed_alone / denom
 
     class Meta:
         table_name = "yagua_tests"
