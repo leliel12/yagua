@@ -27,6 +27,6 @@ yagua status "$WORK_DIR"
 
 # Show project report
 echo "Showing project report..."
-yagua report "$WORK_DIR"
+yagua report "$WORK_DIR" -r
 
 echo "Done!"
