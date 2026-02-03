@@ -37,3 +37,4 @@ simple_proj/_work_path_/
 simple_proj/_yagua_work_/
 _yagua_wd_astroalign_/
 .ipynb_checkpoints/*
+.virtual_documents/experiment.ipynb
