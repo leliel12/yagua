@@ -318,27 +318,27 @@ Yagua automatically derives four additional metrics from the basic measurements:
 - **High Overlap**: Code tested is mostly already covered by other tests
 - **Low Overlap**: Code tested is exercised almost uniquely by this test
 
-#### 3. Coverage Uniqueness (%)
+#### 3. Coverage Uniqueness
 
-**Formula**: `(coverage_impact / coverage_alone) × 100`
+**Formula**: `coverage_impact / coverage_alone`
 
-**Meaning**: Percentage of this test's coverage that is unique.
-
-**Interpretation**:
-- **100%**: All coverage is unique - critical test
-- **50%**: Half unique, half redundant
-- **0%**: Completely redundant test
-
-#### 4. Coverage Redundancy (%)
-
-**Formula**: `((coverage_alone - coverage_impact) / coverage_alone) × 100`
-
-**Meaning**: Percentage of this test's coverage that is redundant.
+**Meaning**: Proportion of this test's coverage that is unique.
 
 **Interpretation**:
-- **0%**: No redundant coverage - completely unique
-- **50%**: Half redundant
-- **100%**: Completely redundant - all coverage duplicated elsewhere
+- **1.0**: All coverage is unique - critical test
+- **0.5**: Half unique, half redundant
+- **0.0**: Completely redundant test
+
+#### 4. Coverage Redundancy
+
+**Formula**: `(coverage_alone - coverage_impact) / coverage_alone`
+
+**Meaning**: Proportion of this test's coverage that is redundant.
+
+**Interpretation**:
+- **0.0**: No redundant coverage - completely unique
+- **0.5**: Half redundant
+- **1.0**: Completely redundant - all coverage duplicated elsewhere
 
 ### Mutation Testing Metrics
 
@@ -380,27 +380,27 @@ Yagua automatically derives four additional metrics from the basic measurements:
 - **High Overlap**: Mutants killed are mostly caught by other tests too
 - **Low Overlap**: Mutants killed are almost exclusively caught by this test
 
-#### 3. MSR Uniqueness (%)
+#### 3. MSR Uniqueness
 
-**Formula**: `(msr_impact / msr_alone) × 100`
+**Formula**: `msr_impact / msr_alone`
 
-**Meaning**: Percentage of this test's killed mutants that are unique.
-
-**Interpretation**:
-- **100%**: All mutant kills are unique - critical test for bug detection
-- **50%**: Half unique, half redundant
-- **0%**: Completely redundant test (all mutants caught by others)
-
-#### 4. MSR Redundancy (%)
-
-**Formula**: `((msr_alone - msr_impact) / msr_alone) × 100`
-
-**Meaning**: Percentage of this test's killed mutants that are redundant.
+**Meaning**: Proportion of this test's killed mutants that are unique.
 
 **Interpretation**:
-- **0%**: No redundant mutant kills - completely unique
-- **50%**: Half redundant
-- **100%**: Completely redundant - all mutant kills duplicated elsewhere
+- **1.0**: All mutant kills are unique - critical test for bug detection
+- **0.5**: Half unique, half redundant
+- **0.0**: Completely redundant test (all mutants caught by others)
+
+#### 4. MSR Redundancy
+
+**Formula**: `(msr_alone - msr_impact) / msr_alone`
+
+**Meaning**: Proportion of this test's killed mutants that are redundant.
+
+**Interpretation**:
+- **0.0**: No redundant mutant kills - completely unique
+- **0.5**: Half redundant
+- **1.0**: Completely redundant - all mutant kills duplicated elsewhere
 
 ### Interpreting Results
 
@@ -413,10 +413,10 @@ The calculated metrics are available via the Python API using `proj.store.get_te
 #### Coverage Analysis
 
 **Identify Critical Tests**
-Tests with high coverage uniqueness (>80%) are critical for maintaining coverage. Removing them would significantly reduce overall coverage.
+Tests with high coverage uniqueness (>0.8) are critical for maintaining coverage. Removing them would significantly reduce overall coverage.
 
 **Find Redundant Tests**
-Tests with high coverage redundancy (>90%) are candidates for removal or refactoring. They test code already covered by other tests.
+Tests with high coverage redundancy (>0.9) are candidates for removal or refactoring. They test code already covered by other tests.
 
 **Optimize Test Suite**
 Balance coverage with test count by removing highly redundant tests while preserving high-uniqueness tests.
@@ -427,10 +427,10 @@ Tests with high coverage overlap indicate areas where code is well-tested, makin
 #### Mutation Testing Analysis
 
 **Identify Bug-Detecting Tests**
-Tests with high MSR uniqueness (>80%) are critical for catching bugs. They detect issues that no other test catches.
+Tests with high MSR uniqueness (>0.8) are critical for catching bugs. They detect issues that no other test catches.
 
 **Find Ineffective Tests**
-Tests with high MSR redundancy (>90%) kill mutants already caught by other tests. Consider removing or improving them.
+Tests with high MSR redundancy (>0.9) kill mutants already caught by other tests. Consider removing or improving them.
 
 **Prioritize Test Execution**
 Run high-impact mutation tests first in CI/CD. They provide the most unique bug detection per execution time.
