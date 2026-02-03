@@ -148,7 +148,6 @@ class ProjectStore:
         with self.transaction():
             self.db.create_tables(MODELS_TO_CREATE, safe=True)
 
-
     # ========================================================================
     # Alternative Constructors
     # ========================================================================
@@ -196,7 +195,8 @@ class ProjectStore:
         if work_dir.exists():
             raise ValueError(
                 f"Work directory {work_dir} already exists. "
-                "Please choose a different directory or remove the existing one."
+                "Please choose a different directory "
+                "or remove the existing one."
             )
 
         path = Path(path).resolve()

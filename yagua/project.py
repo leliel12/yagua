@@ -29,11 +29,10 @@ from_project_info : function
 # =============================================================================
 
 from datetime import datetime, timezone
-from pathlib import Path
-
 
 from .collection import Collector
 from .dal import ProjectStore
+from .utils.bunch import Bunch
 
 
 # =============================================================================
@@ -61,7 +60,6 @@ class PipelineError(Exception):
     """Exception raised when pipeline step validation fails."""
 
     pass
-
 
 
 def _default_callback(current, total, test_id):
@@ -455,15 +453,11 @@ class Project:
         if self.store.mutants_number is None or force:
             # Get tests ordered by priority (coverage_alone)
             priority = "coverage_alone"
-            cov_columns = list(
-                {"coverage_alone", "coverage_without"}
-            )
+            cov_columns = list({"coverage_alone", "coverage_without"})
             tests_df = self.store.get_tests_dataframe()[
                 ["test_id"] + cov_columns
             ]
-            tests_df.sort_values(
-                priority, ascending=False, inplace=True
-            )
+            tests_df.sort_values(priority, ascending=False, inplace=True)
 
             # Validate that coverage collection is complete
             if tests_df[cov_columns].isna().to_numpy().any():
@@ -533,7 +527,7 @@ class Project:
     # Public Methods - Information and Status
     # ========================================================================
 
-    def get_tests_info(self, include_internal=False):
+    def get_tests_report(self, include_internal=False):
         """Get tests information as DataFrame.
 
         Pipeline step: Requires 'tests_collected' or later.
@@ -580,11 +574,19 @@ class Project:
                 columns=[c for c in internal_cols if c in tests.columns]
             )
 
-        return {
+        the_report = {
             "tests_df": tests,
+            "tests_number": len(tests),
             "coverage": self.store.coverage,
-            "total_count": len(tests),
+            "mutants_number": self.store.mutants_number,
+            "msr": self.store.msr,
+            "mutants_killed": self.store.mutants_killed,
+            "mutants_survived": self.store.mutants_survived,
+            "mutation_active_test_ratio": self.store.mutation_active_test_ratio,
+            "macrostate_tightness_ratio": self.store.macrostate_tightness_ratio,
         }
+
+        return Bunch("report", the_report)
 
     def get_project_info(self):
         """Get project information dictionary.

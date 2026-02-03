@@ -547,7 +547,7 @@ class CLIManager:
                     )
                 progress.refresh()
 
-            result = step(force=force, progress_callback=callback)
+        result = step(force=force, progress_callback=callback)
 
         # Display result summary - transform dict to displayable format
         result_items = []
@@ -557,7 +557,7 @@ class CLIManager:
                 continue
             key = key.replace("_", "-")
             if isinstance(value, float):
-                result_items.append(f"{key}={value:.2f}")
+                result_items.append(f"{key}={value:.4f}")
             else:
                 result_items.append(f"{key}={value}")
 
@@ -683,7 +683,7 @@ class CLIManager:
 
             if proj.store.coverage is not None:
                 info_lines.append(
-                    f"[cyan]💯 Coverage:[/cyan] {proj.store.coverage:.2f}%"
+                    f"[cyan]💯 Coverage:[/cyan] {proj.store.coverage:.4f}%"
                 )
 
             if proj.store.mutants_number is not None:
@@ -693,7 +693,7 @@ class CLIManager:
 
             if proj.store.msr is not None:
                 info_lines.append(
-                    f"[cyan]🎯 Survival Rate:[/cyan] {proj.store.msr:.2f}%"
+                    f"[cyan]🎯 Survival Rate:[/cyan] {proj.store.msr:.4f}%"
                 )
 
             if proj.store.failed_at:
@@ -746,7 +746,7 @@ class CLIManager:
         """
         with self._use_project(work_dir) as proj:
             try:
-                result = proj.get_tests_info(include_internal=long)
+                result = proj.get_tests_report(include_internal=long)
             except (ValueError, PipelineError) as err:
                 if raise_errors:
                     raise
@@ -759,39 +759,39 @@ class CLIManager:
                 )
                 raise typer.Exit(1)
 
-            tests = result["tests_df"]
+            tests = result.tests_df
             tests_table = df_to_rich_table(tests, show_index=False)
 
             # Show summary info
             self.console.print()
-            if result["coverage"] is not None:
+            if result.coverage is not None:
                 self.console.print(
                     f"💯 [bold green]Total coverage:[/bold green] "
-                    f"[cyan]{result['coverage']:.2f}%[/cyan]"
+                    f"[cyan]{result.coverage:.4f}%[/cyan]"
                 )
-            if proj.store.msr is not None:
+            if result.msr is not None:
                 self.console.print(
                     f"🎯 [bold green]Survival rate:[/bold green] "
-                    f"[cyan]{proj.store.msr:.2f}%[/cyan]"
-                    f" ([cyan]Killed: {proj.store.mutants_killed}[/cyan], ",
-                    f" [cyan]Survived: {proj.store.mutants_survived}[/cyan], ",
-                    f" [cyan]Total: {proj.store.mutants_number}[/cyan])"
+                    f"[cyan]{result.msr:.4f}%[/cyan]"
+                    f" ([cyan]⚰️  Killed: {result.mutants_killed}[/cyan], ",
+                    f" [cyan]🛟 Survived: {result.mutants_survived}[/cyan], ",
+                    f" [cyan]📍 Total: {result.mutants_number}[/cyan])"
                 )
                 print("-----")
                 self.console.print(
-                    f"🪢 [bold green]Mutation Active Test Ratio:[/bold green] "
-                    f"[cyan]{proj.store.mutation_active_test_ratio:.4f}[/cyan]"
+                    f"☣️  [bold green]Mutation Active Test Ratio:[/bold green] "
+                    f"[cyan]{result.mutation_active_test_ratio:.4f}[/cyan]"
                 )
                 self.console.print(
                     f"🪢 [bold green]Macrostate Tightness Index:[/bold green] "
-                    f"[cyan]{proj.store.macrostate_tightness_ratio:.4f}[/cyan]"
+                    f"[cyan]{result.macrostate_tightness_ratio:.4f}[/cyan]"
                 )
             self.console.print()
 
             self.console.print("[bold cyan]🧪 Tests:[/bold cyan]\n")
             self.console.print(tests_table)
             self.console.print(
-                f"\n[dim]📊 Total:[/dim] [bold]{result['total_count']}[/bold] "
+                f"\n[dim]📊 Total:[/dim] [bold]{result.tests_number}[/bold] "
                 f"[dim]tests[/dim]\n"
             )
 
