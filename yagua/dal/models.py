@@ -237,11 +237,11 @@ class ProjectModel(BaseModel):
 
         Formula
         -------
-        mutants_survived = round(msr * mutants_number / 100.0)
+        mutants_survived = round(msr * mutants_number )
 
         """
         try:
-            the_ms = self.msr * self.mutants_number / 100.0
+            the_ms = self.msr * self.mutants_number
             return int(round(the_ms))
         except TypeError:
             return None
@@ -375,7 +375,10 @@ class TestModel(BaseModel):
         coverage_impact = total_coverage - coverage_without
 
         """
-        return self.project.coverage - self.coverage_without
+        try:
+            return self.project.coverage - self.coverage_without
+        except TypeError:
+            return None
 
     @hybrid.hybrid_property
     def coverage_uniqueness(self):
@@ -395,11 +398,11 @@ class TestModel(BaseModel):
 
         Formula
         -------
-        mutants_survived_alone = round(msr_alone * mutants_number / 100.0)
+        mutants_survived_alone = round(msr_alone * mutants_number )
 
         """
         try:
-            the_ms_alone = self.msr_alone * self.project.mutants_number / 100.0
+            the_ms_alone = self.msr_alone * self.project.mutants_number
             return int(round(the_ms_alone))
         except TypeError:
             return None
@@ -434,13 +437,11 @@ class TestModel(BaseModel):
 
         Formula
         -------
-        mutants_survived_without = round(msr_without * mutants_number / 100.0)
+        mutants_survived_without = round(msr_without * mutants_number )
 
         """
         try:
-            the_ms_without = (
-                self.msr_without * self.project.mutants_number / 100.0
-            )
+            the_ms_without = self.msr_without * self.project.mutants_number
             return int(round(the_ms_without))
         except TypeError:
             return None
@@ -495,10 +496,13 @@ class TestModel(BaseModel):
         ProjectStore.macrostate_tightness_ratio : Uses these weights for MTI
 
         """
-        all_tests = list(self.project.tests)
-        denom = np.sum([t.mutants_killed_alone for t in all_tests])
+        try:
+            all_tests = list(self.project.tests)
+            denom = np.sum([t.mutants_killed_alone for t in all_tests])
 
-        return self.mutants_killed_alone / denom
+            return self.mutants_killed_alone / denom
+        except TypeError:
+            return None
 
     class Meta:
         table_name = "yagua_tests"

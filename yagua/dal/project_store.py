@@ -39,6 +39,7 @@ Key Patterns
 """
 
 import contextlib
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -48,6 +49,7 @@ import pandas as pd
 from peewee import SqliteDatabase
 
 from .. import io as yagua_io
+from ..utils.bunch import Bunch
 from .models import BaseModel, HistoryModel, ProjectModel, TestModel
 
 
@@ -68,6 +70,19 @@ ALL_MODELS = [BaseModel] + MODELS_TO_CREATE
 # ============================================================================
 # PROJECT STORE CLASS
 # ============================================================================
+
+
+@dataclass(frozen=True)
+class _ProjectTransaction:
+    transaction: object
+    models: Bunch
+
+    def __getattr__(self, attr):
+        return getattr(self.transaction, attr)
+
+    @property
+    def project_model(self):
+        return self.models.ProjectModel.get_by_id(1)
 
 
 class ProjectStore:
@@ -126,8 +141,13 @@ class ProjectStore:
         self.db = SqliteDatabase(str(self.db_path))
         self.db.connect()
 
+        # store the models as bunch for convenience
+        models_dict = {model.__name__: model for model in MODELS_TO_CREATE}
+        self._models = Bunch("models", models_dict)
+
         with self.transaction():
             self.db.create_tables(MODELS_TO_CREATE, safe=True)
+
 
     # ========================================================================
     # Alternative Constructors
@@ -235,13 +255,20 @@ class ProjectStore:
         All database operations should be wrapped in this context manager
         to ensure proper model binding and transaction management.
         """
+        txn = None
         with self.db.bind_ctx(ALL_MODELS):
             with self.db.atomic() as txn:
                 try:
-                    yield txn
+
+                    prj_transaction = _ProjectTransaction(
+                        transaction=txn, models=self._models
+                    )
+                    yield prj_transaction
                     txn.commit()
                 except Exception:
-                    txn.rollback()
+                    if txn:
+                        txn.rollback()
+                    raise
 
     # ========================================================================
     # Public Methods - Test Management
@@ -900,7 +927,7 @@ class ProjectStore:
             String in format "ProjectStore(work_dir=<path>)".
         """
         return f"ProjectStore(work_dir={self.work_dir})"
-    
+
     @property
     def mutation_active_test_ratio(self):
         """Calculate the ratio of mutation-active tests in the test suite.
