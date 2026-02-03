@@ -125,9 +125,12 @@ store = ProjectStore(work_dir="/work")
 
 **Key Methods**:
 - `add_test()`: Save test to database
-- `update_coverage()`: Update coverage metrics for a test
-- `update_mutations()`: Update mutation metrics for a test
-- `get_tests()`: Query tests from database
+- `save_test_coverage_alone()`: Save isolated coverage for a single test
+- `save_test_coverage_without()`: Save coverage-without for a single test
+- `save_test_msr_alone()`: Save isolated MSR for a single test
+- `save_test_msr_without()`: Save MSR-without for a single test
+- `get_tests_dataframe()`: Query all tests as DataFrame
+- `get_test()`: Get a specific test by ID as Series
 
 **Key Properties**:
 - `macrostate_tightness_ratio` (alias `mti2`): Normalized entropy metric measuring distribution of mutation-killing capability across test suite

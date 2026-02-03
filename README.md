@@ -214,18 +214,17 @@ yagua export my_work_dir --output backup.tar.gz
 Yagua provides a complete Python API for integration into scripts and tools:
 
 ```python
-from yagua import Project, ProjectStore, read_dir, read_archive
+from yagua import read_dir, read_archive
+from yagua.project import from_project_info
 
-# Create new project store (creates work_dir with yagua.db inside)
-store = ProjectStore.from_project_info(
+# Create new project (creates work_dir with yagua.db inside)
+proj = from_project_info(
     name="my_project",
     path="/path/to/project",
     work_dir="my_work_dir",
     description="Optional description",
     mutation_timeout=50.0
 )
-# Wrap in Project for business logic operations
-proj = Project(store)
 
 # Open existing project from work directory (returns Project)
 proj = read_dir("my_work_dir")
@@ -233,14 +232,14 @@ proj = read_dir("my_work_dir")
 # Open project from an archive file (returns Project)
 proj = read_archive("my_project.zip")
 
-# Run the complete pipeline with progress tracking
+# Run the pipeline step by step with progress tracking
 def progress(current, total, test_id):
     print(f"Processing {current}/{total}: {test_id}")
 
-result = proj.run_pipeline(
-    rerun=False,  # Set to True to force re-execution
-    progress_callback=progress
-)
+# Execute pipeline steps sequentially
+while step_method := proj.next_step():
+    result = step_method(force=False, progress_callback=progress)
+    print(f"Completed: {step_method.__name__}")
 
 # Check pipeline status
 status = proj.get_pipeline_status()
@@ -248,9 +247,12 @@ print(f"Tests collected: {status['tests_collected']}")
 print(f"Coverage collected: {status['coverage_collected']}")
 print(f"Mutations collected: {status['mutations_collected']}")
 
-# Get tests as DataFrame
-info = proj.get_tests_info()
-tests_df = info['tests_df']
+# Get tests report as DataFrame
+report = proj.get_tests_report()
+tests_df = report.tests_df
+print(f"Total tests: {report.tests_number}")
+print(f"Coverage: {report.coverage}")
+print(f"MSR: {report.msr}")
 
 # Access project properties
 project_info = proj.get_project_info()
@@ -259,7 +261,6 @@ print(f"Path: {project_info['path']}")
 print(f"Work Dir: {project_info['work_dir']}")
 print(f"Database: {project_info['db_path']}")
 print(f"Coverage: {project_info['coverage']}")
-print(f"Total MSR: {project_info['msr']}")
 
 # Close when done
 proj.store.close()
@@ -403,7 +404,7 @@ Yagua automatically derives four additional metrics from the basic measurements:
 
 ### Interpreting Results
 
-The calculated metrics are available via the Python API using `proj.get_test(test_id)` which returns a pandas Series with all metrics, or displayed in the CLI using `yagua list-tests my_work_dir`:
+The calculated metrics are available via the Python API using `proj.store.get_test(test_id)` which returns a pandas Series with all metrics, or displayed in the CLI using `yagua report my_work_dir`:
 
 ![Test listing with coverage metrics](res/list_tests.png)
 
@@ -451,9 +452,9 @@ Beyond individual test metrics, yagua provides suite-level metrics that measure 
 **Formula**: `MTI = -sum(w_i * log(w_i)) / log(N)`
 
 where:
-- `w_i = mk_alone_i / sum(mk_alones)` are normalized weights
+- `w_i` are the normalized information weights per test (computed via hybrid property `information_weights`)
 - `N` is the total number of tests
-- `mk_alone_i` is the number of mutants exclusively killed by test i
+- Only tests with `mutants_killed_alone > 0` are included in the calculation
 
 **Meaning**: Normalized entropy-based metric measuring how evenly the mutation-killing capability is distributed across the test suite.
 
