@@ -180,6 +180,7 @@ class CLIManager:
     export
         Export work directory to archive.
     """
+
     def __init__(self):
         # Rich console for colored output
         self.console = Console()
@@ -701,7 +702,9 @@ class CLIManager:
                     f"[yellow]⚠️  Last Failure:[/yellow] {proj.store.failed_at}"  # noqa
                 )
 
-            self.console.print(Panel("\n".join(info_lines), border_style="blue"))
+            self.console.print(
+                Panel("\n".join(info_lines), border_style="blue")
+            )
 
             # Next step suggestion
             if current_step != PipelineStep.COMPLETED:
@@ -767,15 +770,15 @@ class CLIManager:
             if result.coverage is not None:
                 self.console.print(
                     f"💯 [bold green]Total coverage:[/bold green] "
-                    f"[cyan]{result.coverage:.4f}%[/cyan]"
+                    f"[cyan]{result.coverage:.4f}[/cyan]"
                 )
             if result.msr is not None:
                 self.console.print(
                     f"🎯 [bold green]Survival rate:[/bold green] "
-                    f"[cyan]{result.msr:.4f}%[/cyan]"
+                    f"[cyan]{result.msr:.4f}[/cyan]"
                     f" ([cyan]⚰️  Killed: {result.mutants_killed}[/cyan], ",
                     f" [cyan]🛟 Survived: {result.mutants_survived}[/cyan], ",
-                    f" [cyan]📍 Total: {result.mutants_number}[/cyan])"
+                    f" [cyan]📍 Total: {result.mutants_number}[/cyan])",
                 )
                 print("-----")
                 self.console.print(
