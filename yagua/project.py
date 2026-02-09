@@ -62,26 +62,6 @@ class PipelineError(Exception):
     pass
 
 
-def _default_callback(current, total, test_id):
-    """Default no-op progress callback.
-
-    This function serves as the default progress callback for pipeline
-    methods when no custom callback is provided. It accepts progress
-    parameters but performs no action.
-
-    Parameters
-    ----------
-    current : int
-        Current progress count (e.g., current test number).
-    total : int
-        Total count (e.g., total number of tests).
-    test_id : str
-        Identifier of the current item being processed.
-
-    """
-    pass
-
-
 # =============================================================================
 # PROJECT CLASS
 # =============================================================================
@@ -231,7 +211,7 @@ class Project:
     # Public Methods - Test Collection
     # ========================================================================
 
-    def collect_tests(self, force=False, progress_callback=_default_callback):
+    def collect_tests(self, force=False, progress_callback=None):
         """Collect tests from the project using the configured test suite.
 
         This method runs the test suite's discovery mechanism and stores
@@ -303,7 +283,7 @@ class Project:
     # ========================================================================
 
     def collect_coverage(
-        self, force=False, progress_callback=_default_callback
+        self, force=False, progress_callback=None
     ):
         """Collect and store coverage information for the project.
 
@@ -406,7 +386,7 @@ class Project:
     # ========================================================================
 
     def collect_mutations(
-        self, force=False, progress_callback=_default_callback
+        self, force=False, progress_callback=None
     ):
         """Collect and analyze mutation testing data for the project.
 

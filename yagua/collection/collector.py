@@ -47,7 +47,7 @@ MUTATION_SUITES = {
 # =============================================================================
 
 
-def _default_callback(current, total, test_id):
+def _no_callback(current, total, test_id):
     pass
 
 
@@ -127,6 +127,9 @@ class Collector:
         self.mutation_suite_name = mutation_suite_name
         self.mutation_timeout = mutation_timeout
 
+    def _resolve_progress_callbak(self, progress_callback):
+        return _no_callback if progress_callback is None else progress_callback
+
     # ========================================================================
     # Properties
     # ========================================================================
@@ -162,7 +165,7 @@ class Collector:
     # Public Methods - Test Collection
     # ========================================================================
 
-    def collect_tests(self, progress_callback=_default_callback):
+    def collect_tests(self, progress_callback=None):
         """Collect tests from the project using the configured test suite.
 
         This method runs the test suite's discovery mechanism (e.g.,
@@ -187,6 +190,8 @@ class Collector:
         ValueError
             If no tests are found in the project.
         """
+        progress_callback = self._resolve_progress_callbak(progress_callback)
+
         progress_callback(0, 1, "collecting")
 
         suite = self.test_suite
@@ -204,7 +209,7 @@ class Collector:
     # Public Methods - Coverage Collection
     # ========================================================================
 
-    def collect_coverage(self, test_ids, progress_callback=_default_callback):
+    def collect_coverage(self, test_ids, progress_callback=None):
         """Collect coverage information for the project.
 
         This method runs the test suite with coverage enabled in phases:
@@ -234,6 +239,8 @@ class Collector:
         ValueError
             If no tests found.
         """
+        progress_callback = self._resolve_progress_callbak(progress_callback)
+
         suite = self.test_suite
 
         # Phase 1: Calculate coverage for all tests combined
@@ -283,7 +290,7 @@ class Collector:
         self,
         test_ids,
         force=False,
-        progress_callback=_default_callback,
+        progress_callback=_no_callback,
     ):
         """Collect mutation testing data for the project.
 
@@ -314,6 +321,8 @@ class Collector:
             - 'msr_result': SuiteRunResult for execution
             - 'per_test_data': List of dicts with test mutation data
         """
+        progress_callback = self._resolve_progress_callbak(progress_callback)
+
         suite = self.mutation_suite
 
         # Phase 1: Initialize mutations and count mutants
