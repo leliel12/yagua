@@ -371,6 +371,10 @@ class Project:
                 )
                 result.raise_if_error()
 
+        self._update_step("coverage_collected")
+
+        return {"project-coverage": store.coverage}
+
     # ========================================================================
     # Public Methods - Mutation Collection
     # ========================================================================

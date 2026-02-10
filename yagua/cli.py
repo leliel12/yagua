@@ -558,7 +558,7 @@ class CLIManager:
                 continue
             key = key.replace("_", "-")
             if isinstance(value, float):
-                result_items.append(f"{key}={value:.4f}")
+                result_items.append(f"{key}={value:.3f}")
             else:
                 result_items.append(f"{key}={value}")
 
