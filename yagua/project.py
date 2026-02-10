@@ -262,6 +262,7 @@ class Project:
             saved_count, updated_count = self.store.save_tests(
                 tests_data=tests_data, result=result
             )
+            result.raise_if_error()
             total_tests = saved_count + updated_count
             was_collected = True
 
@@ -343,6 +344,7 @@ class Project:
                 value=collected["total_coverage"],
                 result=collected["total_result"],
             )
+            collected["total_result"].raise_if_error()
 
             # Save per-test coverage
             for test_data in collected["per_test_data"]:
@@ -353,12 +355,14 @@ class Project:
                     value=test_data["coverage_alone"],
                     result=test_data["result_alone"],
                 )
+                test_data["result_alone"].raise_if_error()
 
                 self.store.save_test_coverage_without(
                     test_id=test_id,
                     value=test_data["coverage_without"],
                     result=test_data["result_without"],
                 )
+                test_data["result_without"].raise_if_error()
 
         coverage = self.store.coverage
 
@@ -459,12 +463,14 @@ class Project:
                 value=collected["mutants_number"],
                 result=collected["mutants_result"],
             )
+            collected["mutants_result"].raise_if_error()
 
             # Save overall MSR
             self.store.save_msr(
                 value=collected["msr"],
                 result=collected["msr_result"],
             )
+            collected["msr_result"].raise_if_error()
 
             # Save per-test mutation data
             for test_data in collected["per_test_data"]:
@@ -475,12 +481,14 @@ class Project:
                     value=test_data["msr_alone"],
                     result=test_data["result_alone"],
                 )
+                test_data["result_alone"].raise_if_error()
 
                 self.store.save_test_msr_without(
                     test_id=test_id,
                     value=test_data["msr_without"],
                     result=test_data["result_without"],
                 )
+                test_data["result_without"].raise_if_error()
 
         mutants_number = self.store.mutants_number
         msr = self.store.msr

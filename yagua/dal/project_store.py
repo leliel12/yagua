@@ -516,7 +516,6 @@ class ProjectStore:
 
             self._write_history(project, "collect_tests", result)
 
-        result.raise_if_error()
         return saved_count, updated_count
 
     def save_coverage(self, *, value, result):
@@ -542,7 +541,6 @@ class ProjectStore:
 
             self._write_history(project, "collect_coverage", result)
 
-        result.raise_if_error()
         return value
 
     def save_test_coverage_alone(self, *, test_id, value, result):
@@ -575,7 +573,6 @@ class ProjectStore:
                 result,
             )
 
-        result.raise_if_error()
         return value
 
     def save_test_coverage_without(self, *, test_id, value, result):
@@ -608,7 +605,6 @@ class ProjectStore:
                 result,
             )
 
-        result.raise_if_error()
         return value
 
     def save_mutants_number(self, *, value, result):
@@ -634,7 +630,6 @@ class ProjectStore:
 
             self._write_history(project, "collect_mutants", result)
 
-        result.raise_if_error()
         return value
 
     def save_msr(self, *, value, result):
@@ -660,7 +655,6 @@ class ProjectStore:
 
             self._write_history(project, "get_survival_rate", result)
 
-        result.raise_if_error()
         return value
 
     def save_test_msr_alone(self, *, test_id, value, result):
@@ -693,7 +687,6 @@ class ProjectStore:
                 result,
             )
 
-        result.raise_if_error()
         return value
 
     def save_test_msr_without(self, *, test_id, value, result):
@@ -726,7 +719,6 @@ class ProjectStore:
                 result,
             )
 
-        result.raise_if_error()
         return value
 
     # ========================================================================
@@ -977,7 +969,7 @@ class ProjectStore:
             ratio = len(mutants_killed_alones) / tests_number
             return ratio
 
-    # Deprecated alias for backward compatibility
+    # paper alias
     mti1 = mutation_active_test_ratio
 
     @property
@@ -1037,4 +1029,5 @@ class ProjectStore:
             )
             return the_mti2
 
+    # paper alias
     mti2 = macrostate_tightness_ratio
