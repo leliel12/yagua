@@ -400,7 +400,7 @@ class TestModel(BaseModel):
 
         """
         try:
-            return (self.coverage_impact / self.coverage_alone) * 100.0
+            return (self.coverage_impact / self.coverage_alone)
         except (TypeError, ZeroDivisionError):
             return None
 
