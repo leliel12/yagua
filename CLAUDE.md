@@ -29,9 +29,10 @@ yagua/
 │       ├── __init__.py
 │       ├── abc.py
 │       └── cosmicray_suite.py
-└── utils/              # Utility functions (df2rt for Rich table formatting)
+└── utils/              # Utility functions
     ├── __init__.py
-    └── df2rt.py
+    ├── bunch.py        # Bunch class (read-only attribute-accessible mapping)
+    └── df2rt.py        # df_to_rich_table for Rich table formatting
 ```
 
 ## Key Patterns

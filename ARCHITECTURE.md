@@ -80,15 +80,18 @@ collector = Collector(
 )
 
 # Collect tests
-tests_data = collector.collect_tests(progress_callback)
+result = collector.collect_tests()
 
-# Collect coverage
-coverage_data = collector.collect_coverage(test_ids, progress_callback)
+# Collect coverage (per-test)
+coverage, result = collector.collect_project_coverage()
+coverage, result = collector.collect_coverage_alone(test_id)
+coverage, result = collector.collect_coverage_without(test_id, all_test_ids)
 
-# Collect mutations
-mutations_data = collector.collect_mutations(
-    test_ids, force, progress_callback
-)
+# Collect mutations (per-test)
+mutants_number, result = collector.collect_mutants(force=False)
+msr, result = collector.collect_project_msr(force=False)
+msr, result = collector.collect_msr_alone(test_id, force=False)
+msr, result = collector.collect_msr_without(test_id, all_test_ids, force=False)
 ```
 
 **Responsibilities**:
@@ -98,9 +101,14 @@ mutations_data = collector.collect_mutations(
 - Provide progress callbacks during long-running operations
 
 **Key Methods**:
-- `collect_tests(callback)`: Discover tests in the project
-- `collect_coverage(test_ids, callback)`: Measure coverage
-- `collect_mutations(test_ids, force, callback)`: Run mutations
+- `collect_tests()`: Discover tests in the project
+- `collect_project_coverage()`: Measure total coverage
+- `collect_coverage_alone(test_id)`: Measure coverage for a single test
+- `collect_coverage_without(test_id, all_test_ids)`: Measure coverage without a test
+- `collect_mutants(force)`: Initialize mutations and count mutants
+- `collect_project_msr(force)`: Calculate project-wide survival rate
+- `collect_msr_alone(test_id, force)`: Measure MSR for a single test
+- `collect_msr_without(test_id, all_test_ids, force)`: Measure MSR without a test
 
 ### 4. Data Access Layer (`project_store.py`)
 
@@ -166,7 +174,7 @@ store = ProjectStore(work_dir="/work")
 - Base data: test_id, file, suite, test
 - Coverage: coverage_alone, coverage_without
 - Mutations: msr_alone, msr_without
-- Hybrid properties: mutants_survived_alone, mutants_killed_alone, mutants_survived_without, mutants_killed_without
+- Hybrid properties: coverage_impact, coverage_uniqueness, mutants_survived_alone, mutants_killed_alone, mutants_survived_without, mutants_killed_without, information_weights
 
 **HistoryModel**:
 - Execution audit: tag, command, status_code, stdout, stderr, result
@@ -180,25 +188,25 @@ yagua run work_dir
   ↓
 CLI Layer: typer command
   ↓
-Business Logic: Project.run_pipeline()
+Business Logic: Project.next_step() → collect_tests/coverage/mutations
   ↓
   ├─> Suite Execution: Collector.collect_tests()
   │     ↓
   │   PytestSuite (subprocess) → returns test data
   │     ↓
-  │   Data Access: ProjectStore.add_test() → persists to DB
+  │   Data Access: ProjectStore.save_tests() → persists to DB
   │
-  ├─> Suite Execution: Collector.collect_coverage()
+  ├─> Suite Execution: Collector.collect_project_coverage() / collect_coverage_alone() / collect_coverage_without()
   │     ↓
   │   PytestSuite (subprocess, N tests = 2N+1 runs) → returns coverage data
   │     ↓
-  │   Data Access: ProjectStore.update_coverage() → persists to DB
+  │   Data Access: ProjectStore.save_coverage() / save_test_coverage_alone() / save_test_coverage_without() → persists to DB
   │
-  └─> Suite Execution: Collector.collect_mutations()
+  └─> Suite Execution: Collector.collect_mutants() / collect_project_msr() / collect_msr_alone() / collect_msr_without()
         ↓
       CosmicRaySuite (subprocess) → returns mutation data
         ↓
-      Data Access: ProjectStore.update_mutations() → persists to DB
+      Data Access: ProjectStore.save_mutants_number() / save_msr() / save_test_msr_alone() / save_test_msr_without() → persists to DB
         ↓
 Database: All data persisted to work_dir/yagua.db
 ```

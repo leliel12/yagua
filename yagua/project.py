@@ -512,11 +512,19 @@ class Project:
 
         Returns
         -------
-        dict
-            Dictionary with keys:
+        Bunch
+            Bunch (attribute-accessible dict) with keys:
             - 'tests_df': DataFrame with test information
+            - 'tests_number': Total number of tests
             - 'coverage': Total coverage proportion (0-1, or None)
-            - 'total_count': Total number of tests
+            - 'mutants_number': Number of mutants (or None)
+            - 'msr': Mutation survival rate proportion (0-1, or None)
+            - 'mutants_killed': Killed mutants count (or None)
+            - 'mutants_survived': Survived mutants count (or None)
+            - 'mutation_active_test_ratio': Ratio of
+              mutation-active tests (or None)
+            - 'macrostate_tightness_ratio': MTI entropy metric
+              (or None)
 
         Raises
         ------

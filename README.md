@@ -181,8 +181,8 @@ yagua init /path/to/project my_work_dir \
 yagua run my_work_dir
 
 # Force re-run the entire pipeline (ignores cache)
-yagua run my_work_dir --rerun
-yagua run my_work_dir -r  # Short form
+yagua run my_work_dir --force
+yagua run my_work_dir -f  # Short form
 ```
 
 **Note**: The pipeline execution can be time-consuming for large test suites. For N tests, coverage collection runs approximately 2N+1 test executions (total coverage + each test alone + all tests without each one). Mutation testing can take significantly longer depending on the number of mutants.
@@ -280,7 +280,7 @@ Yagua provides comprehensive metrics for analyzing test quality, redundancy, and
 
 ### Coverage Metrics
 
-Coverage metrics analyze how much of your codebase is exercised by tests. All metrics are automatically calculated when running `yagua collect-coverage`.
+Coverage metrics analyze how much of your codebase is exercised by tests. All metrics are automatically calculated when running `yagua run`.
 
 #### Basic Coverage Metrics
 
@@ -294,7 +294,7 @@ These are directly measured by running pytest with coverage:
 
 #### Calculated Coverage Metrics
 
-Yagua automatically derives four additional metrics from the basic measurements:
+Yagua automatically derives two additional metrics from the basic measurements, available as hybrid properties on each test:
 
 #### 1. Coverage Impact
 
@@ -307,18 +307,7 @@ Yagua automatically derives four additional metrics from the basic measurements:
 - **Low Impact** (close to 0): Test coverage is mostly redundant
 - **Negative Impact**: Should never occur with a proper test suite
 
-#### 2. Coverage Overlap
-
-**Formula**: `coverage_alone - coverage_impact`
-(Alternative: `coverage_without + coverage_alone - total_coverage`)
-
-**Meaning**: Amount of coverage this test shares with other tests. The portion of this test's coverage that is NOT unique to it.
-
-**Interpretation**:
-- **High Overlap**: Code tested is mostly already covered by other tests
-- **Low Overlap**: Code tested is exercised almost uniquely by this test
-
-#### 3. Coverage Uniqueness
+#### 2. Coverage Uniqueness
 
 **Formula**: `coverage_impact / coverage_alone`
 
@@ -329,20 +318,9 @@ Yagua automatically derives four additional metrics from the basic measurements:
 - **0.5**: Half unique, half redundant
 - **0.0**: Completely redundant test
 
-#### 4. Coverage Redundancy
-
-**Formula**: `(coverage_alone - coverage_impact) / coverage_alone`
-
-**Meaning**: Proportion of this test's coverage that is redundant.
-
-**Interpretation**:
-- **0.0**: No redundant coverage - completely unique
-- **0.5**: Half redundant
-- **1.0**: Completely redundant - all coverage duplicated elsewhere
-
 ### Mutation Testing Metrics
 
-Mutation testing metrics measure how effectively tests detect bugs by analyzing their ability to kill mutants (intentional code modifications). All metrics are automatically calculated when running `yagua collect-mutations`.
+Mutation testing metrics measure how effectively tests detect bugs by analyzing their ability to kill mutants (intentional code modifications). All metrics are automatically calculated when running `yagua run`.
 
 #### Basic MSR Metrics
 
@@ -350,57 +328,19 @@ These are directly measured by running mutation testing:
 
 | Metric | Description |
 |--------|-------------|
-| **MSR Alone** | Mutation Score Ratio when running only this test in isolation |
-| **MSR Without** | Mutation Score Ratio when running all tests except this one |
-| **Total MSR** | Overall project Mutation Score Ratio with all tests |
+| **MSR Alone** | Mutation Survival Ratio when running only this test in isolation |
+| **MSR Without** | Mutation Survival Ratio when running all tests except this one |
+| **Total MSR** | Overall project Mutation Survival Ratio with all tests |
 
 #### Calculated MSR Metrics
 
-Yagua automatically derives four additional metrics from the basic measurements:
+From the basic MSR measurements and the total number of mutants, Yagua derives per-test mutant counts as hybrid properties:
 
-#### 1. MSR Impact
-
-**Formula**: `total_msr - msr_without`
-
-**Meaning**: The unique contribution of this test to mutation detection. How many additional mutants would survive if you removed this test.
-
-**Interpretation**:
-- **High Impact** (close to msr_alone): Test kills mutants uniquely
-- **Low Impact** (close to 0): Mutant kills are mostly redundant
-- **Negative Impact**: Should never occur with a proper test suite
-
-#### 2. MSR Overlap
-
-**Formula**: `msr_alone - msr_impact`
-(Alternative: `msr_without + msr_alone - total_msr`)
-
-**Meaning**: Number of mutants killed by this test that are also killed by other tests. The portion of this test's mutation detection that is NOT unique to it.
-
-**Interpretation**:
-- **High Overlap**: Mutants killed are mostly caught by other tests too
-- **Low Overlap**: Mutants killed are almost exclusively caught by this test
-
-#### 3. MSR Uniqueness
-
-**Formula**: `msr_impact / msr_alone`
-
-**Meaning**: Proportion of this test's killed mutants that are unique.
-
-**Interpretation**:
-- **1.0**: All mutant kills are unique - critical test for bug detection
-- **0.5**: Half unique, half redundant
-- **0.0**: Completely redundant test (all mutants caught by others)
-
-#### 4. MSR Redundancy
-
-**Formula**: `(msr_alone - msr_impact) / msr_alone`
-
-**Meaning**: Proportion of this test's killed mutants that are redundant.
-
-**Interpretation**:
-- **0.0**: No redundant mutant kills - completely unique
-- **0.5**: Half redundant
-- **1.0**: Completely redundant - all mutant kills duplicated elsewhere
+- **mutants_survived_alone**: `round(msr_alone * mutants_number)` - Number of mutants that survived when running only this test
+- **mutants_killed_alone**: `mutants_number - mutants_survived_alone` - Number of mutants killed when running only this test
+- **mutants_survived_without**: `round(msr_without * mutants_number)` - Number of mutants that survived when running all tests except this one
+- **mutants_killed_without**: `mutants_number - mutants_survived_without` - Number of mutants killed when running all tests except this one
+- **information_weights**: `mutants_killed_alone / sum(all mutants_killed_alone)` - Normalized weight used in entropy calculations
 
 ### Interpreting Results
 

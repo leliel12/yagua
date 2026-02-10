@@ -162,13 +162,6 @@ class Collector:
         This method runs the test suite's discovery mechanism (e.g.,
         pytest --collect-only) and returns the test data.
 
-        Parameters
-        ----------
-        progress_callback : callable, optional
-            Callback function called for progress updates with signature:
-            progress_callback(current, total, test_id).
-            Default is None (no-op function).
-
         Returns
         -------
         dict
