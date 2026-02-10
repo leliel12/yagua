@@ -280,87 +280,93 @@ class Collector:
     # Public Methods - Mutation Collection
     # ========================================================================
 
-    def collect_mutations(
-        self,
-        test_ids,
-        force=False,
-        progress_callback=_no_callback,
-    ):
-        """Collect mutation testing data for the project.
-
-        This method performs mutation testing analysis in phases:
-        1. Mutation initialization (count mutants)
-        2. Mutation execution (calculate survival rate)
-        3. Per-test mutation analysis (msr_alone and msr_without)
+    def collect_mutants(self, force=False):
+        """Initialize mutations and count total mutants.
 
         Parameters
         ----------
-        test_ids : list of str
-            List of test IDs to analyze (ordered by priority).
         force : bool, optional
-            Force re-execution of mutations even if already run.
-            Default is False.
-        progress_callback : callable, optional
-            Callback function with signature:
-            progress_callback(current, total, test_id).
-            Default is None (no-op function).
+            Force re-initialization even if already done. Default is False.
 
         Returns
         -------
-        dict
-            Dictionary with keys:
-            - 'mutants_number': Number of mutants generated
-            - 'mutants_result': SuiteRunResult for initialization
-            - 'msr': Mutation survival rate percentage
-            - 'msr_result': SuiteRunResult for execution
-            - 'per_test_data': List of dicts with test mutation data
+        tuple
+            Tuple of (mutants_number, result) where:
+            - mutants_number: int - Total number of mutants generated
+            - result: SuiteRunResult - Result object from mutation suite
         """
-        progress_callback = self._resolve_progress_callbak(progress_callback)
-
         suite = self.mutation_suite
-
-        # Phase 1: Initialize mutations and count mutants
-        progress_callback(0, len(test_ids), "Initializing")
-        mutants_result = suite.get_mutants(
+        result = suite.get_mutants(
             self.project_path, self.project_name, force=force
         )
+        return result.value, result
 
-        # Phase 2: Execute mutations and calculate survival rate
-        progress_callback(0, len(test_ids), "All tests")
-        msr_result = suite.get_survival_rate(
+    def collect_project_msr(self, force=False):
+        """Execute mutations and calculate project-wide survival rate.
+
+        Parameters
+        ----------
+        force : bool, optional
+            Force re-execution even if already done. Default is False.
+
+        Returns
+        -------
+        tuple
+            Tuple of (msr, result) where:
+            - msr: float - Mutation survival rate (0-1)
+            - result: SuiteRunResult - Result object from mutation suite
+        """
+        suite = self.mutation_suite
+        result = suite.get_survival_rate(
             self.project_path, self.project_name, force
         )
+        return result.value, result
 
-        # Phase 3: Per-test mutation analysis
-        per_test_data = []
-        for idx, test_id in enumerate(test_ids, 1):
-            progress_callback(idx, len(test_ids), test_id)
+    def collect_msr_alone(self, test_id, force=False):
+        """Collect MSR when running only a single test.
 
-            # MSR when running only this test
-            result_alone = suite.get_survival_rate_for_tests(
-                self.project_path, self.project_name, [test_id], force
-            )
+        Parameters
+        ----------
+        test_id : str
+            Unique identifier for the test to run.
+        force : bool, optional
+            Force re-execution even if already done. Default is False.
 
-            # MSR when running all tests except this one
-            tids_without = [t for t in test_ids if t != test_id]
-            result_without = suite.get_survival_rate_for_tests(
-                self.project_path, self.project_name, tids_without, force
-            )
+        Returns
+        -------
+        tuple
+            Tuple of (msr, result) where:
+            - msr: float - Mutation survival rate (0-1)
+            - result: SuiteRunResult - Result object from mutation suite
+        """
+        suite = self.mutation_suite
+        result = suite.get_survival_rate_for_tests(
+            self.project_path, self.project_name, [test_id], force
+        )
+        return result.value, result
 
-            per_test_data.append(
-                {
-                    "test_id": test_id,
-                    "msr_alone": result_alone.value,
-                    "result_alone": result_alone,
-                    "msr_without": result_without.value,
-                    "result_without": result_without,
-                }
-            )
+    def collect_msr_without(self, test_id, all_test_ids, force=False):
+        """Collect MSR when running all tests except one.
 
-        return {
-            "mutants_number": mutants_result.value,
-            "mutants_result": mutants_result,
-            "msr": msr_result.value,
-            "msr_result": msr_result,
-            "per_test_data": per_test_data,
-        }
+        Parameters
+        ----------
+        test_id : str
+            Unique identifier for the test to exclude.
+        all_test_ids : list[str]
+            List of all test IDs in the project.
+        force : bool, optional
+            Force re-execution even if already done. Default is False.
+
+        Returns
+        -------
+        tuple
+            Tuple of (msr, result) where:
+            - msr: float - Mutation survival rate (0-1)
+            - result: SuiteRunResult - Result object from mutation suite
+        """
+        suite = self.mutation_suite
+        tids_without = [t for t in all_test_ids if t != test_id]
+        result = suite.get_survival_rate_for_tests(
+            self.project_path, self.project_name, tids_without, force
+        )
+        return result.value, result

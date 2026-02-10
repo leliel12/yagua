@@ -391,8 +391,8 @@ class Project:
     def collect_mutations(self, force=False, progress_callback=None):
         """Collect and analyze mutation testing data for the project.
 
-        This method coordinates mutation testing through the mutation
-        suite and persists results via the store.
+        This method coordinates mutation testing through the collector
+        and persists results via the store.
 
         Pipeline step: Updates from 'coverage_collected' to
         'mutations_collected'.
@@ -410,9 +410,9 @@ class Project:
         -------
         dict
             Dictionary with keys:
-            - 'mutants_number': Total number of mutants
-            - 'msr': Mutation survival rate percentage
-            - 'tests_data': List of tuples (test_id, msr_alone, msr_wo)
+            - 'project-msr': Project-wide mutation survival rate
+            - 'msr-alone mean': Mean of msr_alone values
+            - 'msr-without mean': Mean of msr_without values
 
         Raises
         ------
@@ -424,89 +424,74 @@ class Project:
         # Validate pipeline: must have collected coverage
         self._validate_step("coverage_collected")
 
+        progress_callback = self._resolve_progress_callback(progress_callback)
+        collector = self.collector
+        store = self.store
+
         # Validate that coverage exists before running mutations
-        if not self.store.coverage:
+        if not store.coverage:
             raise ValueError(
                 "Coverage data is required before running "
                 "mutation analysis."
             )
 
-        if self.store.mutants_number is None or force:
-            # Get tests ordered by priority (coverage_alone)
-            priority = "coverage_alone"
-            cov_columns = list({"coverage_alone", "coverage_without"})
-            tests_df = self.store.get_tests_dataframe()[
-                ["test_id"] + cov_columns
-            ]
-            tests_df.sort_values(priority, ascending=False, inplace=True)
+        # Phase 1: Initialize mutations and count mutants
+        if store.mutants_number is None or force:
+            progress_callback(1, 1, "Initializing")
+            mutants_number, result = collector.collect_mutants(force=force)
 
-            # Validate that coverage collection is complete
-            if tests_df[cov_columns].isna().to_numpy().any():
-                raise ValueError(
-                    "Coverage collection appears to be incomplete. "
-                    "Some tests are missing coverage data."
+            store.save_mutants_number(value=mutants_number, result=result)
+            result.raise_if_error()
+
+        # Phase 2: Calculate project-wide MSR
+        if store.msr is None or force:
+            progress_callback(1, 1, "All Tests")
+            msr, result = collector.collect_project_msr(force=force)
+
+            store.save_msr(value=msr, result=result)
+            result.raise_if_error()
+
+        # Phase 3: Per-test MSR analysis
+        columns = ["test_id", "msr_alone", "msr_without"]
+        test_df = store.get_tests_dataframe()[columns]
+        all_tests_ids = test_df["test_id"].tolist()
+        total_tests = len(test_df)
+
+        for idx, test_id, msr_alone, msr_without in test_df.itertuples():
+            progress_callback(idx, total_tests, test_id)
+
+            if msr_alone is None or force:
+                msr_alone, result = collector.collect_msr_alone(
+                    test_id, force=force
                 )
 
-            test_ids = tests_df["test_id"].tolist()
-
-            # Collect mutations using collector
-            collected = self.collector.collect_mutations(
-                test_ids, force, progress_callback
-            )
-
-            # Save mutants number
-            self.store.save_mutants_number(
-                value=collected["mutants_number"],
-                result=collected["mutants_result"],
-            )
-            collected["mutants_result"].raise_if_error()
-
-            # Save overall MSR
-            self.store.save_msr(
-                value=collected["msr"],
-                result=collected["msr_result"],
-            )
-            collected["msr_result"].raise_if_error()
-
-            # Save per-test mutation data
-            for test_data in collected["per_test_data"]:
-                test_id = test_data["test_id"]
-
-                self.store.save_test_msr_alone(
-                    test_id=test_id,
-                    value=test_data["msr_alone"],
-                    result=test_data["result_alone"],
+                store.save_test_msr_alone(
+                    test_id=test_id, value=msr_alone, result=result
                 )
-                test_data["result_alone"].raise_if_error()
+                result.raise_if_error()
 
-                self.store.save_test_msr_without(
-                    test_id=test_id,
-                    value=test_data["msr_without"],
-                    result=test_data["result_without"],
+            if msr_without is None or force:
+                msr_without, result = collector.collect_msr_without(
+                    test_id, all_test_ids=all_tests_ids, force=force
                 )
-                test_data["result_without"].raise_if_error()
 
-        mutants_number = self.store.mutants_number
-        msr = self.store.msr
+                store.save_test_msr_without(
+                    test_id=test_id, value=msr_without, result=result
+                )
+                result.raise_if_error()
 
-        # Get final mutation data
-        tests_data = []
-        mutation_df = self.store.get_tests_dataframe()[
-            ["test_id", "msr_alone", "msr_without"]
-        ]
-        for _, row in mutation_df.iterrows():
-            tests_data.append(
-                (row["test_id"], row["msr_alone"], row["msr_without"])
-            )
-
-        # Update pipeline step
         self._update_step("mutations_collected")
 
-        return {
-            "mutants_number": mutants_number,
-            "msr": msr,
-            "tests_data": tests_data,
+        # Create result summary
+        msr_mean = store.get_tests_dataframe()[columns[1:]].mean()
+
+        result = {
+            "project-msr": store.msr,
+            "msr-alone mean": msr_mean.loc["msr_alone"],
+            "msr-without mean": msr_mean.loc["msr_without"],
         }
+
+        return result
 
     # ========================================================================
     # Public Methods - Information and Status
