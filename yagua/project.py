@@ -373,7 +373,16 @@ class Project:
 
         self._update_step("coverage_collected")
 
-        return {"project-coverage": store.coverage}
+        # create resume
+        cov_mean = store.get_tests_dataframe()[columns[1:]].mean()
+
+        result = {
+            "project-coverage": store.coverage,
+            "coverage-alone mean": cov_mean.loc["coverage_alone"],
+            "coverage-without mean": cov_mean.loc["coverage_without"],
+        }
+
+        return result
 
     # ========================================================================
     # Public Methods - Mutation Collection
