@@ -32,18 +32,15 @@ class Bunch(Mapping):
     They extend dictionaries by enabling values to be accessed by key,
     `bunch["value_key"]`, or by an attribute, `bunch.value_key`.
 
-    Examples
-    --------
-    >>> b = SKCBunch("data", {"a": 1, "b": 2})
-    >>> b
-    data({a, b})
-    >>> b['b']
-    2
-    >>> b.b
-    2
-    >>> b.a = 3
-    >>> b['a']
-    3
+    This implementation is read-only; attempting to set attributes will
+    raise an AttributeError.
+
+    Parameters
+    ----------
+    name : str
+        Name identifier for the Bunch instance.
+    data : Mapping
+        Dictionary or mapping containing the data.
 
     """
 
@@ -116,23 +113,14 @@ class Bunch(Mapping):
         return self._data.get(key, default)
 
     def to_dict(self):
-        """
-        Convert the Bunch object to a dictionary.
+        """Convert the Bunch object to a dictionary.
 
-        This method performs a deep copy of the _data attribute, ensuring that
-        the original data remains unchanged.
+        This method performs a deep copy of the _data attribute, ensuring
+        that the original data remains unchanged.
 
         Returns
         -------
         dict
             A deep copy of the _data attribute.
-
-        Example
-        -------
-        >>> bunch = Bunch()
-        >>> bunch._data = {'key1': 'value1', 'key2': 'value2'}
-        >>> dict_data = bunch.to_dict()
-        >>> print(dict_data)
-        {'key1': 'value1', 'key2': 'value2'}
         """
         return copy.deepcopy(self._data)

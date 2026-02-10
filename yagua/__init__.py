@@ -13,7 +13,8 @@ main : function
     CLI entry point for the yagua command-line tool (session-based
     pipeline design).
 Project : class
-    Business logic layer for project operations with pipeline validation.
+    Orchestration layer that coordinates Collector and ProjectStore for
+    pipeline workflow management.
 ProjectStore : class
     Data access layer for managing project data and test information.
 PytestSuite : class

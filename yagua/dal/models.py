@@ -187,7 +187,7 @@ class ProjectModel(BaseModel):
     pipeline_step : CharField
         Current step in the analysis pipeline. One of:
         'created', 'tests_collected', 'coverage_collected',
-        'mutations_collected', 'completed'.
+        'mutations_collected'.
         Used for resumability and progress tracking.
     failed_at : DateTimeField, optional
         UTC timestamp of last pipeline failure, if any.
@@ -382,6 +382,23 @@ class TestModel(BaseModel):
 
     @hybrid.hybrid_property
     def coverage_uniqueness(self):
+        """Calculate the percentage of this test's coverage that is unique.
+
+        This metric measures how much of this test's coverage is not
+        duplicated by other tests in the suite. A high uniqueness
+        percentage indicates this test covers code that other tests miss.
+
+        Returns
+        -------
+        float | None
+            Coverage uniqueness percentage (0-100), or None if coverage
+            data is unavailable or coverage_alone is zero.
+
+        Formula
+        -------
+        coverage_uniqueness = (coverage_impact / coverage_alone) × 100
+
+        """
         try:
             return (self.coverage_impact / self.coverage_alone) * 100.0
         except (TypeError, ZeroDivisionError):
@@ -528,6 +545,8 @@ class HistoryModel(BaseModel):
     command : TextField
         The full command string that was executed
         (e.g., 'pytest --collect-only -q').
+    status_code : IntegerField
+        Exit status code from the command execution.
     stdout : TextField
         Standard output from the command execution.
     stderr : TextField
@@ -535,17 +554,6 @@ class HistoryModel(BaseModel):
     result : TextField
         Additional result data from the command execution.
         Can store JSON data or other structured information.
-
-    Examples
-    --------
-    >>> HistoryModel.create(
-    ...     project=project_model,
-    ...     tag="collect_tests",
-    ...     command="pytest --collect-only -q",
-    ...     stdout="150 tests collected",
-    ...     stderr="",
-    ...     result="raw output data"
-    ... )
     """
 
     project = ForeignKeyField(ProjectModel, backref="history")

@@ -176,7 +176,7 @@ class Collector:
         progress_callback : callable, optional
             Callback function called for progress updates with signature:
             progress_callback(current, total, test_id).
-            Default is _default_callback (no-op function).
+            Default is None (no-op function).
 
         Returns
         -------
@@ -210,7 +210,15 @@ class Collector:
     # ========================================================================
 
     def collect_project_coverage(self):
+        """Collect total coverage for all tests combined.
 
+        Returns
+        -------
+        tuple
+            Tuple of (coverage, result) where:
+            - coverage: float - Total coverage percentage (0-1)
+            - result: SuiteRunResult - Result object from test suite
+        """
         suite = self.test_suite
 
         # Phase 1: Calculate coverage for all tests combined
@@ -220,6 +228,20 @@ class Collector:
         return coverage, result
 
     def collect_coverage_alone(self, test_id):
+        """Collect coverage when running only a single test.
+
+        Parameters
+        ----------
+        test_id : str
+            Unique identifier for the test to run.
+
+        Returns
+        -------
+        tuple
+            Tuple of (coverage, result) where:
+            - coverage: float - Coverage percentage (0-1)
+            - result: SuiteRunResult - Result object from test suite
+        """
         suite = self.test_suite
         result = suite.get_coverage_for_tests(
             self.project_path, self.project_name, [test_id]
@@ -229,6 +251,22 @@ class Collector:
         return coverage, result
 
     def collect_coverage_without(self, test_id, all_test_ids):
+        """Collect coverage when running all tests except one.
+
+        Parameters
+        ----------
+        test_id : str
+            Unique identifier for the test to exclude.
+        all_test_ids : list[str]
+            List of all test IDs in the project.
+
+        Returns
+        -------
+        tuple
+            Tuple of (coverage, result) where:
+            - coverage: float - Coverage percentage (0-1)
+            - result: SuiteRunResult - Result object from test suite
+        """
         suite = self.test_suite
         tids_without = [t for t in all_test_ids if t != test_id]
         result = suite.get_coverage_for_tests(
@@ -265,7 +303,7 @@ class Collector:
         progress_callback : callable, optional
             Callback function with signature:
             progress_callback(current, total, test_id).
-            Default is _default_callback (no-op function).
+            Default is None (no-op function).
 
         Returns
         -------

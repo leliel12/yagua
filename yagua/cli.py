@@ -513,8 +513,6 @@ class CLIManager:
             collect_mutations).
         step_name : str
             Display name for the step.
-        step_number : int
-            Step number in the pipeline sequence.
         force : bool
             Force re-execution flag.
 
@@ -890,13 +888,13 @@ def _create_app(cli_manager):
     """Create and configure the Typer application.
 
     This function sets up the main Typer application instance and
-    automatically registers all public methods from the CLI class as
-    subcommands using introspection.
+    automatically registers all public methods from the CLIManager class
+    as subcommands using introspection.
 
     Parameters
     ----------
-    cli_manager : CLI2Manager
-        Instance of CLI2Manager class containing command methods.
+    cli_manager : CLIManager
+        Instance of CLIManager class containing command methods.
 
     Returns
     -------
@@ -910,7 +908,7 @@ def _create_app(cli_manager):
         add_completion=True,
     )
 
-    # Introspect CLI2Manager instance and register all public methods
+    # Introspect CLIManager instance and register all public methods
     members = inspect.getmembers(cli_manager, predicate=inspect.ismethod)
     for name, method in members:
         if not name.startswith("_"):
@@ -924,7 +922,7 @@ def _create_app(cli_manager):
 
 
 def main():
-    """Entry point for the Yagua CLI2 application."""
+    """Entry point for the Yagua CLI application."""
     # Show help if no arguments provided
     if len(sys.argv) == 1:
         sys.argv.append("--help")

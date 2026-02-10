@@ -8,13 +8,12 @@ The Project implements a pipeline workflow:
 1. created -> Project is initialized
 2. tests_collected -> Tests have been collected
 3. coverage_collected -> Coverage has been analyzed
-4. mutations_collected -> Mutations have been analyzed
-5. completed -> All analysis steps finished
+4. mutations_collected -> Mutations have been analyzed (pipeline complete)
 
 Classes
 -------
 Project : class
-    Orchestration layer that coordinates Collector and Store.
+    Orchestration layer that coordinates Collector and ProjectStore.
 
 Functions
 ---------
@@ -237,7 +236,7 @@ class Project:
         progress_callback : callable, optional
             Callback function called for progress updates with signature:
             progress_callback(current, total, test_id).
-            Default is _default_callback (no-op function).
+            Default is None (no-op function).
 
         Returns
         -------
@@ -310,14 +309,15 @@ class Project:
         progress_callback : callable, optional
             Callback function called for each test with signature:
             progress_callback(current, total, test_id).
-            Default is _default_callback (no-op function).
+            Default is None (no-op function).
 
         Returns
         -------
         dict
             Dictionary with keys:
-            - 'coverage': Total coverage percentage
-            - 'tests_data': List of tuples (test_id, cov_alone, cov_wo)
+            - 'project-coverage': Total coverage percentage
+            - 'coverage-alone mean': Mean of coverage_alone values
+            - 'coverage-without mean': Mean of coverage_without values
 
         Raises
         ------
@@ -404,7 +404,7 @@ class Project:
         progress_callback : callable, optional
             Callback function called for each test with signature:
             progress_callback(current, total, test_id).
-            Default is _default_callback (no-op function).
+            Default is None (no-op function).
 
         Returns
         -------

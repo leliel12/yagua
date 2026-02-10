@@ -14,10 +14,7 @@ import_archive : function
 read_dir : function
     Open an existing project work directory (returns Project).
 read_archive : function
-    Extract and open a project from an archive file (returns
-    Project).
-detect_archive_format : function
-    Detect archive format from file extension.
+    Extract and open a project from an archive file (returns Project).
 
 Constants
 ---------
