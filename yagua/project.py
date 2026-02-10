@@ -260,7 +260,7 @@ class Project:
 
             # Save to database via store
             saved_count, updated_count = self.store.save_tests(
-                tests_data, result
+                tests_data=tests_data, result=result
             )
             total_tests = saved_count + updated_count
             was_collected = True
@@ -340,7 +340,8 @@ class Project:
 
             # Save total coverage
             self.store.save_coverage(
-                collected["total_coverage"], collected["total_result"]
+                value=collected["total_coverage"],
+                result=collected["total_result"],
             )
 
             # Save per-test coverage
@@ -348,15 +349,15 @@ class Project:
                 test_id = test_data["test_id"]
 
                 self.store.save_test_coverage_alone(
-                    test_id,
-                    test_data["coverage_alone"],
-                    test_data["result_alone"],
+                    test_id=test_id,
+                    value=test_data["coverage_alone"],
+                    result=test_data["result_alone"],
                 )
 
                 self.store.save_test_coverage_without(
-                    test_id,
-                    test_data["coverage_without"],
-                    test_data["result_without"],
+                    test_id=test_id,
+                    value=test_data["coverage_without"],
+                    result=test_data["result_without"],
                 )
 
         coverage = self.store.coverage
@@ -455,14 +456,14 @@ class Project:
 
             # Save mutants number
             self.store.save_mutants_number(
-                collected["mutants_number"],
-                collected["mutants_result"],
+                value=collected["mutants_number"],
+                result=collected["mutants_result"],
             )
 
             # Save overall MSR
             self.store.save_msr(
-                collected["msr"],
-                collected["msr_result"],
+                value=collected["msr"],
+                result=collected["msr_result"],
             )
 
             # Save per-test mutation data
@@ -470,15 +471,15 @@ class Project:
                 test_id = test_data["test_id"]
 
                 self.store.save_test_msr_alone(
-                    test_id,
-                    test_data["msr_alone"],
-                    test_data["result_alone"],
+                    test_id=test_id,
+                    value=test_data["msr_alone"],
+                    result=test_data["result_alone"],
                 )
 
                 self.store.save_test_msr_without(
-                    test_id,
-                    test_data["msr_without"],
-                    test_data["result_without"],
+                    test_id=test_id,
+                    value=test_data["msr_without"],
+                    result=test_data["result_without"],
                 )
 
         mutants_number = self.store.mutants_number

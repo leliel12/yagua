@@ -481,7 +481,7 @@ class ProjectStore:
     # Public Methods - Save Operations (DAL)
     # ========================================================================
 
-    def save_tests(self, tests_data, result):
+    def save_tests(self, *, tests_data, result):
         """Save collected tests and write history in a transaction.
 
         Parameters
@@ -519,7 +519,7 @@ class ProjectStore:
         result.raise_if_error()
         return saved_count, updated_count
 
-    def save_coverage(self, value, result):
+    def save_coverage(self, *, value, result):
         """Save project coverage value and write history.
 
         Parameters
@@ -545,7 +545,7 @@ class ProjectStore:
         result.raise_if_error()
         return value
 
-    def save_test_coverage_alone(self, test_id, value, result):
+    def save_test_coverage_alone(self, *, test_id, value, result):
         """Save isolated coverage for a single test and write history.
 
         Parameters
@@ -578,7 +578,7 @@ class ProjectStore:
         result.raise_if_error()
         return value
 
-    def save_test_coverage_without(self, test_id, value, result):
+    def save_test_coverage_without(self, *, test_id, value, result):
         """Save coverage-without for a single test and write history.
 
         Parameters
@@ -611,7 +611,7 @@ class ProjectStore:
         result.raise_if_error()
         return value
 
-    def save_mutants_number(self, value, result):
+    def save_mutants_number(self, *, value, result):
         """Save project mutants number and write history.
 
         Parameters
@@ -637,7 +637,7 @@ class ProjectStore:
         result.raise_if_error()
         return value
 
-    def save_msr(self, value, result):
+    def save_msr(self, *, value, result):
         """Save project mutation survival rate and write history.
 
         Parameters
@@ -663,7 +663,7 @@ class ProjectStore:
         result.raise_if_error()
         return value
 
-    def save_test_msr_alone(self, test_id, value, result):
+    def save_test_msr_alone(self, *, test_id, value, result):
         """Save isolated MSR for a single test and write history.
 
         Parameters
@@ -696,7 +696,7 @@ class ProjectStore:
         result.raise_if_error()
         return value
 
-    def save_test_msr_without(self, test_id, value, result):
+    def save_test_msr_without(self, *, test_id, value, result):
         """Save MSR-without for a single test and write history.
 
         Parameters
