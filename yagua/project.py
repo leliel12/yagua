@@ -44,6 +44,7 @@ PIPELINE_STEPS = [
     "tests_collected",
     "coverage_collected",
     "mutations_collected",
+    "entropy_collected",
 ]
 
 #: Mapping of pipeline steps to their index for ordering
@@ -214,6 +215,8 @@ class Project:
             return self.collect_coverage
         elif current == "coverage_collected":
             return self.collect_mutations
+        elif current == "mutations_collected":
+            return self.collect_entropy
         return None
 
     # ========================================================================
@@ -494,6 +497,75 @@ class Project:
         }
 
         return result
+
+    # =========================================================================
+    # Public Methods
+    # =========================================================================
+
+    def collect_entropy(self, force=False, progress_callback=None):
+        """Analyze entropy reduction by incremental test suite construction.
+
+        This method performs entropy analysis by executing mutation testing
+        for each incremental test suite T_i = {t_1, ..., t_i} where i ranges
+        from 1 to N (total number of tests). Tests are ordered according to
+        the specified strategy.
+
+        For each i, this computes and stores:
+        - W_i: number of surviving mutants when running the first i tests
+        - S_i: entropy = ln(W_i)
+
+        The results are stored in the database for later analysis and
+        visualization.
+
+        """
+        # Validate pipeline: must have collected mutations
+        self._validate_step("mutations_collected")
+
+        progress_callback = self._resolve_progress_callback(progress_callback)
+        collector = self.collector
+        store = self.store
+
+        # Validate that mutations exist
+        if store.mutants_number is None:
+            raise ValueError(
+                "Mutation data is required before running entropy analysis."
+            )
+
+        # FIXED
+        ordering_method, ascending = "mutants_killed_without", True
+
+        store.create_entropy_measurements(
+            ordering_method=ordering_method, ascending=ascending
+        )
+        #entropy_df = store.get_entropy_dataframe(ordering_method=ordering_method, ascending=ascending)
+        import ipdb; ipdb.set_trace()
+
+        # # Get tests ordered by the specified metric
+        # tests_df = store.get_tests_dataframe()[
+        #     ["test_id", ordering_method]
+        # ]
+        # tests_df.sort_values(
+        #     ordering_method, ascending=ascending, inplace=True
+        # )
+
+        # # Validate that mutation collection is complete
+        # if tests_df[ordering_method].isna().to_numpy().any():
+        #     raise ValueError(
+        #         "Mutation collection appears to be incomplete. "
+        #         "Some tests are missing mutation data."
+        #     )
+
+        # tests_ids = tests_df["test_id"].tolist()
+        # mutants_number = store.mutants_number
+
+        # for remove_from, test_ids in enumerate(tests_ids, 0):
+        #     selected_test_ids = test_ids[remove_from:]
+        #     entropy = store.get_entropy(ordering_method, ascending, selected_test_ids)
+
+        #     print(tests_ids[remove_from:])
+
+        raise Exception("DONE!!!!")
+        return {}
 
     # ========================================================================
     # Public Methods - Information and Status

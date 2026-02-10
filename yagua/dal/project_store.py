@@ -50,7 +50,13 @@ from peewee import SqliteDatabase
 
 from .. import io as yagua_io
 from ..utils.bunch import Bunch
-from .models import BaseModel, HistoryModel, ProjectModel, TestModel
+from .models import (
+    BaseModel,
+    EntropyMeasurementModel,
+    HistoryModel,
+    ProjectModel,
+    TestModel,
+)
 
 
 # ============================================================================
@@ -60,7 +66,12 @@ from .models import BaseModel, HistoryModel, ProjectModel, TestModel
 #: Models that need to have tables created in the database.
 #: These are the concrete models that store actual data.
 #: BaseModel is excluded as it's abstract.
-MODELS_TO_CREATE = [ProjectModel, TestModel, HistoryModel]
+MODELS_TO_CREATE = [
+    ProjectModel,
+    TestModel,
+    HistoryModel,
+    EntropyMeasurementModel,
+]
 
 #: All models that need to be bound to the database instance.
 #: Includes BaseModel since child models inherit from it and
@@ -83,6 +94,10 @@ class _ProjectTransaction:
     @property
     def project_model(self):
         return self.models.ProjectModel.get_by_id(1)
+
+    @property
+    def m(self):
+        return self.models
 
 
 class ProjectStore:
@@ -352,6 +367,81 @@ class ProjectStore:
         with self.transaction():
             project = self._get_project_model()
             query = TestModel.select().where(TestModel.project == project)
+            # Convert each model to dict using to_records() which
+            # includes hybrid properties
+            dicts = (dict(mdl.to_records()) for mdl in query)
+            df = pd.DataFrame.from_dict(dicts)
+            # Option to group coverage columns into multiindex
+            # (currently disabled)
+            # df.columns = group_coverage_columns(df.columns)
+
+        return df
+
+    def create_entropy_measurements(self, *, ordering_method, ascending):
+        creations = 0
+        with self.transaction() as txn:
+            project = txn.project_model
+
+            em_q = project.entropy_measurements.select().where(
+                txn.m.EntropyMeasurementModel.ordering_method
+                == ordering_method,
+                txn.m.EntropyMeasurementModel.ascending == ascending,
+            )
+
+            if not em_q.exists():
+                tests = sorted(
+                    [t for t in project.tests.select()],
+                    key=(lambda t: getattr(t, ordering_method)),
+                    reverse=not ascending,
+                )
+
+                while tests:
+                    _, created= txn.m.EntropyMeasurementModel.get_or_create(
+                        project=project,
+                        ordering_method=ordering_method,
+                        ascending=ascending,
+                        test_ids=tests,
+                        test_count=len(tests),
+                    )
+                    creations += int(created)
+            return {"created": creations}
+
+    def get_entropy_dataframe(
+        self, *, ordering_method, ascending
+    ) -> pd.DataFrame:
+        """Get all tests for this project as a DataFrame.
+
+        This method queries all tests from the database and converts them
+        to a pandas DataFrame, including both regular fields and hybrid
+        properties (mutants_survived_alone, mutants_killed_alone, etc.).
+
+        Returns
+        -------
+        pd.DataFrame
+            DataFrame containing all test information.
+
+        Notes
+        -----
+        Hybrid properties (mutants_survived_alone, mutants_killed_alone,
+        mutants_survived_without, mutants_killed_without) will be None
+        if the required mutation data has not been collected yet.
+        """
+
+        with self.transaction() as txn:
+            project = txn.project_model
+            EntropyMeasurementModel = txn.m.EntropyMeasurementModel
+
+            query = project.entropy_measurements.where(
+                ordering_method=ordering_method,
+                ascending=ascending,
+            )
+            if not query.count():
+
+                query = project.entropy_measurements.where(
+                    ordering_method=ordering_method,
+                    ascending=ascending,
+                )
+
             # Convert each model to dict using to_records() which
             # includes hybrid properties
             dicts = (dict(mdl.to_records()) for mdl in query)

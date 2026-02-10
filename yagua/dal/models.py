@@ -38,6 +38,7 @@ import numpy as np
 
 from peewee import (
     Model,
+    BooleanField,
     CharField,
     FloatField,
     ForeignKeyField,
@@ -47,6 +48,7 @@ from peewee import (
     IntegerField,
 )
 from playhouse import hybrid
+from playhouse.fields import PickleField
 
 
 # ============================================================================
@@ -402,7 +404,7 @@ class TestModel(BaseModel):
 
         """
         try:
-            return (self.coverage_impact / self.coverage_alone)
+            return self.coverage_impact / self.coverage_alone
         except (TypeError, ZeroDivisionError):
             return None
 
@@ -526,6 +528,110 @@ class TestModel(BaseModel):
     class Meta:
         table_name = "yagua_tests"
         indexes = ((("project", "file", "suite", "test"), True),)
+
+
+class EntropyMeasurementModel(BaseModel):
+    """Entropy measurement table.
+
+    Stores entropy measurements for incremental test suite analysis.
+    Each record represents the entropy S_i = ln(W_i) for a test suite
+    containing exactly i tests, where W_i is the number of surviving
+    mutants when running those i tests.
+
+    This data is used to construct entropy reduction curves that
+    characterize test suite quality as tests are progressively added
+    according to a specific ordering strategy.
+
+    Attributes
+    ----------
+    project : ForeignKeyField
+        Reference to the ProjectModel (always id=1).
+        Accessible via backref as project.entropy_measurements.
+    test_count : IntegerField
+        Number of tests in this incremental test suite (i).
+        Values range from 1 to N (total number of tests).
+    surviving_mutants : IntegerField
+        Number of mutants that survived when running exactly i tests (W_i).
+        Expected to decrease as test_count increases.
+    entropy : FloatField
+        Shannon entropy S_i = ln(W_i).
+        Expected to decrease as test_count increases, representing
+        reduction in the space of admissible program implementations.
+    ordering_method : CharField
+        Strategy used to order tests for incremental analysis.
+        Current implementation: "mutants_killed_without".
+    ascending : BooleanField
+        Whether tests are ordered in ascending (True) or descending (False)
+        order according to the ordering_method metric.
+        For "mutants_killed_without" with ascending=True:
+        tests with lower mutants_killed_without are added first
+        (most important tests first, most redundant tests last).
+    test_ids : JSONField
+        Ordered list of test_id strings included in this incremental
+        test suite T_i = [t_1, t_2, ..., t_i].
+        Preserves the exact ordering used in the analysis.
+
+    Notes
+    -----
+    For a complete entropy analysis, there should be N records per
+    (ordering_method, ascending) combination, where N is the total number
+    of tests in the project.
+
+    Example interpretation for "mutants_killed_without" with ascending=True:
+    - Tests that kill fewer mutants when removed (low mutants_killed_without)
+      are added first (high individual impact).
+    - Tests that kill many mutants when removed (high mutants_killed_without)
+      are added last (low individual impact, more redundant).
+
+    Examples
+    --------
+    >>> EntropyMeasurementModel.create(
+    ...     project=project_model,
+    ...     test_count=3,
+    ...     surviving_mutants=342,
+    ...     ordering_method="mutants_killed_without",
+    ...     ascending=True,
+    ...     test_ids=["test_a.py::test_1", "test_b.py::test_2", "test_c.py::test_3"]
+    ... )
+    """
+
+    project = ForeignKeyField(ProjectModel, backref="entropy_measurements")
+    ordering_method = CharField()
+    ascending = BooleanField()
+    test_ids = PickleField()
+    test_count = IntegerField()
+
+    msr = FloatField(null=True)
+
+    @hybrid.hybrid_property
+    def mutants_survived(self):
+        try:
+            the_ms = self.msr * self.project.mutants_number
+            return int(round(the_ms))
+        except TypeError:
+            return None
+
+    @hybrid.hybrid_property
+    def mutants_killed(self):
+        try:
+            return self.project.mutants_number - self.mutants_survived
+        except TypeError:
+            return None
+
+    @hybrid.hybrid_property
+    def information_weights(self):
+        try:
+            all_tests = list(self.project.entropy_measurements)
+            denom = np.sum([t.mutants_killed for t in all_tests])
+            return self.mutants_killed / denom
+        except TypeError:
+            return None
+
+    class Meta:
+        table_name = "yagua_entropy_measurements"
+        indexes = (
+            (("project", "ordering_method", "ascending", "test_count"), True),
+        )
 
 
 class HistoryModel(BaseModel):
