@@ -396,7 +396,7 @@ class ProjectStore:
                 )
 
                 while tests:
-                    _, created= txn.m.EntropyMeasurementModel.get_or_create(
+                    _, created = txn.m.EntropyMeasurementModel.get_or_create(
                         project=project,
                         ordering_method=ordering_method,
                         ascending=ascending,
@@ -404,6 +404,7 @@ class ProjectStore:
                         test_count=len(tests),
                     )
                     creations += int(created)
+
             return {"created": creations}
 
     def get_entropy_dataframe(
