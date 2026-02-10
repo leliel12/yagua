@@ -314,8 +314,8 @@ class TestModel(BaseModel):
         Unique coverage contribution of this test.
         Calculated as: total_coverage - coverage_without
     coverage_uniqueness : float | None
-        Percentage of this test's coverage that is unique (0-100).
-        Calculated as: (coverage_impact / coverage_alone) × 100
+        Proportion of this test's coverage that is unique (0-1).
+        Calculated as: coverage_impact / coverage_alone
     mutants_survived_alone : int | None
         Number of mutants that survived when running only this test.
         Calculated from msr_alone and project.mutants_number.
@@ -391,12 +391,12 @@ class TestModel(BaseModel):
         Returns
         -------
         float | None
-            Coverage uniqueness percentage (0-100), or None if coverage
+            Coverage uniqueness proportion (0-1), or None if coverage
             data is unavailable or coverage_alone is zero.
 
         Formula
         -------
-        coverage_uniqueness = (coverage_impact / coverage_alone) × 100
+        coverage_uniqueness = coverage_impact / coverage_alone
 
         """
         try:
