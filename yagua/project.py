@@ -105,12 +105,22 @@ class Project:
         collector : Collector
             Collector instance for suite execution.
         """
-        self.store = store
-        self.collector = collector
+        self.store: ProjectStore = store
+        self.collector: Collector = collector
 
     # ========================================================================
     # Private Methods - Pipeline Management
     # ========================================================================
+
+    def _resolve_progress_callback(self, pcallback):
+        if pcallback is None:
+
+            def _no_callback(current, total, test_id):
+                pass
+
+            pcallback = _no_callback
+
+        return pcallback
 
     def _get_current_step(self):
         """Get current pipeline step from the database.
@@ -283,9 +293,7 @@ class Project:
     # Public Methods - Coverage Collection
     # ========================================================================
 
-    def collect_coverage(
-        self, force=False, progress_callback=None
-    ):
+    def collect_coverage(self, force=False, progress_callback=None):
         """Collect and store coverage information for the project.
 
         This method coordinates coverage collection through the collector
@@ -321,78 +329,53 @@ class Project:
         # Validate pipeline: must have collected tests
         self._validate_step("tests_collected")
 
+        progress_callback = self._resolve_progress_callback(progress_callback)
+        collector = self.collector
+        store = self.store
+
         # Validate that there are tests to analyze
-        if not self.store.count_tests():
-            raise ValueError(
-                f"No tests found for project '{self.store.name}'."
-            )
+        if not store.count_tests():
+            raise ValueError(f"No tests found for project '{store.name}'.")
 
         # Phase 1: Calculate coverage for all tests combined
-        if self.store.coverage is None or force:
-            progress_callback(0, 1, "All Tests")
-
-            # Get all test IDs from dataframe
-            test_ids = self.store.get_tests_dataframe()["test_id"].tolist()
-
-            # Collect coverage using collector
-            collected = self.collector.collect_coverage(
-                test_ids, progress_callback
-            )
+        if store.coverage is None or force:
+            progress_callback(1, 1, "All Tests")
+            coverage, result = collector.collect_project_coverage()
 
             # Save total coverage
-            self.store.save_coverage(
-                value=collected["total_coverage"],
-                result=collected["total_result"],
-            )
-            collected["total_result"].raise_if_error()
+            store.save_coverage(value=coverage, result=result)
+            result.raise_if_error()
 
-            # Save per-test coverage
-            for test_data in collected["per_test_data"]:
-                test_id = test_data["test_id"]
+        columns = ["test_id", "coverage_alone", "coverage_without"]
+        test_df = store.get_tests_dataframe()[columns]
+        all_tests_ids = test_df["test_id"].tolist()
+        total_tests = len(test_df)
 
-                self.store.save_test_coverage_alone(
-                    test_id=test_id,
-                    value=test_data["coverage_alone"],
-                    result=test_data["result_alone"],
+        for idx, test_id, cov_alone, cov_without in test_df.itertuples():
+            progress_callback(idx, total_tests, test_id)
+            if cov_alone is None or force:
+                cov_alone, result = collector.collect_coverage_alone(test_id)
+
+                store.save_test_coverage_alone(
+                    test_id=test_id, value=cov_alone, result=result
                 )
-                test_data["result_alone"].raise_if_error()
+                result.raise_if_error()
 
-                self.store.save_test_coverage_without(
-                    test_id=test_id,
-                    value=test_data["coverage_without"],
-                    result=test_data["result_without"],
+            if cov_without is None or force:
+                cov_without, result = collector.collect_coverage_without(
+                    test_id, all_test_ids=all_tests_ids
                 )
-                test_data["result_without"].raise_if_error()
 
-        coverage = self.store.coverage
-
-        # Get final coverage data
-        tests_data = []
-        tests_df = self.store.get_tests_dataframe()[
-            ["test_id", "coverage_alone", "coverage_without"]
-        ]
-
-        for _, row in tests_df.iterrows():
-            tests_data.append(
-                (
-                    row["test_id"],
-                    row["coverage_alone"],
-                    row["coverage_without"],
+                store.save_test_coverage_without(
+                    test_id=test_id, value=cov_without, result=result
                 )
-            )
-
-        # Update pipeline step
-        self._update_step("coverage_collected")
-
-        return {"coverage": coverage, "tests_data": tests_data}
+                result.raise_if_error()
 
     # ========================================================================
     # Public Methods - Mutation Collection
     # ========================================================================
 
-    def collect_mutations(
-        self, force=False, progress_callback=None
-    ):
+    def collect_mutations(self, force=False, progress_callback=None):
         """Collect and analyze mutation testing data for the project.
 
         This method coordinates mutation testing through the mutation

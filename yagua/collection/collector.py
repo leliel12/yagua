@@ -209,6 +209,35 @@ class Collector:
     # Public Methods - Coverage Collection
     # ========================================================================
 
+    def collect_project_coverage(self):
+
+        suite = self.test_suite
+
+        # Phase 1: Calculate coverage for all tests combined
+        result = suite.get_coverage(self.project_path, self.project_name)
+        coverage = result.value
+
+        return coverage, result
+
+    def collect_coverage_alone(self, test_id):
+        suite = self.test_suite
+        result = suite.get_coverage_for_tests(
+            self.project_path, self.project_name, [test_id]
+        )
+        coverage = result.value
+
+        return coverage, result
+
+    def collect_coverage_without(self, test_id, all_test_ids):
+        suite = self.test_suite
+        tids_without = [t for t in all_test_ids if t != test_id]
+        result = suite.get_coverage_for_tests(
+            self.project_path, self.project_name, tids_without
+        )
+        coverage = result.value
+
+        return coverage, result
+
     def collect_coverage(self, test_ids, progress_callback=None):
         """Collect coverage information for the project.
 
