@@ -404,6 +404,7 @@ class ProjectStore:
                         test_count=len(tests),
                     )
                     creations += int(created)
+                    tests.pop(0)
 
             return {"created": creations}
 
