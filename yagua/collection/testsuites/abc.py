@@ -26,17 +26,17 @@ SuiteRunResult instances or compatible tuple structures:
 
 2. get_coverage(project_path, project_name) -> SuiteRunResult
    - Measures total coverage for all tests
-   - Returns result with coverage_percent as value
+   - Returns result with coverage proportion (0-1) as value
 
 3. get_coverage_for_tests(project_path, project_name, test_ids)
    -> SuiteRunResult
    - Measures coverage for specific test(s)
-   - Returns result with coverage_percent as value
+   - Returns result with coverage proportion (0-1) as value
 
 Return Value Format
 -------------------
 Methods can return either SuiteRunResult instances or 5-tuple structures:
-- value: Primary result (test list or coverage percentage)
+- value: Primary result (test list or coverage proportion)
 - command: Command string that was executed
 - status_code: Exit status (0 = success, non-zero = error)
 - stdout: Standard output from command
@@ -119,8 +119,8 @@ class _SuiteRunResult:
         The primary result value from the operation. Type varies by operation:
         - For get_tests(): list[tuple[str, str | None, str, str]]
           (list of test definitions)
-        - For get_coverage(): float | None (coverage percentage 0-100)
-        - For get_coverage_for_tests(): float | None (coverage percentage)
+        - For get_coverage(): float | None (coverage proportion 0-1)
+        - For get_coverage_for_tests(): float | None (coverage proportion 0-1)
     command : str
         The complete command string that was executed (e.g.,
         "pytest --collect-only -q" or "pytest --cov=myproject").
@@ -246,7 +246,7 @@ class TestSuiteABC(ABC):
         Parameters
         ----------
         value : object
-            The primary result value (tests list or coverage percentage).
+            The primary result value (tests list or coverage proportion).
         command : str
             The command string that was executed.
         status_code : int
@@ -323,7 +323,7 @@ class TestSuiteABC(ABC):
 
     @abstractmethod
     def get_coverage(self, project_path, project_name) -> _SuiteRunResult:
-        """Run tests with coverage and return the total coverage percentage.
+        """Run tests with coverage and return the total coverage proportion.
 
         Parameters
         ----------
@@ -335,7 +335,7 @@ class TestSuiteABC(ABC):
         Returns
         -------
         coverage : float | None
-            Total coverage percentage (0-100) or None if coverage could not
+            Total coverage proportion (0-1) or None if coverage could not
             be determined.
         command : str
             The command that was executed to collect coverage.
@@ -359,7 +359,7 @@ class TestSuiteABC(ABC):
     def get_coverage_for_tests(
         self, project_path, project_name, test_ids
     ) -> _SuiteRunResult:
-        """Run specific test(s) with coverage and return coverage percentage.
+        """Run specific test(s) with coverage and return coverage proportion.
 
         Parameters
         ----------
@@ -376,7 +376,7 @@ class TestSuiteABC(ABC):
         Returns
         -------
         coverage : float | None
-            Coverage percentage (0-100) for the specified test(s), or None if
+            Coverage proportion (0-1) for the specified test(s), or None if
             coverage could not be determined.
         command : str
             The command that was executed to collect coverage.

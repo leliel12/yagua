@@ -524,7 +524,7 @@ class ProjectStore:
         Parameters
         ----------
         value : float
-            Coverage percentage to store.
+            Coverage proportion to store (0-1).
         result : object
             Result object from the test suite execution.
 
@@ -551,7 +551,7 @@ class ProjectStore:
         test_id : str
             Unique test identifier.
         value : float
-            Coverage percentage when running only this test.
+            Coverage proportion when running only this test (0-1).
         result : object
             Result object from the test suite execution.
 
@@ -583,7 +583,8 @@ class ProjectStore:
         test_id : str
             Unique test identifier to exclude.
         value : float
-            Coverage percentage when running all tests except this one.
+            Coverage proportion when running all tests except this
+            one (0-1).
         result : object
             Result object from the test suite execution.
 
@@ -638,7 +639,7 @@ class ProjectStore:
         Parameters
         ----------
         value : float
-            Mutation survival rate percentage.
+            Mutation survival rate proportion (0-1).
         result : object
             Result object from the mutation suite execution.
 
@@ -665,7 +666,7 @@ class ProjectStore:
         test_id : str
             Unique test identifier.
         value : float
-            MSR percentage when running only this test.
+            MSR proportion when running only this test (0-1).
         result : object
             Result object from the mutation suite execution.
 
@@ -697,7 +698,8 @@ class ProjectStore:
         test_id : str
             Unique test identifier to exclude.
         value : float
-            MSR percentage when running all tests except this one.
+            MSR proportion when running all tests except this one
+            (0-1).
         result : object
             Result object from the mutation suite execution.
 

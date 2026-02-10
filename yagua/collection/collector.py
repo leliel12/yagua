@@ -43,15 +43,6 @@ MUTATION_SUITES = {
 
 
 # =============================================================================
-# PRIVATE HELPER FUNCTIONS
-# =============================================================================
-
-
-def _no_callback(current, total, test_id):
-    pass
-
-
-# =============================================================================
 # COLLECTOR CLASS
 # =============================================================================
 
@@ -165,7 +156,7 @@ class Collector:
     # Public Methods - Test Collection
     # ========================================================================
 
-    def collect_tests(self, progress_callback=None):
+    def collect_tests(self):
         """Collect tests from the project using the configured test suite.
 
         This method runs the test suite's discovery mechanism (e.g.,
@@ -190,15 +181,10 @@ class Collector:
         ValueError
             If no tests are found in the project.
         """
-        progress_callback = self._resolve_progress_callbak(progress_callback)
-
-        progress_callback(0, 1, "collecting")
 
         suite = self.test_suite
         result = suite.get_tests(self.project_path)
         tests_data = result.value if not result.error else []
-
-        progress_callback(1, 1, "collecting")
 
         if not tests_data:
             raise ValueError("No tests found in the project.")
@@ -216,7 +202,7 @@ class Collector:
         -------
         tuple
             Tuple of (coverage, result) where:
-            - coverage: float - Total coverage percentage (0-1)
+            - coverage: float - Total coverage proportion (0-1)
             - result: SuiteRunResult - Result object from test suite
         """
         suite = self.test_suite
@@ -239,7 +225,7 @@ class Collector:
         -------
         tuple
             Tuple of (coverage, result) where:
-            - coverage: float - Coverage percentage (0-1)
+            - coverage: float - Coverage proportion (0-1)
             - result: SuiteRunResult - Result object from test suite
         """
         suite = self.test_suite
@@ -264,7 +250,7 @@ class Collector:
         -------
         tuple
             Tuple of (coverage, result) where:
-            - coverage: float - Coverage percentage (0-1)
+            - coverage: float - Coverage proportion (0-1)
             - result: SuiteRunResult - Result object from test suite
         """
         suite = self.test_suite

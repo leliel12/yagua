@@ -682,7 +682,7 @@ class CLIManager:
 
             if proj.store.coverage is not None:
                 info_lines.append(
-                    f"[cyan]💯 Coverage:[/cyan] {proj.store.coverage:.4f}%"
+                    f"[cyan]💯 Coverage:[/cyan] {proj.store.coverage:.4f}"
                 )
 
             if proj.store.mutants_number is not None:
@@ -692,7 +692,7 @@ class CLIManager:
 
             if proj.store.msr is not None:
                 info_lines.append(
-                    f"[cyan]🎯 Survival Rate:[/cyan] {proj.store.msr:.4f}%"
+                    f"[cyan]🎯 Survival Rate:[/cyan] {proj.store.msr:.4f}"
                 )
 
             if proj.store.failed_at:

@@ -173,16 +173,16 @@ class ProjectModel(BaseModel):
         Timeout in seconds for mutation testing execution.
         None means no timeout (use mutation suite's default).
     coverage : FloatField, optional
-        Total project coverage percentage (0-100).
+        Total project coverage proportion (0-1).
         Updated via collect-coverage command.
     mutants_number : IntegerField, optional
         Total number of mutants generated for the project.
         Updated via collect-mutations command.
     msr : FloatField, optional
-        Mutation Survival Ratio for the entire project (0-100).
-        Represents the percentage of mutants that survived (were not killed).
-        Lower values indicate more effective test suites.
-        Note: mutation_score = 100 - msr
+        Mutation Survival Ratio for the entire project (0-1).
+        Represents the proportion of mutants that survived (were not
+        killed). Lower values indicate more effective test suites.
+        Note: mutation_score = 1 - msr
         Updated via collect-mutations command.
     pipeline_step : CharField
         Current step in the analysis pipeline. One of:
@@ -291,22 +291,24 @@ class TestModel(BaseModel):
     test : CharField
         Test function name.
     coverage_alone : FloatField, optional
-        Coverage percentage when running this test in isolation (0-100).
+        Coverage proportion when running this test in isolation (0-1).
         Updated via collect-coverage command with per-test analysis.
     coverage_without : FloatField, optional
-        Coverage percentage when running all tests except this one (0-100).
+        Coverage proportion when running all tests except this one (0-1).
         Updated via collect-coverage command, useful for identifying
         test redundancy and dependencies.
     msr_alone : FloatField, optional
-        Mutation Survival Ratio when running only this test in isolation (0-100).
-        Represents the percentage of mutants that survived when tested alone.
-        Lower values indicate this test is more effective at killing mutants.
-        Updated via collect-mutations command with per-test analysis.
+        Mutation Survival Ratio when running only this test in
+        isolation (0-1). Represents the proportion of mutants that
+        survived when tested alone. Lower values indicate this test
+        is more effective at killing mutants. Updated via
+        collect-mutations command with per-test analysis.
     msr_without : FloatField, optional
-        Mutation Survival Ratio when running all tests except this one (0-100).
-        Represents the percentage of mutants that survived without this test.
-        Updated via collect-mutations command, useful for identifying
-        which mutants are uniquely detected by this test.
+        Mutation Survival Ratio when running all tests except this
+        one (0-1). Represents the proportion of mutants that survived
+        without this test. Updated via collect-mutations command,
+        useful for identifying which mutants are uniquely detected
+        by this test.
 
     Hybrid Properties
     -----------------
@@ -368,7 +370,7 @@ class TestModel(BaseModel):
         Returns
         -------
         float | None
-            Coverage impact (0-100), or None if coverage data unavailable.
+            Coverage impact (0-1), or None if coverage data unavailable.
 
         Formula
         -------
@@ -382,11 +384,11 @@ class TestModel(BaseModel):
 
     @hybrid.hybrid_property
     def coverage_uniqueness(self):
-        """Calculate the percentage of this test's coverage that is unique.
+        """Calculate the proportion of this test's coverage that is unique.
 
         This metric measures how much of this test's coverage is not
         duplicated by other tests in the suite. A high uniqueness
-        percentage indicates this test covers code that other tests miss.
+        proportion indicates this test covers code that other tests miss.
 
         Returns
         -------

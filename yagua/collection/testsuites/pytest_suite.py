@@ -347,12 +347,12 @@ class PytestSuite(TestSuiteABC):
         )
 
     def get_coverage(self, project_path, project_name):
-        """Run pytest with coverage and return the total coverage percentage.
+        """Run pytest with coverage and return the total coverage proportion.
 
         Executes pytest with pytest-cov to run all tests and measure code
         coverage. Uses subprocess to call pytest as an external command.
         Generates a JSON coverage report in a hash-named file and extracts
-        the total coverage percentage from it.
+        the total coverage proportion from it.
 
         Parameters
         ----------
@@ -366,7 +366,7 @@ class PytestSuite(TestSuiteABC):
         -------
         SuiteRunResult
             Result containing:
-            - value: float | None - Total coverage percentage (0-100)
+            - value: float | None - Total coverage proportion (0-1)
             - command: str - The pytest command executed
             - status_code: int - Exit status from pytest
             - stdout: str - Standard output from pytest
@@ -413,12 +413,12 @@ class PytestSuite(TestSuiteABC):
         )
 
     def get_coverage_for_tests(self, project_path, project_name, tests_ids):
-        """Run specific test(s) with coverage and return coverage percentage.
+        """Run specific test(s) with coverage and return coverage proportion.
 
         Executes pytest with pytest-cov to run only the specified tests and
         measure code coverage. Uses subprocess to call pytest as an external
         command. Generates a JSON coverage report in a hash-named file based
-        on the test IDs and extracts the total coverage percentage from it.
+        on the test IDs and extracts the total coverage proportion from it.
 
         Parameters
         ----------
@@ -437,7 +437,7 @@ class PytestSuite(TestSuiteABC):
         -------
         SuiteRunResult
             Result containing:
-            - value: float | None - Coverage percentage (0-100) for the
+            - value: float | None - Coverage proportion (0-1) for the
               specified test(s)
             - command: str - The pytest command executed
             - status_code: int - Exit status from pytest

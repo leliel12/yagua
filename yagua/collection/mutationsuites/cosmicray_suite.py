@@ -381,7 +381,7 @@ name = "local"
         -------
         SuiteRunResult
             Result containing:
-            - value: float - Mutation survival rate percentage (0-100)
+            - value: float - Mutation survival rate proportion (0-1)
             - command: str - The cosmic-ray commands executed
             - status_code: int - Combined exit status from all commands
             - stdout: str - Combined standard output
@@ -460,7 +460,7 @@ name = "local"
         -------
         SuiteRunResult
             Result containing:
-            - value: float - Mutation survival rate percentage (0-100)
+            - value: float - Mutation survival rate proportion (0-1)
             - command: str - The cosmic-ray commands executed
             - status_code: int - Combined exit status from all commands
             - stdout: str - Combined standard output

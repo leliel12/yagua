@@ -263,7 +263,9 @@ class Project:
 
         if total_tests == 0 or force:
             # Use collector to gather test data
-            collected = self.collector.collect_tests(progress_callback)
+            progress_callback(0, 1, "collecting")
+            collected = self.collector.collect_tests()
+            progress_callback(1, 1, "collecting")
             tests_data = collected["tests_data"]
             result = collected["result"]
 
@@ -315,7 +317,7 @@ class Project:
         -------
         dict
             Dictionary with keys:
-            - 'project-coverage': Total coverage percentage
+            - 'project-coverage': Total coverage proportion (0-1)
             - 'coverage-alone mean': Mean of coverage_alone values
             - 'coverage-without mean': Mean of coverage_without values
 
@@ -513,7 +515,7 @@ class Project:
         dict
             Dictionary with keys:
             - 'tests_df': DataFrame with test information
-            - 'coverage': Total coverage percentage (or None)
+            - 'coverage': Total coverage proportion (0-1, or None)
             - 'total_count': Total number of tests
 
         Raises
@@ -571,7 +573,7 @@ class Project:
             - 'db_path': Database path
             - 'description': Project description (or None)
             - 'test_count': Number of tests
-            - 'coverage': Coverage percentage (or None)
+            - 'coverage': Coverage proportion (0-1, or None)
             - 'mutants_number': Number of mutants (or None)
         """
         test_count = self.store.count_tests()

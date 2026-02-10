@@ -35,7 +35,7 @@ SuiteRunResult instances or compatible tuple structures:
 Return Value Format
 -------------------
 Methods can return either SuiteRunResult instances or 6-tuple structures:
-- value: Primary result (mutants count or mutation score percentage)
+- value: Primary result (mutants count or mutation score proportion)
 - command: Command string that was executed
 - status_code: Exit status (0 = success, non-zero = error)
 - stdout: Standard output from command
@@ -115,7 +115,7 @@ class _SuiteRunResult:
     ----------
     value : object
         The primary result value from the operation. Type varies by operation:
-        - For get_mutations(): float | None (mutation score percentage 0-100)
+        - For get_mutations(): float | None (mutation score proportion 0-1)
         - For get_mutations_for_tests(): float | None (mutation score)
     command : str
         The complete command string that was executed (e.g.,
@@ -245,7 +245,7 @@ class MutationSuiteABC(ABC):
         Parameters
         ----------
         value : object
-            The primary result value (mutation score percentage).
+            The primary result value (mutation score proportion).
         command : str
             The command string that was executed.
         status_code : int
@@ -328,7 +328,7 @@ class MutationSuiteABC(ABC):
 
         This method runs all mutation tests against the test suite and
         calculates the mutation survival rate, which represents the
-        percentage of mutants that were not detected (survived) by the
+        proportion of mutants that were not detected (survived) by the
         test suite.
 
         Parameters
@@ -344,7 +344,7 @@ class MutationSuiteABC(ABC):
         -------
         SuiteRunResult
             Result containing:
-            - value: float | None - Mutation survival rate percentage (0-100)
+            - value: float | None - Mutation survival rate proportion (0-1)
             - command: str - The command that was executed to run mutations
             - status_code: int - Exit status from mutation execution
             - stdout: str - Standard output from the command execution
@@ -353,10 +353,10 @@ class MutationSuiteABC(ABC):
 
         Notes
         -----
-        The survival rate represents the percentage of mutants that survived
+        The survival rate represents the proportion of mutants that survived
         (were not killed by the test suite). A lower survival rate indicates
         a more effective test suite. The mutation score can be calculated as:
-        mutation_score = 100 - survival_rate
+        mutation_score = 1 - survival_rate
         """
         pass
 
@@ -387,7 +387,7 @@ class MutationSuiteABC(ABC):
         -------
         SuiteRunResult
             Result containing:
-            - value: float | None - Mutation survival rate percentage (0-100)
+            - value: float | None - Mutation survival rate proportion (0-1)
             - command: str - The command that was executed to run mutations
             - status_code: int - Exit status from mutation execution
             - stdout: str - Standard output from the command execution
