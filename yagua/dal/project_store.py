@@ -396,12 +396,13 @@ class ProjectStore:
                 )
 
                 while tests:
+                    tests_ids = [t.test_id for t in tests]
                     _, created = txn.m.EntropyMeasurementModel.get_or_create(
                         project=project,
                         ordering_method=ordering_method,
                         ascending=ascending,
-                        test_ids=tests,
                         test_count=len(tests),
+                        defaults={"test_ids": tests_ids},
                     )
                     creations += int(created)
                     tests.pop(0)
