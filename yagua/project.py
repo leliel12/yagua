@@ -503,20 +503,46 @@ class Project:
     # =========================================================================
 
     def collect_entropy(self, force=False, progress_callback=None):
-        """Analyze entropy reduction by incremental test suite construction.
+        """Analyze entropy reduction by incremental test suite \
+construction.
 
-        This method performs entropy analysis by executing mutation testing
-        for each incremental test suite T_i = {t_1, ..., t_i} where i ranges
-        from 1 to N (total number of tests). Tests are ordered according to
-        the specified strategy.
+        This method performs entropy analysis by executing mutation
+        testing for each incremental test suite T_i = {t_1, ..., t_i}
+        where i ranges from 1 to N (total number of tests). Tests are
+        ordered according to the specified strategy.
 
         For each i, this computes and stores:
-        - W_i: number of surviving mutants when running the first i tests
+        - W_i: number of surviving mutants when running the first i
+          tests
         - S_i: entropy = ln(W_i)
 
         The results are stored in the database for later analysis and
         visualization.
 
+        Pipeline step: Updates from 'mutations_collected' to
+        'entropy_collected'.
+
+        Parameters
+        ----------
+        force : bool, optional
+            Force recalculation even if entropy data exists.
+            Default is False.
+        progress_callback : callable, optional
+            Callback function called for progress updates with
+            signature: progress_callback(current, total, test_id).
+            Default is None (no-op function).
+
+        Returns
+        -------
+        dict
+            Dictionary with entropy analysis results.
+
+        Raises
+        ------
+        ValueError
+            If mutation data does not exist.
+        PipelineError
+            If called before mutations are collected.
         """
         # Validate pipeline: must have collected mutations
         self._validate_step("mutations_collected")
@@ -540,9 +566,7 @@ class Project:
         entropy_df = store.get_entropy_dataframe(
             ordering_method=ordering_method, ascending=ascending
         )
-        import ipdb
-
-        ipdb.set_trace()
+        import ipdb; ipdb.set_trace()
 
         # # Get tests ordered by the specified metric
         # tests_df = store.get_tests_dataframe()[
@@ -564,7 +588,9 @@ class Project:
 
         # for remove_from, test_ids in enumerate(tests_ids, 0):
         #     selected_test_ids = test_ids[remove_from:]
-        #     entropy = store.get_entropy(ordering_method, ascending, selected_test_ids)
+        #     entropy = store.get_entropy(
+        #         ordering_method, ascending, selected_test_ids
+        #     )
 
         #     print(tests_ids[remove_from:])
 
@@ -638,8 +664,12 @@ class Project:
             "msr": self.store.msr,
             "mutants_killed": self.store.mutants_killed,
             "mutants_survived": self.store.mutants_survived,
-            "mutation_active_test_ratio": self.store.mutation_active_test_ratio,
-            "macrostate_tightness_ratio": self.store.macrostate_tightness_ratio,
+            "mutation_active_test_ratio": (
+                self.store.mutation_active_test_ratio
+            ),
+            "macrostate_tightness_ratio": (
+                self.store.macrostate_tightness_ratio
+            ),
         }
 
         return Bunch("report", the_report)
@@ -761,12 +791,6 @@ def from_work_dir(work_dir):
     ------
     FileNotFoundError
         If work directory or database does not exist.
-
-    Examples
-    --------
-    >>> proj = from_work_dir("/path/to/work_dir")
-    >>> proj.collect_tests()
-    >>> proj.collect_coverage()
     """
     # Create ProjectStore (DAL)
     store = ProjectStore(work_dir)
@@ -818,16 +842,6 @@ def from_project_info(
     ------
     ValueError
         If work directory already exists.
-
-    Examples
-    --------
-    >>> proj = from_project_info(
-    ...     name="MyProject",
-    ...     path="/path/to/project",
-    ...     work_dir="/path/to/work_dir",
-    ...     mutation_timeout=50.0
-    ... )
-    >>> proj.collect_tests()
     """
     # Test and mutation suite names are constants for now
     test_suite_name = "pytest"

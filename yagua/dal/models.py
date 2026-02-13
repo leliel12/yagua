@@ -35,17 +35,16 @@ instances to each have their own database connection.
 from datetime import datetime, timezone
 
 import numpy as np
-
 from peewee import (
-    Model,
     BooleanField,
     CharField,
-    FloatField,
-    ForeignKeyField,
     Check,
     DateTimeField,
-    TextField,
+    FloatField,
+    ForeignKeyField,
     IntegerField,
+    Model,
+    TextField,
 )
 from playhouse import hybrid
 from playhouse.fields import PickleField
@@ -81,7 +80,7 @@ class BaseModel(Model):
         list[str]
             List of field names in the order they are defined.
         """
-        return [field.name for field in cls._meta.sorted_fields]
+        return sorted([field.name for field in cls._meta.sorted_fields])
 
     @classmethod
     def _hproperties(cls):
@@ -137,13 +136,6 @@ class BaseModel(Model):
         list[tuple[str, Any]]
             List of tuples containing (field_name, field_value) for all
             fields and hybrid properties in the model.
-
-        Examples
-        --------
-        >>> test = TestModel.get_by_id(1)
-        >>> records = test.to_records()
-        >>> dict(records)
-        {'id': 1, 'file': 'test_foo.py', 'coverage_alone': 45.5, ...}
         """
         data = []
         fields = self._fields() + self._hproperties()
@@ -410,7 +402,8 @@ class TestModel(BaseModel):
 
     @hybrid.hybrid_property
     def mutants_survived_alone(self):
-        """Calculate number of mutants that survived when running only this test.
+        """Calculate number of mutants that survived when running \
+only this test.
 
         Returns
         -------
@@ -449,7 +442,7 @@ class TestModel(BaseModel):
 
     @hybrid.hybrid_property
     def mutants_survived_without(self):
-        """Calculate mutants that survived when running all tests except this one.
+        """Calculate mutants that survived without this test.
 
         Returns
         -------
@@ -582,33 +575,45 @@ class EntropyMeasurementModel(BaseModel):
       are added first (high individual impact).
     - Tests that kill many mutants when removed (high mutants_killed_without)
       are added last (low individual impact, more redundant).
-
-    Examples
-    --------
-    >>> EntropyMeasurementModel.create(
-    ...     project=project_model,
-    ...     test_count=3,
-    ...     surviving_mutants=342,
-    ...     ordering_method="mutants_killed_without",
-    ...     ascending=True,
-    ...     test_ids=["test_a.py::test_1", "test_b.py::test_2", "test_c.py::test_3"]
-    ... )
     """
 
     project = ForeignKeyField(ProjectModel, backref="entropy_measurements")
     ordering_method = CharField()
     ascending = BooleanField()
-    test_ids = PickleField()
+    tests_ids = PickleField()
     test_count = IntegerField()
 
     msr = FloatField(null=True)
 
+    def get_tests(self):
+        filter = TestModel.test_id.in_(self.tests_ids)
+        self.project.tests.select().where(**filter)
+
     @hybrid.hybrid_property
     def fullts(self):
+        """Whether this measurement uses the full test suite.
+
+        Returns
+        -------
+        bool
+            True if test_count equals the total number of tests.
+        """
         return self.project.tests.count() == self.test_count
 
     @hybrid.hybrid_property
     def mutants_survived(self):
+        """Calculate surviving mutants for this incremental suite.
+
+        Returns
+        -------
+        int | None
+            Number of surviving mutants, or None if data
+            unavailable.
+
+        Formula
+        -------
+        mutants_survived = round(msr * mutants_number)
+        """
         try:
             the_ms = self.msr * self.project.mutants_number
             return int(round(the_ms))
@@ -617,6 +622,17 @@ class EntropyMeasurementModel(BaseModel):
 
     @hybrid.hybrid_property
     def mutants_killed(self):
+        """Calculate killed mutants for this incremental suite.
+
+        Returns
+        -------
+        int | None
+            Number of killed mutants, or None if data unavailable.
+
+        Formula
+        -------
+        mutants_killed = mutants_number - mutants_survived
+        """
         try:
             return self.project.mutants_number - self.mutants_survived
         except TypeError:
@@ -624,6 +640,17 @@ class EntropyMeasurementModel(BaseModel):
 
     @hybrid.hybrid_property
     def information_weights(self):
+        """Calculate normalized weight of this measurement's impact.
+
+        Returns
+        -------
+        float | None
+            Normalized weight (0-1), or None if data unavailable.
+
+        Formula
+        -------
+        w_i = mutants_killed_i / sum(mutants_killed_j for all j)
+        """
         try:
             all_tests = list(self.project.entropy_measurements)
             denom = np.sum([t.mutants_killed for t in all_tests])

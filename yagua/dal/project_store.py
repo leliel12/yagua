@@ -43,9 +43,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
-
 import pandas as pd
-
 from peewee import SqliteDatabase
 
 from .. import io as yagua_io
@@ -85,6 +83,16 @@ ALL_MODELS = [BaseModel] + MODELS_TO_CREATE
 
 @dataclass(frozen=True)
 class _ProjectTransaction:
+    """Wrapper around a database transaction with model access.
+
+    Attributes
+    ----------
+    transaction : object
+        Peewee atomic transaction context.
+    models : Bunch
+        Bunch of bound model classes.
+    """
+
     transaction: object
     models: Bunch
 
@@ -93,10 +101,12 @@ class _ProjectTransaction:
 
     @property
     def project_model(self):
+        """Get the project model instance (id=1)."""
         return self.models.ProjectModel.get_by_id(1)
 
     @property
     def m(self):
+        """Get the models Bunch."""
         return self.models
 
 
@@ -378,6 +388,21 @@ class ProjectStore:
         return df
 
     def create_entropy_measurements(self, *, ordering_method, ascending):
+        """Create entropy measurement records for ordered tests.
+
+        Parameters
+        ----------
+        ordering_method : str
+            Metric used to order tests.
+        ascending : bool
+            Whether to sort in ascending order.
+
+        Returns
+        -------
+        dict
+            Dictionary with 'created' key indicating number of
+            records created.
+        """
         creations = 0
         with self.transaction() as txn:
             project = txn.project_model
@@ -403,7 +428,7 @@ class ProjectStore:
                         ordering_method=ordering_method,
                         ascending=ascending,
                         test_count=len(tests),
-                        defaults={"test_ids": tests_ids},
+                        defaults={"tests_ids": tests_ids},
                     )
                     creations += int(created)
                     tests.pop(0)
@@ -413,7 +438,21 @@ class ProjectStore:
     def get_entropy_dataframe(
         self, *, ordering_method, ascending
     ) -> pd.DataFrame:
-        """ """
+        """Get entropy measurements as a DataFrame.
+
+        Parameters
+        ----------
+        ordering_method : str
+            Metric used to order tests.
+        ascending : bool
+            Whether tests were sorted in ascending order.
+
+        Returns
+        -------
+        pd.DataFrame
+            DataFrame with entropy measurements ordered by
+            test_count descending.
+        """
 
         with self.transaction() as txn:
             project = txn.project_model
@@ -441,8 +480,8 @@ class ProjectStore:
         int
             Number of tests for the project.
         """
-        with self.transaction():
-            project = self._get_project_model()
+        with self.transaction() as txn:
+            project = txn.project_model()
             return project.tests.count()
 
     def get_test(self, test_id: str | int) -> pd.Series:
@@ -496,6 +535,22 @@ class ProjectStore:
             return series
 
     def _write_history(self, project, tag, result):
+        """Create a history record in the database.
+
+        Parameters
+        ----------
+        project : ProjectModel
+            Project model instance.
+        tag : str
+            Tag identifying the operation.
+        result : object
+            Result object with command execution details.
+
+        Returns
+        -------
+        HistoryModel
+            Created history model instance.
+        """
         return HistoryModel.create(
             project=project,
             tag=tag,
