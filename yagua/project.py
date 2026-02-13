@@ -537,8 +537,12 @@ class Project:
         store.create_entropy_measurements(
             ordering_method=ordering_method, ascending=ascending
         )
-        #entropy_df = store.get_entropy_dataframe(ordering_method=ordering_method, ascending=ascending)
-        import ipdb; ipdb.set_trace()
+        entropy_df = store.get_entropy_dataframe(
+            ordering_method=ordering_method, ascending=ascending
+        )
+        import ipdb
+
+        ipdb.set_trace()
 
         # # Get tests ordered by the specified metric
         # tests_df = store.get_tests_dataframe()[

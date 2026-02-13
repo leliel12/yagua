@@ -381,14 +381,15 @@ class ProjectStore:
         creations = 0
         with self.transaction() as txn:
             project = txn.project_model
+            EntropyMeasurementModel = txn.m.EntropyMeasurementModel
 
-            em_q = project.entropy_measurements.select().where(
-                txn.m.EntropyMeasurementModel.ordering_method
-                == ordering_method,
-                txn.m.EntropyMeasurementModel.ascending == ascending,
+            filter = (
+                EntropyMeasurementModel.ordering_method == ordering_method,
+                EntropyMeasurementModel.ascending == ascending,
             )
+            query = project.entropy_measurements.select().where(*filter)
 
-            if not em_q.exists():
+            if not query.exists():
                 tests = sorted(
                     [t for t in project.tests.select()],
                     key=(lambda t: getattr(t, ordering_method)),
@@ -397,7 +398,7 @@ class ProjectStore:
 
                 while tests:
                     tests_ids = [t.test_id for t in tests]
-                    _, created = txn.m.EntropyMeasurementModel.get_or_create(
+                    _, created = EntropyMeasurementModel.get_or_create(
                         project=project,
                         ordering_method=ordering_method,
                         ascending=ascending,
@@ -412,46 +413,23 @@ class ProjectStore:
     def get_entropy_dataframe(
         self, *, ordering_method, ascending
     ) -> pd.DataFrame:
-        """Get all tests for this project as a DataFrame.
-
-        This method queries all tests from the database and converts them
-        to a pandas DataFrame, including both regular fields and hybrid
-        properties (mutants_survived_alone, mutants_killed_alone, etc.).
-
-        Returns
-        -------
-        pd.DataFrame
-            DataFrame containing all test information.
-
-        Notes
-        -----
-        Hybrid properties (mutants_survived_alone, mutants_killed_alone,
-        mutants_survived_without, mutants_killed_without) will be None
-        if the required mutation data has not been collected yet.
-        """
+        """ """
 
         with self.transaction() as txn:
             project = txn.project_model
             EntropyMeasurementModel = txn.m.EntropyMeasurementModel
 
-            query = project.entropy_measurements.where(
-                ordering_method=ordering_method,
-                ascending=ascending,
+            filter = (
+                EntropyMeasurementModel.ordering_method == ordering_method,
+                EntropyMeasurementModel.ascending == ascending,
             )
-            if not query.count():
-
-                query = project.entropy_measurements.where(
-                    ordering_method=ordering_method,
-                    ascending=ascending,
-                )
+            query = project.entropy_measurements.select().where(*filter)
+            query = query.order_by(EntropyMeasurementModel.test_count.desc())
 
             # Convert each model to dict using to_records() which
             # includes hybrid properties
             dicts = (dict(mdl.to_records()) for mdl in query)
             df = pd.DataFrame.from_dict(dicts)
-            # Option to group coverage columns into multiindex
-            # (currently disabled)
-            # df.columns = group_coverage_columns(df.columns)
 
         return df
 

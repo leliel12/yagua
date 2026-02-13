@@ -604,6 +604,10 @@ class EntropyMeasurementModel(BaseModel):
     msr = FloatField(null=True)
 
     @hybrid.hybrid_property
+    def fullts(self):
+        return self.project.tests.count() == self.test_count
+
+    @hybrid.hybrid_property
     def mutants_survived(self):
         try:
             the_ms = self.msr * self.project.mutants_number
