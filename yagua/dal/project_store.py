@@ -849,6 +849,54 @@ class ProjectStore:
 
         return value
 
+    def save_entropy_measurement(
+        self, *, ordering_method, ascending, test_count, msr, result
+    ):
+        """Save MSR for an entropy measurement record and write history.
+
+        Parameters
+        ----------
+        ordering_method : str
+            Metric used to order tests.
+        ascending : bool
+            Whether tests were sorted in ascending order.
+        test_count : int
+            Number of tests in this incremental suite.
+        msr : float
+            Mutation survival rate for this incremental suite (0-1).
+        result : object or None
+            Result object from the mutation suite execution, or None
+            when reusing the full test suite's existing MSR.
+
+        Returns
+        -------
+        float
+            The MSR value.
+        """
+        with self.transaction() as txn:
+            project = txn.project_model
+            EntropyMeasurementModel = txn.m.EntropyMeasurementModel
+
+            record = EntropyMeasurementModel.get(
+                EntropyMeasurementModel.project == project,
+                EntropyMeasurementModel.ordering_method == ordering_method,
+                EntropyMeasurementModel.ascending == ascending,
+                EntropyMeasurementModel.tests_count == test_count,
+            )
+            if result is None or not result.error:
+                record.msr = msr
+                record.save()
+
+            if result is not None:
+                self._write_history(
+                    project,
+                    f"collect_entropy_msr::{ordering_method}::{ascending}"
+                    f"::{test_count}",
+                    result,
+                )
+
+        return msr
+
     # ========================================================================
     # Public Methods - Project Information
     # ========================================================================

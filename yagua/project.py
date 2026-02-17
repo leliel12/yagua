@@ -569,22 +569,16 @@ construction.
             ordering_method=ordering_method, ascending=ascending
         )
         total_cases = len(entropy_df)
-        for row in entropy_df.itertuples():
-            idx = row.Index
+        for idx, row in enumerate(entropy_df.itertuples(), start=1):
             msr = row.msr
             tests_count = row.tests_count
             fullts = row.fullts
             tests_ids = row.tests_ids
 
-            msg = (
-                "Entropy case for "
-                f"{ordering_method}, {ascending}, {tests_count}"
-            )  # [MEJORA ESTO CLAUDE]
-
+            msg = f"Incremental suite {tests_count}/{total_cases} tests"
             progress_callback(idx, total_cases, msg)
 
             if msr is None or force:
-                import ipdb; ipdb.set_trace()
                 if fullts:
                     msr_for, result = store.msr, None
                 else:
@@ -599,17 +593,16 @@ construction.
                     result=result,
                 )
 
-                result.raise_if_error()
+                if result is not None:
+                    result.raise_if_error()
 
-        #     selected_test_ids = test_ids[remove_from:]
-        #     entropy = store.get_entropy(
-        #         ordering_method, ascending, selected_test_ids
-        #     )
+        self._update_step("entropy_collected")
 
-        #     print(tests_ids[remove_from:])
-
-        raise Exception("DONE!!!!")
-        return {}
+        return {
+            "ordering_method": ordering_method,
+            "ascending": ascending,
+            "total_cases": total_cases,
+        }
 
     # ========================================================================
     # Public Methods - Information and Status
