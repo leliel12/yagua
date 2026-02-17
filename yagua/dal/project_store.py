@@ -420,18 +420,18 @@ class ProjectStore:
                     key=(lambda t: getattr(t, ordering_method)),
                     reverse=not ascending,
                 )
+                tests_ids = []
+                for test in tests:
+                    tests_ids.append(test.test_id)
 
-                while tests:
-                    tests_ids = [t.test_id for t in tests]
                     _, created = EntropyMeasurementModel.get_or_create(
                         project=project,
                         ordering_method=ordering_method,
                         ascending=ascending,
-                        test_count=len(tests),
+                        tests_count=len(tests_ids),
                         defaults={"tests_ids": tests_ids},
                     )
                     creations += int(created)
-                    tests.pop(0)
 
             return {"created": creations}
 
@@ -463,7 +463,7 @@ class ProjectStore:
                 EntropyMeasurementModel.ascending == ascending,
             )
             query = project.entropy_measurements.select().where(*filter)
-            query = query.order_by(EntropyMeasurementModel.test_count.desc())
+            query = query.order_by(EntropyMeasurementModel.tests_count)
 
             # Convert each model to dict using to_records() which
             # includes hybrid properties
@@ -481,7 +481,7 @@ class ProjectStore:
             Number of tests for the project.
         """
         with self.transaction() as txn:
-            project = txn.project_model()
+            project = txn.project_model
             return project.tests.count()
 
     def get_test(self, test_id: str | int) -> pd.Series:

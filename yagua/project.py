@@ -563,30 +563,44 @@ construction.
         store.create_entropy_measurements(
             ordering_method=ordering_method, ascending=ascending
         )
+
+        # Phase 3: Per-case MSR analysis
         entropy_df = store.get_entropy_dataframe(
             ordering_method=ordering_method, ascending=ascending
         )
-        import ipdb; ipdb.set_trace()
+        total_cases = len(entropy_df)
+        for row in entropy_df.itertuples():
+            idx = row.Index
+            msr = row.msr
+            tests_count = row.tests_count
+            fullts = row.fullts
+            tests_ids = row.tests_ids
 
-        # # Get tests ordered by the specified metric
-        # tests_df = store.get_tests_dataframe()[
-        #     ["test_id", ordering_method]
-        # ]
-        # tests_df.sort_values(
-        #     ordering_method, ascending=ascending, inplace=True
-        # )
+            msg = (
+                "Entropy case for "
+                f"{ordering_method}, {ascending}, {tests_count}"
+            )  # [MEJORA ESTO CLAUDE]
 
-        # # Validate that mutation collection is complete
-        # if tests_df[ordering_method].isna().to_numpy().any():
-        #     raise ValueError(
-        #         "Mutation collection appears to be incomplete. "
-        #         "Some tests are missing mutation data."
-        #     )
+            progress_callback(idx, total_cases, msg)
 
-        # tests_ids = tests_df["test_id"].tolist()
-        # mutants_number = store.mutants_number
+            if msr is None or force:
+                import ipdb; ipdb.set_trace()
+                if fullts:
+                    msr_for, result = store.msr, None
+                else:
+                    msr_for, result = collector.collect_msr_for(
+                        tests_ids, force=force
+                    )
+                store.save_entropy_measurement(
+                    ordering_method=ordering_method,
+                    ascending=ascending,
+                    test_count=tests_count,
+                    msr=msr_for,
+                    result=result,
+                )
 
-        # for remove_from, test_ids in enumerate(tests_ids, 0):
+                result.raise_if_error()
+
         #     selected_test_ids = test_ids[remove_from:]
         #     entropy = store.get_entropy(
         #         ordering_method, ascending, selected_test_ids

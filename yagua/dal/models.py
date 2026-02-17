@@ -540,15 +540,15 @@ class EntropyMeasurementModel(BaseModel):
     project : ForeignKeyField
         Reference to the ProjectModel (always id=1).
         Accessible via backref as project.entropy_measurements.
-    test_count : IntegerField
+    tests_count : IntegerField
         Number of tests in this incremental test suite (i).
         Values range from 1 to N (total number of tests).
     surviving_mutants : IntegerField
         Number of mutants that survived when running exactly i tests (W_i).
-        Expected to decrease as test_count increases.
+        Expected to decrease as tests_count increases.
     entropy : FloatField
         Shannon entropy S_i = ln(W_i).
-        Expected to decrease as test_count increases, representing
+        Expected to decrease as tests_count increases, representing
         reduction in the space of admissible program implementations.
     ordering_method : CharField
         Strategy used to order tests for incremental analysis.
@@ -581,7 +581,7 @@ class EntropyMeasurementModel(BaseModel):
     ordering_method = CharField()
     ascending = BooleanField()
     tests_ids = PickleField()
-    test_count = IntegerField()
+    tests_count = IntegerField()
 
     msr = FloatField(null=True)
 
@@ -596,9 +596,9 @@ class EntropyMeasurementModel(BaseModel):
         Returns
         -------
         bool
-            True if test_count equals the total number of tests.
+            True if tests_count equals the total number of tests.
         """
-        return self.project.tests.count() == self.test_count
+        return self.project.tests.count() == self.tests_count
 
     @hybrid.hybrid_property
     def mutants_survived(self):
@@ -661,7 +661,7 @@ class EntropyMeasurementModel(BaseModel):
     class Meta:
         table_name = "yagua_entropy_measurements"
         indexes = (
-            (("project", "ordering_method", "ascending", "test_count"), True),
+            (("project", "ordering_method", "ascending", "tests_count"), True),
         )
 
 

@@ -118,9 +118,6 @@ class Collector:
         self.mutation_suite_name = mutation_suite_name
         self.mutation_timeout = mutation_timeout
 
-    def _resolve_progress_callbak(self, progress_callback):
-        return _no_callback if progress_callback is None else progress_callback
-
     # ========================================================================
     # Properties
     # ========================================================================
@@ -347,5 +344,30 @@ class Collector:
         tids_without = [t for t in all_test_ids if t != test_id]
         result = suite.get_survival_rate_for_tests(
             self.project_path, self.project_name, tids_without, force
+        )
+        return result.value, result
+
+    def collect_msr_for(self, tests_ids, force=False):
+        """Collect MSR when running all tests except one.
+
+        Parameters
+        ----------
+        test_id : str
+            Unique identifier for the test to exclude.
+        all_test_ids : list[str]
+            List of all test IDs in the project.
+        force : bool, optional
+            Force re-execution even if already done. Default is False.
+
+        Returns
+        -------
+        tuple
+            Tuple of (msr, result) where:
+            - msr: float - Mutation survival rate (0-1)
+            - result: SuiteRunResult - Result object from mutation suite
+        """
+        suite = self.mutation_suite
+        result = suite.get_survival_rate_for_tests(
+            self.project_path, self.project_name, tests_ids, force
         )
         return result.value, result
