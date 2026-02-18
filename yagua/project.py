@@ -569,7 +569,8 @@ construction.
             ordering_method=ordering_method, ascending=ascending
         )
         total_cases = len(entropy_df)
-        for idx, row in enumerate(entropy_df.itertuples(), start=1):
+        for row in entropy_df.itertuples():
+            idx = row.Index
             msr = row.msr
             tests_count = row.tests_count
             fullts = row.fullts
@@ -577,10 +578,14 @@ construction.
 
             msg = f"Incremental suite {tests_count}/{total_cases} tests"
             progress_callback(idx, total_cases, msg)
+            import ipdb; ipdb.set_trace()
 
             if msr is None or force:
                 if fullts:
                     msr_for, result = store.msr, None
+                elif tests_count == 1:
+                    test_serie = store.get_test(tests_ids[0])
+                    msr_for, result = test_serie.msr_alone, None
                 else:
                     msr_for, result = collector.collect_msr_for(
                         tests_ids, force=force
