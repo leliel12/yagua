@@ -578,7 +578,7 @@ construction.
 
             msg = f"Incremental suite {tests_count}/{total_cases} tests"
             progress_callback(idx, total_cases, msg)
-            import ipdb; ipdb.set_trace()
+#            import ipdb; ipdb.set_trace()
 
             if msr is None or force:
                 if fullts:
