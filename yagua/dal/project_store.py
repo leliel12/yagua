@@ -470,6 +470,8 @@ class ProjectStore:
             dicts = (dict(mdl.to_records()) for mdl in query)
             df = pd.DataFrame.from_dict(dicts)
 
+        df.msr.replace(np.nan, None, inplace=True)
+
         return df
 
     def count_tests(self) -> int:

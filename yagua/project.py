@@ -601,7 +601,7 @@ construction.
                 if result is not None:
                     result.raise_if_error()
 
-        self._update_step("entropy_collected")
+        # self._update_step("entropy_collected")
 
         return {
             "ordering_method": ordering_method,
