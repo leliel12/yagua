@@ -549,7 +549,7 @@ class CLIManager:
         """
         with self._use_project(work_dir) as proj:
             result = proj.get_pipeline_progress()
-            result["progress"] = result["progress"] * 100
+            result["progress"] = result["progress"].apply(lambda v: f"{v * 100}%")
             self.console.print(df_to_rich_table(result))
 
 
