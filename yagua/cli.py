@@ -716,7 +716,7 @@ class CLIManager:
                     f"{work_dir}[/cyan]\n"
                 )
 
-    def report(
+    def tests_report(
         self,
         work_dir: str = _make_work_dir_argument(),
         long: bool = typer.Option(
@@ -795,6 +795,54 @@ class CLIManager:
                 f"\n[dim]📊 Total:[/dim] [bold]{result.tests_number}[/bold] "
                 f"[dim]tests[/dim]\n"
             )
+
+    def entropy_report(
+        self,
+        work_dir: str = _make_work_dir_argument(),
+        raise_errors: bool = _make_raise_errors_option(),
+    ) -> None:
+        """Display the entropy dataframe ordered by mutants killed without.
+
+        This command shows the entropy metrics for each test, ordered by
+        mutants_killed_without ascending, excluding internal columns
+        (tests_ids, created_at).
+
+        Parameters
+        ----------
+        work_dir : Path
+            Path to existing work directory containing yagua.db.
+
+        Raises
+        ------
+        typer.Exit
+            If work directory does not exist.
+        """
+        with self._use_project(work_dir) as proj:
+            try:
+                df = proj.store.get_entropy_dataframe(
+                    ordering_method="mutants_killed_without", ascending=True
+                )
+            except Exception as err:
+                if raise_errors:
+                    raise
+                self.console.print(
+                    Panel(
+                        f"[yellow]{err}[/yellow]",
+                        title="⚠️  Warning",
+                        border_style="yellow",
+                    )
+                )
+                raise typer.Exit(1)
+
+            drop = [
+                c for c in ["tests_ids", "created_at"] if c in df.columns
+            ]
+            df = df.drop(columns=drop)
+
+            table = df_to_rich_table(df, show_index=False, float_fmt="{:.4f}")
+            self.console.print()
+            self.console.print(table)
+            self.console.print()
 
     # ========================================================================
     # Public Methods - Export
