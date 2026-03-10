@@ -51,14 +51,17 @@ yagua/
 # Initialize a new project
 yagua init /path/to/project my_work_dir --name "Project" --mutation-timeout 50.0
 
-# Run the complete pipeline (tests, coverage, mutations)
+# Run the complete pipeline (tests, coverage, mutations, entropy)
 yagua run my_work_dir
 
-# Check pipeline status
+# Check pipeline progress (percentage per step)
 yagua status my_work_dir
 
-# View results report
-yagua report my_work_dir
+# View per-test coverage and mutation metrics
+yagua tests-report my_work_dir
+
+# View entropy dataframe (ordered by mutants_killed_without)
+yagua entropy-report my_work_dir
 
 # Export project data
 yagua export my_work_dir output.tar.gz

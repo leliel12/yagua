@@ -8,7 +8,8 @@ The Project implements a pipeline workflow:
 1. created -> Project is initialized
 2. tests_collected -> Tests have been collected
 3. coverage_collected -> Coverage has been analyzed
-4. mutations_collected -> Mutations have been analyzed (pipeline complete)
+4. mutations_collected -> Mutations have been analyzed
+5. entropy_collected -> Entropy reduction curve has been computed
 
 Classes
 -------
@@ -113,6 +114,19 @@ class Project:
     # ========================================================================
 
     def _resolve_progress_callback(self, pcallback):
+        """Return pcallback unchanged, or a no-op if None.
+
+        Parameters
+        ----------
+        pcallback : callable or None
+            Progress callback with signature
+            ``(current, total, test_id)``, or None.
+
+        Returns
+        -------
+        callable
+            The original callback, or a no-op function.
+        """
         if pcallback is None:
 
             def _no_callback(current, total, test_id):
@@ -205,7 +219,8 @@ class Project:
         - 'created' -> collect_tests
         - 'tests_collected' -> collect_coverage
         - 'coverage_collected' -> collect_mutations
-        - 'mutations_collected' -> None (pipeline complete)
+        - 'mutations_collected' -> collect_entropy
+        - 'entropy_collected' -> None (pipeline complete)
         """
         current = self._get_current_step()
 
@@ -557,17 +572,11 @@ construction.
                 "Mutation data is required before running entropy analysis."
             )
 
-        # FIXED
         ordering_method, ascending = "mutants_killed_without", True
 
-        store.create_entropy_measurements(
-            ordering_method=ordering_method, ascending=ascending
-        )
+        store.create_entropy_measurements()
 
-        # Phase 3: Per-case MSR analysis
-        entropy_df = store.get_entropy_dataframe(
-            ordering_method=ordering_method, ascending=ascending
-        )
+        entropy_df = store.get_entropy_dataframe()
         total_cases = len(entropy_df)
         for row in entropy_df.itertuples():
             idx = row.Index
@@ -578,7 +587,6 @@ construction.
 
             msg = f"Incremental suite {tests_count}/{total_cases} tests"
             progress_callback(idx, total_cases, msg)
-            #            import ipdb; ipdb.set_trace()
 
             if msr is None or force:
                 if fullts:
@@ -601,7 +609,7 @@ construction.
                 if result is not None:
                     result.raise_if_error()
 
-        # self._update_step("entropy_collected")
+        self._update_step("entropy_collected")
 
         return {
             "ordering_method": ordering_method,
@@ -722,10 +730,11 @@ construction.
         -------
         dict
             Dictionary with keys:
-            - 'current_step': Current pipeline step
-            - 'tests_collected': Boolean
-            - 'coverage_collected': Boolean
-            - 'mutations_collected': Boolean
+            - 'current_step': Current pipeline step string
+            - 'tests_collected': bool, True if step reached
+            - 'coverage_collected': bool, True if step reached
+            - 'mutations_collected': bool, True if step reached
+            - 'entropy_collected': bool, True if step reached
         """
         current = self._get_current_step()
         current_idx = PIPELINE_ORDER[current]
@@ -743,6 +752,27 @@ construction.
         }
 
     def get_pipeline_progress(self):
+        """Get pipeline progress as a DataFrame with one row per step.
+
+        Each row reports the fraction of work completed for that step
+        (0.0 to 1.0). Steps that have not started yet show 0.0; steps
+        that are fully complete show 1.0; steps in progress show an
+        intermediate value derived from the number of tests processed.
+
+        Returns
+        -------
+        pandas.DataFrame
+            DataFrame with columns:
+
+            - 'step': pipeline step name (str)
+            - 'progress': fraction completed (float, 0.0–1.0)
+
+            Rows (in order):
+            - 'test_collected'
+            - 'coverage_collected'
+            - 'mutations_collected'
+            - 'entropy_collected'
+        """
         status = self.get_pipeline_status()
         store = self.store
         rows = []

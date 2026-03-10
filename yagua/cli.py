@@ -10,7 +10,6 @@ implementing a resumable pipeline pattern similar to cosmic-ray and mutmut.
 # =============================================================================
 
 import contextlib
-import enum
 import inspect
 import sys
 from pathlib import Path
@@ -20,56 +19,11 @@ import typer
 from rich.console import Console
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
-from rich.table import Table
 
 from . import project as project_module
 from .dal import ProjectStore
 from .project import PipelineError
 from .utils.df2rt import df_to_rich_table
-
-
-# ============================================================================
-# PIPELINE STEPS ENUM
-# ============================================================================
-
-
-class PipelineStep(str, enum.Enum):
-    """Pipeline execution steps."""
-
-    CREATED = "created"
-    TESTS_COLLECTED = "tests_collected"
-    COVERAGE_COLLECTED = "coverage_collected"
-    MUTATIONS_COLLECTED = "mutations_collected"
-    COMPLETED = "completed"
-
-    @classmethod
-    def get_next_step(cls, current_step):
-        """Get the next step in the pipeline.
-
-        Parameters
-        ----------
-        current_step : PipelineStep
-            Current pipeline step.
-
-        Returns
-        -------
-        PipelineStep | None
-            Next step in pipeline, or None if completed.
-        """
-        steps = [
-            cls.CREATED,
-            cls.TESTS_COLLECTED,
-            cls.COVERAGE_COLLECTED,
-            cls.MUTATIONS_COLLECTED,
-            cls.COMPLETED,
-        ]
-        try:
-            idx = steps.index(PipelineStep(current_step))
-            if idx < len(steps) - 1:
-                return steps[idx + 1]
-            return None
-        except (ValueError, IndexError):
-            return None
 
 
 # ============================================================================
@@ -165,7 +119,7 @@ class CLIManager:
 
     This class implements a resumable pipeline pattern where projects
     progress through stages: created -> tests_collected ->
-    coverage_collected -> mutations_collected -> completed.
+    coverage_collected -> mutations_collected -> entropy_collected.
 
     Methods
     -------
@@ -174,9 +128,11 @@ class CLIManager:
     run
         Execute the pipeline (resumable).
     status
-        Show pipeline status and progress.
-    report
-        Display test results and metrics.
+        Show pipeline progress as a table (fraction complete per step).
+    tests_report
+        Display per-test coverage and mutation metrics.
+    entropy_report
+        Display entropy dataframe ordered by mutants killed without.
     export
         Export work directory to archive.
     """
@@ -531,11 +487,11 @@ class CLIManager:
         self,
         work_dir: str = _make_work_dir_argument(),
     ) -> None:
-        """Show project status and pipeline progress.
+        """Show pipeline progress as a percentage table.
 
-        This command displays the current state of the analysis pipeline,
-        including which steps are completed and detailed progress for
-        each phase.
+        Displays a table with one row per pipeline step and the
+        fraction of work completed for that step, expressed as a
+        percentage (e.g. 0% / 50% / 100%).
 
         Parameters
         ----------
