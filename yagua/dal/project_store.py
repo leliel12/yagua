@@ -387,15 +387,8 @@ class ProjectStore:
 
         return df
 
-    def create_entropy_measurements(self, *, ordering_method, ascending):
+    def create_entropy_measurements(self):
         """Create entropy measurement records for ordered tests.
-
-        Parameters
-        ----------
-        ordering_method : str
-            Metric used to order tests.
-        ascending : bool
-            Whether to sort in ascending order.
 
         Returns
         -------
@@ -403,6 +396,9 @@ class ProjectStore:
             Dictionary with 'created' key indicating number of
             records created.
         """
+        ordering_method = "mutants_killed_without"
+        ascending = True
+
         creations = 0
         with self.transaction() as txn:
             project = txn.project_model
@@ -435,17 +431,8 @@ class ProjectStore:
 
             return {"created": creations}
 
-    def get_entropy_dataframe(
-        self, *, ordering_method, ascending
-    ) -> pd.DataFrame:
+    def get_entropy_dataframe(self) -> pd.DataFrame:
         """Get entropy measurements as a DataFrame.
-
-        Parameters
-        ----------
-        ordering_method : str
-            Metric used to order tests.
-        ascending : bool
-            Whether tests were sorted in ascending order.
 
         Returns
         -------
@@ -453,6 +440,9 @@ class ProjectStore:
             DataFrame with entropy measurements ordered by
             test_count descending.
         """
+        # harcoded for now
+        ordering_method = "mutants_killed_without"
+        ascending = True
 
         with self.transaction() as txn:
             project = txn.project_model
@@ -470,7 +460,7 @@ class ProjectStore:
             dicts = (dict(mdl.to_records()) for mdl in query)
             df = pd.DataFrame.from_dict(dicts)
 
-        df.msr.replace(np.nan, None, inplace=True)
+        df["msr"] = df.msr.replace(np.nan, None)
 
         return df
 

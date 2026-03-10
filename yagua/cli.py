@@ -228,51 +228,6 @@ class CLIManager:
         finally:
             proj.store.close()
 
-    def _get_pipeline_progress(self, proj):
-        """Calculate pipeline progress statistics.
-
-        Parameters
-        ----------
-        proj : Project
-            Project instance.
-
-        Returns
-        -------
-        dict
-            Dictionary with progress statistics for each phase.
-        """
-        tests_df = proj.store.get_tests_dataframe()
-        total_tests = len(tests_df)
-
-        progress = {
-            "total_tests": total_tests,
-            "coverage_alone_complete": 0,
-            "coverage_without_complete": 0,
-            "mutations_alone_complete": 0,
-            "mutations_without_complete": 0,
-        }
-
-        if total_tests == 0:
-            return progress
-
-        # Count completed coverage metrics
-        progress["coverage_alone_complete"] = (
-            tests_df["coverage_alone"].notna().sum()
-        )
-        progress["coverage_without_complete"] = (
-            tests_df["coverage_without"].notna().sum()
-        )
-
-        # Count completed mutation metrics
-        progress["mutations_alone_complete"] = (
-            tests_df["msr_alone"].notna().sum()
-        )
-        progress["mutations_without_complete"] = (
-            tests_df["msr_without"].notna().sum()
-        )
-
-        return progress
-
     # ========================================================================
     # Public Methods - Project Initialization
     # ========================================================================
@@ -593,128 +548,10 @@ class CLIManager:
             If work directory does not exist.
         """
         with self._use_project(work_dir) as proj:
-            # Get progress statistics
-            progress = self._get_pipeline_progress(proj)
-            current_step = PipelineStep(proj.store.pipeline_step)
+            result = proj.get_pipeline_progress()
+            result["progress"] = result["progress"] * 100
+            self.console.print(df_to_rich_table(result))
 
-            # Build status table
-            table = Table(title="Pipeline Status", show_header=True)
-            table.add_column("Step", style="cyan")
-            table.add_column("Status", style="bold")
-            table.add_column("Progress", justify="right")
-
-            # Tests collection
-            if current_step.value == PipelineStep.CREATED.value:
-                tests_status = "⏳ Pending"
-            else:
-                tests_status = f"✅ Complete ({progress['total_tests']} tests)"
-            table.add_row(
-                "1. Collect Tests",
-                tests_status,
-                (
-                    f"{progress['total_tests']}"
-                    if progress["total_tests"]
-                    else "-"
-                ),
-            )
-
-            # Coverage collection
-            if current_step.value in [
-                PipelineStep.CREATED.value,
-                PipelineStep.TESTS_COLLECTED.value,
-            ]:
-                coverage_status = "⏳ Pending"
-                cov_progress = "-"
-            elif (
-                current_step.value == PipelineStep.COVERAGE_COLLECTED.value
-                or progress["coverage_alone_complete"]
-                == progress["total_tests"]
-            ):
-                coverage_status = "✅ Complete"
-                cov_progress = (
-                    f"{progress['coverage_alone_complete']}/"
-                    f"{progress['total_tests']}"
-                )
-            else:
-                coverage_status = "🔄 In Progress"
-                cov_progress = (
-                    f"{progress['coverage_alone_complete']}/"
-                    f"{progress['total_tests']}"
-                )
-            table.add_row("2. Collect Coverage", coverage_status, cov_progress)
-
-            # Mutation collection
-            if current_step.value in [
-                PipelineStep.CREATED.value,
-                PipelineStep.TESTS_COLLECTED.value,
-                PipelineStep.COVERAGE_COLLECTED.value,
-            ]:
-                mutations_status = "⏳ Pending"
-                mut_progress = "-"
-            elif (
-                current_step.value == PipelineStep.MUTATIONS_COLLECTED.value
-                or progress["mutations_alone_complete"]
-                == progress["total_tests"]
-            ):
-                mutations_status = "✅ Complete"
-                mut_progress = (
-                    f"{progress['mutations_alone_complete']}/"
-                    f"{progress['total_tests']}"
-                )
-            else:
-                mutations_status = "🔄 In Progress"
-                mut_progress = (
-                    f"{progress['mutations_alone_complete']}/"
-                    f"{progress['total_tests']}"
-                )
-            table.add_row(
-                "3. Collect Mutations", mutations_status, mut_progress
-            )
-
-            self.console.print()
-            self.console.print(table)
-            self.console.print()
-
-            # Summary information
-            info_lines = [
-                f"[cyan]📊 Current Step:[/cyan] {current_step.value}",
-            ]
-
-            if proj.store.coverage is not None:
-                info_lines.append(
-                    f"[cyan]💯 Coverage:[/cyan] {proj.store.coverage:.4f}"
-                )
-
-            if proj.store.mutants_number is not None:
-                info_lines.append(
-                    f"[cyan]🧬 Mutants:[/cyan] {proj.store.mutants_number}"
-                )
-
-            if proj.store.msr is not None:
-                info_lines.append(
-                    f"[cyan]🎯 Survival Rate:[/cyan] {proj.store.msr:.4f}"
-                )
-
-            if proj.store.failed_at:
-                info_lines.append(
-                    f"[yellow]⚠️  Last Failure:[/yellow] {proj.store.failed_at}"  # noqa
-                )
-
-            self.console.print(
-                Panel("\n".join(info_lines), border_style="blue")
-            )
-
-            # Next step suggestion
-            if current_step != PipelineStep.COMPLETED:
-                self.console.print(
-                    f"\n[dim]💡 Next:[/dim] [cyan]yagua run "
-                    f"{work_dir}[/cyan]\n"
-                )
-            else:
-                self.console.print(
-                    f"\n[dim]💡 View results:[/dim] [cyan]yagua report "
-                    f"{work_dir}[/cyan]\n"
-                )
 
     def tests_report(
         self,
@@ -819,9 +656,7 @@ class CLIManager:
         """
         with self._use_project(work_dir) as proj:
             try:
-                df = proj.store.get_entropy_dataframe(
-                    ordering_method="mutants_killed_without", ascending=True
-                )
+                df = proj.store.get_entropy_dataframe()
             except Exception as err:
                 if raise_errors:
                     raise
@@ -834,9 +669,7 @@ class CLIManager:
                 )
                 raise typer.Exit(1)
 
-            drop = [
-                c for c in ["tests_ids", "created_at"] if c in df.columns
-            ]
+            drop = [c for c in ["tests_ids", "created_at"] if c in df.columns]
             df = df.drop(columns=drop)
 
             table = df_to_rich_table(df, show_index=False, float_fmt="{:.4f}")

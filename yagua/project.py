@@ -578,7 +578,7 @@ construction.
 
             msg = f"Incremental suite {tests_count}/{total_cases} tests"
             progress_callback(idx, total_cases, msg)
-#            import ipdb; ipdb.set_trace()
+            #            import ipdb; ipdb.set_trace()
 
             if msr is None or force:
                 if fullts:
@@ -738,7 +738,87 @@ construction.
             >= PIPELINE_ORDER["coverage_collected"],
             "mutations_collected": current_idx
             >= PIPELINE_ORDER["mutations_collected"],
+            "entropy_collected": current_idx
+            >= PIPELINE_ORDER["entropy_collected"],
         }
+
+    def get_pipeline_progress(self):
+        status = self.get_pipeline_status()
+        store = self.store
+        rows = []
+
+        # test_collected
+        rows.append(
+            {
+                "step": "test_collected",
+                "progress": float(status["tests_collected"]),
+            }
+        )
+
+        with self.store.transaction() as txn:
+            from collections import defaultdict
+            import pandas as pd
+
+            default_df = defaultdict(lambda: pd.Series([None], dtype=object))
+
+            tests_df = (
+                store.get_tests_dataframe()
+                if status["tests_collected"]
+                else default_df
+            )
+
+            ent_df = (
+                store.get_entropy_dataframe()
+                if status["mutations_collected"]
+                else default_df
+            )
+
+            test_number = len(tests_df) if status["tests_collected"] else 0
+
+        # coverage ongoing
+        coverage_progress = (
+            tests_df["coverage_alone"].notna().sum()
+            + tests_df["coverage_without"].notna().sum()
+        )
+        rows.append(
+            {
+                "step": "coverage_collected",
+                "progress": (
+                    coverage_progress / (test_number * 2)
+                    if coverage_progress
+                    else 0.0
+                ),
+            }
+        )
+
+        # mutations ongoing
+        mutations_progress = (
+            tests_df["msr_alone"].notna().sum()
+            + tests_df["msr_without"].notna().sum()
+        )
+        rows.append(
+            {
+                "step": "mutations_collected",
+                "progress": (
+                    mutations_progress / (test_number * 2)
+                    if mutations_progress
+                    else 0.0
+                ),
+            }
+        )
+
+        # entropy ongoing
+        entropy_progress = ent_df["msr"].notna().sum()
+        rows.append(
+            {
+                "step": "entropy_collected",
+                "progress": entropy_progress / test_number,
+            }
+        )
+
+        df = pd.DataFrame(rows)
+
+        return df
 
     def mark_failed(self):
         """Mark the project as failed with current timestamp.
