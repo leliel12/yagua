@@ -10,6 +10,16 @@
 
 </div>
 
+## Install paper version
+
+If you are evaluating the tool described in the paper, install it directly from GitHub:
+
+```bash
+# Install in development mode
+pip install https://github.com/leliel12/yagua/archive/refs/heads/paper.zip
+
+```
+
 ---
 
 ## Table of Contents

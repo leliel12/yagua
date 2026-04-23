@@ -32,13 +32,13 @@ dependencies = [
     "pandas>=2.0.0",
     "rich>=13.0.0",
     "numpy>=1.24.0",
+    "cosmic-ray>=8.3.0",
 ]
 
 [project.optional-dependencies]
 dev = [
     "tox>=4.0.0",
     "mutmut>=2.4.0",
-    "cosmic-ray>=8.3.0",
 ]
 
 [project.scripts]
